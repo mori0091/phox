@@ -56,7 +56,15 @@ impl fmt::Display for Type {
                     _ => write!(f, " ({})", arg),
                 }
             }
-            Type::Tuple(_) | Type::Struct(_, _) => todo!(),
+            Type::Tuple(ts) => {
+                write!(f, "({},", ts[0])?;
+                if ts.len() > 1 {
+                    let s: Vec<String> = ts[1..].iter().map(|t| t.to_string()).collect();
+                    write!(f, " {}", s.join(", "))?;
+                }
+                write!(f, ")")
+            }
+            Type::Struct(_, _) => todo!(),
         }
     }
 }
@@ -71,7 +79,7 @@ impl fmt::Display for TypeVarId {
 }
 
 // ===== Type schemes (∀ vars . ty) =====
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Scheme {
     pub vars: Vec<TypeVarId>, // quantified variables
     pub ty: Type,
@@ -83,7 +91,7 @@ impl fmt::Display for Scheme {
             // 量化変数がなければそのまま型のみ
             write!(f, "{}", self.ty)
         } else {
-            write!(f, "∀{}. {}", TypeVarList(&self.vars), self.ty)
+            write!(f, "∀ {}. {}", TypeVarList(&self.vars), self.ty)
         }
     }
 }
@@ -128,7 +136,10 @@ impl Scheme {
                 Type::App(t1, t2) => {
                     Type::app(rename(t1, map), rename(t2, map))
                 }
-                Type::Tuple(_) | Type::Struct(_, _) => todo!(),
+                Type::Tuple(ts) => {
+                    Type::Tuple(ts.iter().map(|t| rename(t, map)).collect())
+                }
+                Type::Struct(_, _) => todo!(),
             }
         }
 
@@ -140,7 +151,7 @@ impl Scheme {
             let vars: Vec<String> = (0..self.vars.len())
                 .map(|i| ((b'a' + i as u8) as char).to_string())
                 .collect();
-            format!("∀{}. {}", vars.join(" "), renamed_ty)
+            format!("∀ {}. {}", vars.join(" "), renamed_ty)
         }
     }
 }
@@ -209,7 +220,15 @@ impl fmt::Display for Expr {
             Expr::LetRec(x, e1, e2) => write!(f, "let rec {} = {} in {}", x, *e1, *e2),
             Expr::If(e1, e2, e3)    => write!(f, "if {} then {} else {}", e1, e2, e3),
             Expr::Lit(a)            => write!(f, "{}", a),
-            Expr::Tuple(_) | Expr::Struct(_, _) => todo!(),
+            Expr::Tuple(es) => {
+                write!(f, "({},", es[0])?;
+                if es.len() > 1 {
+                    let s: Vec<String> = es[1..].iter().map(|t| t.to_string()).collect();
+                    write!(f, " {}", s.join(", "))?;
+                }
+                write!(f, ")")
+            }
+            Expr::Struct(_, _) => todo!(),
         }
     }
 }

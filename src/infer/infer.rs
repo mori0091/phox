@@ -59,14 +59,19 @@ impl TypeContext {
                     false
                 }
             }
-            Type::Fun(a, b) => self.occurs_in(tv, a) || self.occurs_in(tv, b),
-            Type::Tuple(_) | Type::Struct(_, _) => todo!(),
+            Type::Fun(a, b) => {
+                self.occurs_in(tv, a) || self.occurs_in(tv, b)
+            }
+            Type::Tuple(ts) => {
+                ts.iter().any(|t| self.occurs_in(tv, t))
+            }
+            Type::Struct(_, _) => todo!(),
             _ => false,
         }
     }
 
     // Normalize a type by chasing bindings and compressing vars
-    pub fn repr(&mut self, ty: &Type) -> Type {
+    fn repr(&mut self, ty: &Type) -> Type {
         match ty {
             Type::Var(v) => {
                 let r = self.find(*v);
@@ -81,11 +86,12 @@ impl TypeContext {
             Type::Fun(a, b) => Type::fun(self.repr(a), self.repr(b)),
             Type::App(f, x) => Type::app(self.repr(f), self.repr(x)),
             Type::Con(c) => Type::con(c.clone()),
-            Type::Tuple(_) | Type::Struct(_, _) => todo!(),
+            Type::Tuple(ts) => Type::Tuple(ts.iter().map(|t| self.repr(t)).collect()),
+            Type::Struct(_, _) => todo!(),
         }
     }
 
-    pub fn unify(&mut self, a: &Type, b: &Type) -> Result<(), String> {
+    fn unify(&mut self, a: &Type, b: &Type) -> Result<(), String> {
         let a = self.repr(a);
         let b = self.repr(b);
         match (&a, &b) {
@@ -123,6 +129,20 @@ impl TypeContext {
                 self.unify(x1, x2)
             }
 
+            (Type::Tuple(ts1), Type::Tuple(ts2)) => {
+                if ts1.len() != ts2.len() {
+                    return Err(format!("tuple length mismatch: {} vs {}", ts1.len(), ts2.len()));
+                }
+                for (t1, t2) in ts1.iter().zip(ts2.iter()) {
+                    self.unify(t1, t2)?;
+                }
+                Ok(())
+            }
+
+            (Type::Struct(_s1, _fs1), Type::Struct(_s2, _fs2)) => {
+                todo!()
+            }
+            (ta, tb) if ta == tb => Ok(()),
             _ => Err(format!("type mismatch: {} vs {}", a, b)),
         }
     }
@@ -143,7 +163,12 @@ fn free_ty_vars(ctx: &mut TypeContext, ty: &Type, acc: &mut HashSet<TypeVarId>) 
             free_ty_vars(ctx, a, acc);
             free_ty_vars(ctx, b, acc);
         }
-        Type::Tuple(_) | Type::Struct(_, _) => todo!(),
+        Type::Tuple(ts) => {
+            for ty in ts {
+                free_ty_vars(ctx, &ty, acc);
+            }
+        }
+        Type::Struct(_, _) => todo!(),
     }
 }
 
@@ -176,7 +201,13 @@ fn instantiate(ctx: &mut TypeContext, sch: &Scheme) -> Type {
             Type::Fun(ref a, ref b) => Type::fun(inst(ctx, a, s), inst(ctx, b, s)),
             Type::Con(c)            => Type::con(c),
             Type::App(ref a, ref b) => Type::app(inst(ctx, a, s), inst(ctx, b, s)),
-            Type::Tuple(_) | Type::Struct(_, _) => todo!(),
+            Type::Tuple(ts) => {
+                let ts2: Vec<Type> = ts.iter()
+                    .map(|t| inst(ctx, t, s))
+                    .collect();
+                Type::Tuple(ts2)
+            }
+            Type::Struct(_, _) => todo!(),
         }
     }
     inst(ctx, &sch.ty, &subst)
@@ -250,7 +281,17 @@ pub fn infer(ctx: &mut TypeContext, env: &mut Env, expr: &Expr) -> Result<Type, 
         Expr::Lit(Lit::Unit) => Ok(Type::Con("()".into())),
         Expr::Lit(Lit::Bool(_)) => Ok(Type::Con("Bool".into())),
         Expr::Lit(Lit::Int(_)) => Ok(Type::Con("Int".into())),
-        Expr::Tuple(_) | Expr::Struct(_, _) => todo!(),
+
+        Expr::Tuple(es) => {
+            let mut tys = Vec::new();
+            for e in es {
+                let ty = infer(ctx, env, e)?;
+                tys.push(ty);
+            }
+            Ok(Type::Tuple(tys))
+        }
+
+        Expr::Struct(_, _) => todo!(),
     }
 }
 
