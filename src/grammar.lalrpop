@@ -1,0 +1,109 @@
+use std::str::FromStr;
+use crate::syntax::ast::{Expr, Lit};
+
+grammar;
+
+// 最上位: 式
+pub Expr: Expr = {
+    Expr0,
+};
+
+Expr0: Expr = {
+    ExprAbs,
+    ExprLet,
+    ExprLetRec,
+    ExprIf,
+    ExprAdd,
+};
+
+// λ抽象や let/if は「一番外側でしか出てこない」ようにする
+ExprAbs: Expr = {
+    "\\" <id:Ident> "." <body:Expr0> => Expr::abs(id, body),
+};
+
+ExprLet: Expr = {
+    "let" <id:Ident> "=" <e1:Expr0> "in" <e2:Expr0> => Expr::let_(id, e1, e2),
+};
+
+ExprLetRec: Expr = {
+    "let" "rec" <id:Ident> "=" <e1:Expr0> "in" <e2:Expr0> => Expr::let_rec(id, e1, e2),
+};
+
+ExprIf: Expr = {
+    "if" <cond:Expr0> "then" <e1:Expr0> "else" <e2:Expr0> => Expr::if_(cond, e1, e2),
+};
+
+// 加減算
+ExprAdd: Expr = {
+    <l:ExprAdd> "+" <r:ExprMul> => Expr::app(Expr::app(Expr::var("+"), l), r),
+    <l:ExprAdd> "-" <r:ExprMul> => Expr::app(Expr::app(Expr::var("-"), l), r),
+    ExprMul,
+};
+
+// 乗除算
+ExprMul: Expr = {
+    <l:ExprMul> "*" <r:ExprApp> => Expr::app(Expr::app(Expr::var("*"), l), r),
+    <l:ExprMul> "/" <r:ExprApp> => Expr::app(Expr::app(Expr::var("/"), l), r),
+    ExprApp,
+};
+
+// 関数適用（左結合）
+ExprApp: Expr = {
+    <f:ExprApp> <x:Atom> => Expr::app(f, x),
+    Atom,
+};
+
+// 原子的な式
+Atom: Expr = {
+    Lit,
+    Var,
+    ExprParen,
+    ExprTuple,
+};
+
+Lit: Expr = {
+    LitUnit,
+    LitInt,
+    LitBool,
+};
+
+LitUnit: Expr = {
+    "()" => Expr::Lit(Lit::Unit),
+};
+
+LitBool: Expr = {
+    "true" => Expr::Lit(Lit::Bool(true)),
+    "false" => Expr::Lit(Lit::Bool(false)),
+};
+
+LitInt: Expr = {
+    r"[0-9]+" => Expr::Lit(Lit::Int(i64::from_str(<>).unwrap())),
+};
+
+Var: Expr = {
+    Ident => Expr::var(<>),
+};
+
+Ident: String = {
+    r"[a-zA-Z_][a-zA-Z0-9_]*" => <>.to_string(),
+};
+
+ExprParen: Expr = {
+    "(" <e:Expr> ")" => e,
+};
+
+ExprTuple: Expr = {
+    "(" <es:SepByComma<Expr>> ")" => Expr::Tuple(es),
+};
+
+// A comma-separated list of T elements.
+// Except when there is only one element, the trailing comma is optional.
+SepByComma<T>: Vec<T> = {
+    <mut v:(<T> ",")+> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            v.push(e);
+            v
+        }
+    }
+};

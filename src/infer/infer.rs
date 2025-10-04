@@ -1,34 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use std::fmt;
 
-use crate::syntax::ast::{Kind, Type, TypeVarId, Expr};
-
-// ===== Type schemes (∀ vars . ty) =====
-#[derive(Clone)]
-pub struct Scheme {
-    pub vars: Vec<TypeVarId>, // quantified variables
-    pub ty: Type,
-}
-
-impl fmt::Display for Scheme {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.vars.is_empty() {
-            // 量化変数がなければそのまま型のみ
-            write!(f, "{}", self.ty)
-        } else {
-            write!(f, "∀{}. {}", TypeVarList(&self.vars), self.ty)
-        }
-    }
-}
-
-struct TypeVarList<'a>(&'a [TypeVarId]);
-
-impl<'a> fmt::Display for TypeVarList<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = self.0.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" ");
-        write!(f, "{}", s)
-    }
-}
+use crate::syntax::ast::{Kind, Type, TypeVarId, Scheme, Expr, Lit};
 
 // ===== Type Environment =====
 pub struct TypeEnv {
@@ -88,6 +60,7 @@ impl TypeContext {
                 }
             }
             Type::Fun(a, b) => self.occurs_in(tv, a) || self.occurs_in(tv, b),
+            Type::Tuple(_) | Type::Struct(_, _) => todo!(),
             _ => false,
         }
     }
@@ -108,6 +81,7 @@ impl TypeContext {
             Type::Fun(a, b) => Type::fun(self.repr(a), self.repr(b)),
             Type::App(f, x) => Type::app(self.repr(f), self.repr(x)),
             Type::Con(c) => Type::con(c.clone()),
+            Type::Tuple(_) | Type::Struct(_, _) => todo!(),
         }
     }
 
@@ -169,6 +143,7 @@ fn free_ty_vars(ctx: &mut TypeContext, ty: &Type, acc: &mut HashSet<TypeVarId>) 
             free_ty_vars(ctx, a, acc);
             free_ty_vars(ctx, b, acc);
         }
+        Type::Tuple(_) | Type::Struct(_, _) => todo!(),
     }
 }
 
@@ -201,6 +176,7 @@ fn instantiate(ctx: &mut TypeContext, sch: &Scheme) -> Type {
             Type::Fun(ref a, ref b) => Type::fun(inst(ctx, a, s), inst(ctx, b, s)),
             Type::Con(c)            => Type::con(c),
             Type::App(ref a, ref b) => Type::app(inst(ctx, a, s), inst(ctx, b, s)),
+            Type::Tuple(_) | Type::Struct(_, _) => todo!(),
         }
     }
     inst(ctx, &sch.ty, &subst)
@@ -271,8 +247,10 @@ pub fn infer(ctx: &mut TypeContext, env: &mut Env, expr: &Expr) -> Result<Type, 
             Ok(t_then)
         }
 
-        Expr::LitInt(_) => Ok(Type::Con("Int".into())),
-        Expr::LitBool(_) => Ok(Type::Con("Bool".into())),
+        Expr::Lit(Lit::Unit) => Ok(Type::Con("()".into())),
+        Expr::Lit(Lit::Bool(_)) => Ok(Type::Con("Bool".into())),
+        Expr::Lit(Lit::Int(_)) => Ok(Type::Con("Int".into())),
+        Expr::Tuple(_) | Expr::Struct(_, _) => todo!(),
     }
 }
 

@@ -14,6 +14,9 @@ pub enum Type {
     Fun(Box<Type>, Box<Type>),  // 関数型
     Con(String),                // 型構築子
     App(Box<Type>, Box<Type>),  // 型適用
+
+    Tuple(Vec<Type>),
+    Struct(String, Vec<(String, Type)>),
 }
 
 impl Type {
@@ -53,6 +56,7 @@ impl fmt::Display for Type {
                     _ => write!(f, " ({})", arg),
                 }
             }
+            Type::Tuple(_) | Type::Struct(_, _) => todo!(),
         }
     }
 }
@@ -66,7 +70,99 @@ impl fmt::Display for TypeVarId {
     }
 }
 
+// ===== Type schemes (∀ vars . ty) =====
+#[derive(Clone)]
+pub struct Scheme {
+    pub vars: Vec<TypeVarId>, // quantified variables
+    pub ty: Type,
+}
+
+impl fmt::Display for Scheme {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.vars.is_empty() {
+            // 量化変数がなければそのまま型のみ
+            write!(f, "{}", self.ty)
+        } else {
+            write!(f, "∀{}. {}", TypeVarList(&self.vars), self.ty)
+        }
+    }
+}
+
+struct TypeVarList<'a>(&'a [TypeVarId]);
+
+impl<'a> fmt::Display for TypeVarList<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = self.0
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+            .join(" ");
+        write!(f, "{}", s)
+    }
+}
+
+impl Scheme {
+    pub fn pretty(&self) -> String {
+        use std::collections::HashMap;
+
+        // 量化変数に a, b, c... を割り当てる
+        let mut map = HashMap::new();
+        for (i, v) in self.vars.iter().enumerate() {
+            let ch = (b'a' + i as u8) as char;
+            map.insert(*v, ch.to_string());
+        }
+
+        fn rename(ty: &Type, map: &HashMap<TypeVarId, String>) -> Type {
+            match ty {
+                Type::Var(v) => {
+                    if let Some(name) = map.get(v) {
+                        Type::Con(name.clone()) // ここでは Var を Con に置き換えてもよい
+                    } else {
+                        Type::Var(*v) // 自由変数はそのまま
+                    }
+                }
+                Type::Con(name) => Type::Con(name.clone()),
+                Type::Fun(t1, t2) => {
+                    Type::fun(rename(t1, map), rename(t2, map))
+                }
+                Type::App(t1, t2) => {
+                    Type::app(rename(t1, map), rename(t2, map))
+                }
+                Type::Tuple(_) | Type::Struct(_, _) => todo!(),
+            }
+        }
+
+        let renamed_ty = rename(&self.ty, &map);
+
+        if self.vars.is_empty() {
+            format!("{}", renamed_ty)
+        } else {
+            let vars: Vec<String> = (0..self.vars.len())
+                .map(|i| ((b'a' + i as u8) as char).to_string())
+                .collect();
+            format!("∀{}. {}", vars.join(" "), renamed_ty)
+        }
+    }
+}
+
 // ===== AST =====
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Lit {
+    Unit,        // ()
+    Bool(bool),  // true / false
+    Int(i64),    // 整数リテラル
+}
+
+impl fmt::Display for Lit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Lit::Unit => write!(f, "()"),
+            Lit::Bool(b) => write!(f, "{}", b),
+            Lit::Int(i) => write!(f, "{}", i),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Expr {
     Var(String),
@@ -75,8 +171,11 @@ pub enum Expr {
     Let(String, Box<Expr>, Box<Expr>),
     LetRec(String, Box<Expr>, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
-    LitInt(i64),
-    LitBool(bool),
+
+    Tuple(Vec<Expr>),
+    Struct(String, Vec<(String, Expr)>),
+
+    Lit(Lit),
 }
 
 impl Expr {
@@ -109,8 +208,8 @@ impl fmt::Display for Expr {
             Expr::Let(x, e1, e2)    => write!(f, "let {} = {} in {}", x, *e1, *e2),
             Expr::LetRec(x, e1, e2) => write!(f, "let rec {} = {} in {}", x, *e1, *e2),
             Expr::If(e1, e2, e3)    => write!(f, "if {} then {} else {}", e1, e2, e3),
-            Expr::LitInt(a)         => write!(f, "{}", a),
-            Expr::LitBool(a)        => write!(f, "{}", a),
+            Expr::Lit(a)            => write!(f, "{}", a),
+            Expr::Tuple(_) | Expr::Struct(_, _) => todo!(),
         }
     }
 }
