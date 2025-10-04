@@ -174,8 +174,57 @@ impl fmt::Display for Lit {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum Pat {
+    Lit(Lit),                   // `()`, `true`, `1`, etc.
+    Var(String),                // `x`
+    Wildcard,                   // `_`
+    Con(String, Vec<Pat>),      // `Cons x xs`
+    Tuple(Vec<Pat>),            // `(p,)`, `(p1, p2)`
+    Struct(String, Vec<(String, Pat)>),
+}
+
+impl Pat {
+    pub fn var<S: Into<String>>(s: S) -> Self {
+        Pat::Var(s.into())
+    }
+    pub fn con<S: Into<String>>(s: S, args: Vec<Pat>) -> Self {
+        Pat::Con(s.into(), args)
+    }
+}
+
+impl fmt::Display for Pat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Pat::Lit(a) => write!(f, "{}", a),
+            Pat::Var(x) => write!(f, "{}", x),
+            Pat::Wildcard => write!(f, "_"),
+            Pat::Con(name, args) => {
+                if args.is_empty() {
+                    write!(f, "{}", name)
+                }
+                else {
+                    write!(f, "{}", name)?;
+                    let s: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
+                    write!(f, " {}", s.join(" "))
+                }
+            }
+            Pat::Tuple(es) => {
+                write!(f, "({},", es[0])?;
+                if es.len() > 1 {
+                    let s: Vec<String> = es[1..].iter().map(|t| t.to_string()).collect();
+                    write!(f, " {}", s.join(", "))?;
+                }
+                write!(f, ")")
+            }
+            Pat::Struct(_, _) => todo!(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Expr {
+    Lit(Lit),
     Var(String),
     Abs(String, Box<Expr>),
     App(Box<Expr>, Box<Expr>),
@@ -185,8 +234,6 @@ pub enum Expr {
 
     Tuple(Vec<Expr>),
     Struct(String, Vec<(String, Expr)>),
-
-    Lit(Lit),
 }
 
 impl Expr {
@@ -213,13 +260,13 @@ impl Expr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Expr::Lit(a)            => write!(f, "{}", a),
             Expr::Var(x)            => write!(f, "{}", x),
             Expr::Abs(x, e)         => write!(f, "λ{}.{}", x, *e),
             Expr::App(e1, e2)       => write!(f, "{} {}", *e1, *e2),
             Expr::Let(x, e1, e2)    => write!(f, "let {} = {} in {}", x, *e1, *e2),
             Expr::LetRec(x, e1, e2) => write!(f, "let rec {} = {} in {}", x, *e1, *e2),
             Expr::If(e1, e2, e3)    => write!(f, "if {} then {} else {}", e1, e2, e3),
-            Expr::Lit(a)            => write!(f, "{}", a),
             Expr::Tuple(es) => {
                 write!(f, "({},", es[0])?;
                 if es.len() > 1 {

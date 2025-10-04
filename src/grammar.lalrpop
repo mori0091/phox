@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use crate::syntax::ast::{Expr, Lit};
+use crate::syntax::ast::{Expr, Lit, Pat};
 
 grammar;
 
@@ -55,37 +55,10 @@ ExprApp: Expr = {
 
 // 原子的な式
 Atom: Expr = {
-    Lit,
-    Var,
+    Lit => Expr::Lit(<>),
+    Ident => Expr::var(<>),
     ExprParen,
     ExprTuple,
-};
-
-Lit: Expr = {
-    LitUnit,
-    LitInt,
-    LitBool,
-};
-
-LitUnit: Expr = {
-    "()" => Expr::Lit(Lit::Unit),
-};
-
-LitBool: Expr = {
-    "true" => Expr::Lit(Lit::Bool(true)),
-    "false" => Expr::Lit(Lit::Bool(false)),
-};
-
-LitInt: Expr = {
-    r"[0-9]+" => Expr::Lit(Lit::Int(i64::from_str(<>).unwrap())),
-};
-
-Var: Expr = {
-    Ident => Expr::var(<>),
-};
-
-Ident: String = {
-    r"[a-zA-Z_][a-zA-Z0-9_]*" => <>.to_string(),
 };
 
 ExprParen: Expr = {
@@ -96,6 +69,49 @@ ExprTuple: Expr = {
     "(" <es:SepByComma<Expr>> ")" => Expr::Tuple(es),
 };
 
+// === pattern ===
+Pat: Pat = {
+    "_" => Pat::Wildcard,
+    Lit => Pat::Lit(<>),
+    Ident => Pat::var(<>),
+    PatTuple,
+    PatCon,
+};
+
+PatTuple: Pat = {
+    "(" <ps:SepByComma<Pat>> ")" => Pat::Tuple(ps),
+};
+
+PatCon: Pat = {
+    <name:Ident> <args:Pat*> => Pat::con(name, args),
+};
+
+// === literal ===
+Lit: Lit = {
+    LitUnit,
+    LitInt,
+    LitBool,
+};
+
+LitUnit: Lit = {
+    "()" => Lit::Unit,
+};
+
+LitBool: Lit = {
+    "true" => Lit::Bool(true),
+    "false" => Lit::Bool(false),
+};
+
+LitInt: Lit = {
+    r"[0-9]+" => Lit::Int(i64::from_str(<>).unwrap()),
+};
+
+// === identifier ===
+Ident: String = {
+    r"[a-zA-Z_][a-zA-Z0-9_]*" => <>.to_string(),
+};
+
+// === comma-separated list ===
 // A comma-separated list of T elements.
 // Except when there is only one element, the trailing comma is optional.
 SepByComma<T>: Vec<T> = {
