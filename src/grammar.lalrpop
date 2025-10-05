@@ -22,11 +22,11 @@ ExprAbs: Expr = {
 };
 
 ExprLet: Expr = {
-    "let" <id:Ident> "=" <e1:Expr0> "in" <e2:Expr0> => Expr::let_(id, e1, e2),
+    "let" <p:Pat> "=" <e1:Expr0> "in" <e2:Expr0> => Expr::let_(p, e1, e2),
 };
 
 ExprLetRec: Expr = {
-    "let" "rec" <id:Ident> "=" <e1:Expr0> "in" <e2:Expr0> => Expr::let_rec(id, e1, e2),
+    "let" "rec" <p:Pat> "=" <e1:Expr0> "in" <e2:Expr0> => Expr::let_rec(p, e1, e2),
 };
 
 ExprIf: Expr = {
@@ -57,6 +57,7 @@ ExprApp: Expr = {
 Atom: Expr = {
     Lit => Expr::Lit(<>),
     Ident => Expr::var(<>),
+    ConIdent => Expr::var(<>),
     ExprParen,
     ExprTuple,
 };
@@ -71,19 +72,32 @@ ExprTuple: Expr = {
 
 // === pattern ===
 Pat: Pat = {
+    Pat0,
+};
+
+Pat0: Pat = {
+    PatCon,
+    PatAtom,
+};
+
+PatCon: Pat = {
+    <name:ConIdent> <args:PatAtom*> => Pat::con(name, args),
+};
+
+PatAtom: Pat = {
     "_" => Pat::Wildcard,
     Lit => Pat::Lit(<>),
     Ident => Pat::var(<>),
+    PatParen,
     PatTuple,
-    PatCon,
+};
+
+PatParen: Pat = {
+    "(" <p:Pat> ")" => p,
 };
 
 PatTuple: Pat = {
     "(" <ps:SepByComma<Pat>> ")" => Pat::Tuple(ps),
-};
-
-PatCon: Pat = {
-    <name:Ident> <args:Pat*> => Pat::con(name, args),
 };
 
 // === literal ===
@@ -108,7 +122,11 @@ LitInt: Lit = {
 
 // === identifier ===
 Ident: String = {
-    r"[a-zA-Z_][a-zA-Z0-9_]*" => <>.to_string(),
+    r"[a-z_][a-zA-Z0-9_]*" => <>.to_string(),
+};
+
+ConIdent: String = {
+    r"[A-Z][a-zA-Z0-9_]*" => <>.to_string(),
 };
 
 // === comma-separated list ===

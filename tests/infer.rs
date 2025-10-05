@@ -28,7 +28,7 @@ fn test_simple_let() {
 
 #[test]
 fn test_var() {
-    assert_eq!(check("foo"), Err("infer error: \"unbound variable: foo\"".into()));
+    assert_eq!(check("foo"), Err("infer error: UnboundVariable(\"foo\")".into()));
 }
 
 #[test]
@@ -106,17 +106,83 @@ fn test_tuple_argument_function() {
 #[test]
 fn test_tuple_mismatch_length() {
     let err = check_scheme("if true then (1,) else (1, 2)").unwrap_err();
-    assert!(err.contains("tuple length mismatch"));
+    assert!(err.contains("TupleLengthMismatch"));
 }
 
 #[test]
 fn test_tuple_mismatch_type() {
     let err = check_scheme("if true then (1, true) else (1, 1)").unwrap_err();
-    assert!(err.contains("type mismatch"));
+    assert!(err.contains("Mismatch"));
 }
 
 #[test]
 fn test_empty_tuple() {
     let sch = check_scheme("()").unwrap();
     assert_eq!(sch.pretty(), "()");
+}
+
+#[test]
+fn test_tuple_pattern() {
+    let sch = check_scheme("let (x, y) = (1, true) in x").unwrap();
+    assert_eq!(sch.pretty(), "Int");
+}
+
+#[test]
+fn test_wildcard_pattern() {
+    let sch = check_scheme("let (_, y) = (1, true) in y").unwrap();
+    assert_eq!(sch.pretty(), "Bool");
+}
+
+#[test]
+fn test_literal_pattern() {
+    let sch = check_scheme("let true = true in 1").unwrap();
+    assert_eq!(sch.pretty(), "Int");
+}
+
+#[test]
+fn test_option_pattern() {
+    let sch = check_scheme("let Some x = Some 1 in x").unwrap();
+    assert_eq!(sch.pretty(), "Int");
+}
+
+#[test]
+fn test_none_pattern() {
+    let sch = check_scheme("let None = None in 42").unwrap();
+    assert_eq!(sch.pretty(), "Int");
+}
+
+#[test]
+fn test_nil_pattern() {
+    let sch = check_scheme("let Nil = Nil in 0").unwrap();
+    assert_eq!(sch.pretty(), "Int");
+}
+
+#[test]
+fn test_cons_pattern_single() {
+    let sch = check_scheme("let Cons x xs = Cons 1 Nil in x").unwrap();
+    assert_eq!(sch.pretty(), "Int");
+}
+
+#[test]
+fn test_cons_pattern_tail() {
+    let sch = check_scheme("let Cons x xs = Cons 1 Nil in xs").unwrap();
+    assert_eq!(sch.pretty(), "List Int");
+}
+
+#[test]
+fn test_nested_cons_pattern_mismatch() {
+    let err = check_scheme("let Cons x (Cons y ys) = Cons 1 (Cons true Nil) in y").unwrap_err();
+    assert!(err.contains("Mismatch"));
+}
+
+#[test]
+fn test_nested_cons_pattern() {
+    let sch = check_scheme("let Cons x (Cons y ys) = Cons 1 (Cons 2 Nil) in y").unwrap();
+    assert_eq!(sch.pretty(), "Int");
+}
+
+#[test]
+fn test_list_identity_function() {
+    let sch = check_scheme("\\t. let Cons x xs = t in Cons x xs").unwrap();
+    assert_eq!(sch.pretty(), "∀ a. List a -> List a");
 }

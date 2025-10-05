@@ -1,6 +1,20 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::syntax::ast::{Kind, Type, TypeVarId, Scheme, Expr, Lit};
+use crate::syntax::ast::{Kind, Type, TypeVarId, Scheme, Expr, Lit, Pat};
+
+// ===== Type error =====
+#[derive(Debug)]
+pub enum TypeError {
+    UnboundVariable(String),
+    Mismatch(Type, Type),
+    TupleLengthMismatch(usize, usize),
+    ExpectedTuple(Type),
+    UnsupportedPattern(Pat),
+    RecursiveType,
+    UnknownConstructor(String),
+    ConstructorArityMismatch(String, usize, Type),
+    LetRecPatternNotSupported(Pat),
+}
 
 // ===== Type Environment =====
 pub struct TypeEnv {
@@ -30,7 +44,9 @@ impl TypeContext {
         self.binding.push(None);
         id
     }
+}
 
+impl TypeContext {
     // find with path compression
     fn find(&mut self, id: TypeVarId) -> TypeVarId {
         let p = self.parent[id.0];
@@ -40,7 +56,9 @@ impl TypeContext {
         }
         self.parent[id.0]
     }
+}
 
+impl TypeContext {
     // Occurs check: does tv occur in ty (following bindings)?
     fn occurs_in(&mut self, tv: TypeVarId, ty: &Type) -> bool {
         match ty {
@@ -69,7 +87,9 @@ impl TypeContext {
             _ => false,
         }
     }
+}
 
+impl TypeContext {
     // Normalize a type by chasing bindings and compressing vars
     fn repr(&mut self, ty: &Type) -> Type {
         match ty {
@@ -90,8 +110,10 @@ impl TypeContext {
             Type::Struct(_, _) => todo!(),
         }
     }
+}
 
-    fn unify(&mut self, a: &Type, b: &Type) -> Result<(), String> {
+impl TypeContext {
+    fn unify(&mut self, a: &Type, b: &Type) -> Result<(), TypeError> {
         let a = self.repr(a);
         let b = self.repr(b);
         match (&a, &b) {
@@ -110,7 +132,7 @@ impl TypeContext {
                 // t might reduce further; use repr to avoid deep chains
                 let t = self.repr(t);
                 if self.occurs_in(r, &t) {
-                    Err("occurs check failed: recursive type".into())
+                    Err(TypeError::RecursiveType)
                 } else {
                     self.binding[r.0] = Some(t);
                     Ok(())
@@ -131,7 +153,7 @@ impl TypeContext {
 
             (Type::Tuple(ts1), Type::Tuple(ts2)) => {
                 if ts1.len() != ts2.len() {
-                    return Err(format!("tuple length mismatch: {} vs {}", ts1.len(), ts2.len()));
+                    return Err(TypeError::TupleLengthMismatch(ts1.len(), ts2.len()));
                 }
                 for (t1, t2) in ts1.iter().zip(ts2.iter()) {
                     self.unify(t1, t2)?;
@@ -143,7 +165,95 @@ impl TypeContext {
                 todo!()
             }
             (ta, tb) if ta == tb => Ok(()),
-            _ => Err(format!("type mismatch: {} vs {}", a, b)),
+            _ => Err(TypeError::Mismatch(a, b)),
+        }
+    }
+}
+
+impl TypeContext {
+    pub fn fresh_type_for_pattern(&mut self, pat: &Pat) -> Type {
+        match pat {
+            Pat::Var(_) | Pat::Wildcard => Type::Var(self.fresh_var()),
+            Pat::Lit(lit) => match lit {
+                Lit::Unit => Type::con("Unit"),
+                Lit::Bool(_) => Type::con("Bool"),
+                Lit::Int(_) => Type::con("Int"),
+            },
+            Pat::Tuple(ps) => {
+                let ts = ps.iter().map(|p| self.fresh_type_for_pattern(p)).collect();
+                Type::Tuple(ts)
+            }
+            Pat::Con(_, _) => {
+                Type::Var(self.fresh_var()) // パターン全体の型は未知とする
+            }
+            Pat::Struct(_, _) => todo!(),
+        }
+    }
+}
+
+impl TypeContext {
+    fn match_pattern(&mut self, env: &mut Env, pat: &Pat, ty: &Type) -> Result<(), TypeError> {
+        match pat {
+            Pat::Var(x) => {
+                env.map.insert(x.clone(), Scheme::mono(ty.clone()));
+                Ok(())
+            }
+            Pat::Wildcard => Ok(()), // 束縛なし
+            Pat::Lit(lit) => {
+                let expected = match lit {
+                    Lit::Unit => Type::Con("Unit".to_string()),
+                    Lit::Bool(_) => Type::Con("Bool".to_string()),
+                    Lit::Int(_) => Type::Con("Int".to_string()),
+                };
+                if &expected == ty {
+                    Ok(())
+                } else {
+                    Err(TypeError::Mismatch(expected, ty.clone()))
+                }
+            }
+            Pat::Tuple(ps) => {
+                match ty {
+                    Type::Tuple(ts) => {
+                        if ps.len() != ts.len() {
+                            return Err(TypeError::TupleLengthMismatch(ps.len(), ts.len()));
+                        }
+                        for (p, t) in ps.iter().zip(ts.iter()) {
+                            self.match_pattern(env, p, t)?;
+                        }
+                        Ok(())
+                    }
+                    _ => Err(TypeError::ExpectedTuple(ty.clone())),
+                }
+            }
+            Pat::Con(name, args) => {
+                let scheme = env.map.get(name).ok_or(TypeError::UnknownConstructor(name.clone()))?;
+                let con_ty = instantiate(self, scheme);
+
+                let mut arg_types = Vec::new();
+                let mut ty_fun = con_ty;
+
+                for _ in args {
+                    match self.repr(&ty_fun) {
+                        Type::Fun(a, b) => {
+                            arg_types.push(*a);
+                            ty_fun = *b;
+                        }
+                        other => return Err(TypeError::ConstructorArityMismatch(name.clone(), args.len(), other)),
+                    }
+                }
+
+                self.unify(&ty_fun, ty)?;
+
+                for (p, t) in args.iter().zip(arg_types.iter()) {
+                    self.match_pattern(env, p, t)?;
+                }
+
+                Ok(())
+            }
+            Pat::Struct(_, _) => {
+                // まだ未対応。構造体型の照合が必要
+                Err(TypeError::UnsupportedPattern(pat.clone()))
+            }
         }
     }
 }
@@ -189,28 +299,32 @@ fn instantiate(ctx: &mut TypeContext, sch: &Scheme) -> Type {
     for &v in &sch.vars {
         subst.insert(v, ctx.fresh_var());
     }
-    fn inst(ctx: &mut TypeContext, t: &Type, s: &HashMap<TypeVarId, TypeVarId>) -> Type {
-        match ctx.repr(t) {
-            Type::Var(v) => {
-                if let Some(nv) = s.get(&v) {
-                    Type::Var(*nv)
-                } else {
-                    Type::Var(v)
-                }
+    substitute(ctx, &sch.ty, &subst)
+}
+
+fn substitute(ctx: &mut TypeContext, t: &Type, subst: &HashMap<TypeVarId, TypeVarId>) -> Type {
+    match ctx.repr(t) {
+        Type::Var(v) => {
+            if let Some(nv) = subst.get(&v) {
+                Type::Var(*nv)
+            } else {
+                Type::Var(v)
             }
-            Type::Fun(ref a, ref b) => Type::fun(inst(ctx, a, s), inst(ctx, b, s)),
-            Type::Con(c)            => Type::con(c),
-            Type::App(ref a, ref b) => Type::app(inst(ctx, a, s), inst(ctx, b, s)),
-            Type::Tuple(ts) => {
-                let ts2: Vec<Type> = ts.iter()
-                    .map(|t| inst(ctx, t, s))
-                    .collect();
-                Type::Tuple(ts2)
-            }
-            Type::Struct(_, _) => todo!(),
         }
+        Type::Fun(ref a, ref b) => {
+            Type::fun(substitute(ctx, a, subst), substitute(ctx, b, subst))
+        }
+        Type::Con(c) => {
+            Type::con(c)
+        }
+        Type::App(ref a, ref b) => {
+            Type::app(substitute(ctx, a, subst), substitute(ctx, b, subst))
+        }
+        Type::Tuple(ts) => {
+            Type::Tuple(ts.iter().map(|t| substitute(ctx, t, subst)).collect())
+        }
+        Type::Struct(_, _) => todo!(),
     }
-    inst(ctx, &sch.ty, &subst)
 }
 
 pub fn generalize(ctx: &mut TypeContext, env: &Env, ty: &Type) -> Scheme {
@@ -219,14 +333,14 @@ pub fn generalize(ctx: &mut TypeContext, env: &Env, ty: &Type) -> Scheme {
     let fenv = free_env_vars(ctx, env);
     let mut vars: Vec<TypeVarId> = fty.difference(&fenv).cloned().collect();
     vars.sort_by_key(|v| v.0);
-    Scheme { vars, ty: ctx.repr(ty) }
+    Scheme::poly(vars, ctx.repr(ty))
 }
 
 // ===== Inference (Algorithm J core) =====
-pub fn infer(ctx: &mut TypeContext, env: &mut Env, expr: &Expr) -> Result<Type, String> {
+pub fn infer(ctx: &mut TypeContext, env: &mut Env, expr: &Expr) -> Result<Type, TypeError> {
     match expr {
         Expr::Var(x) => {
-            let sch = env.map.get(x).ok_or_else(|| format!("unbound variable: {}", x))?;
+            let sch = env.map.get(x).ok_or_else(|| TypeError::UnboundVariable(format!("{}",x)))?;
             Ok(instantiate(ctx, sch))
         }
         Expr::Abs(x, body) => {
@@ -234,7 +348,7 @@ pub fn infer(ctx: &mut TypeContext, env: &mut Env, expr: &Expr) -> Result<Type, 
             let tv = Type::Var(ctx.fresh_var());
             // extend env temporarily
             let saved = env.clone();
-            env.map.insert(x.clone(), Scheme { vars: vec![], ty: tv.clone() });
+            env.map.insert(x.clone(), Scheme::mono(tv.clone()));
             let tbody = infer(ctx, env, body)?;
             *env = saved;
             Ok(Type::fun(tv, tbody))
@@ -246,27 +360,42 @@ pub fn infer(ctx: &mut TypeContext, env: &mut Env, expr: &Expr) -> Result<Type, 
             ctx.unify(&tf, &Type::fun(ta, tr.clone()))?;
             Ok(tr)
         }
-        Expr::Let(x, e1, e2) => {
+        Expr::Let(pat, e1, e2) => {
             let t1 = infer(ctx, env, e1)?;
-            let sch = generalize(ctx, env, &t1);
-            env.map.insert(x.clone(), sch);
-            infer(ctx, env, e2)
+            let t_pat = ctx.fresh_type_for_pattern(&pat); // 例: (α, β)
+            ctx.unify(&t1, &t_pat)?;
+            let mut env2 = env.clone();               // 新しいスコープ
+            ctx.match_pattern(&mut env2, &pat, &t_pat)?;
+            infer(ctx, &mut env2, e2)
         }
-        Expr::LetRec(x, e1, e2) => {
-            // 1. fresh type variable
-            let tv = Type::Var(ctx.fresh_var());
-            // 2. 環境に仮の型を追加
-            env.map.insert(x.clone(), Scheme { vars: vec![], ty: tv.clone() });
-            // 3. e1 の型を推論
-            let t1 = infer(ctx, env, e1)?;
-            // 4. unify で仮の型と一致させる
-            ctx.unify(&tv, &t1)?;
-            // 5. 一般化して環境に登録し直す
-            let sch = generalize(ctx, env, &t1);
-            env.map.insert(x.clone(), sch);
-            // 6. e2 の型を推論
-            infer(ctx, env, e2)
+        Expr::LetRec(pat, e1, e2) => {
+            match pat {
+                Pat::Var(x) => {
+                    let tv = Type::Var(ctx.fresh_var());
+                    let mut env2 = env.clone(); // 新しいスコープ
+                    env2.map.insert(x.clone(), Scheme::mono(tv.clone())); // x は e1 にも見える
+                    let t1 = infer(ctx, &mut env2, e1)?;
+                    ctx.unify(&tv, &t1)?;
+                    infer(ctx, &mut env2, e2)
+                }
+                _ => Err(TypeError::LetRecPatternNotSupported(pat.clone()))
+            }
         }
+        // Expr::LetRec(x, e1, e2) => {
+        //     // 1. fresh type variable
+        //     let tv = Type::Var(ctx.fresh_var());
+        //     // 2. 環境に仮の型を追加
+        //     env.map.insert(x.clone(), Scheme { vars: vec![], ty: tv.clone() });
+        //     // 3. e1 の型を推論
+        //     let t1 = infer(ctx, env, e1)?;
+        //     // 4. unify で仮の型と一致させる
+        //     ctx.unify(&tv, &t1)?;
+        //     // 5. 一般化して環境に登録し直す
+        //     let sch = generalize(ctx, env, &t1);
+        //     env.map.insert(x.clone(), sch);
+        //     // 6. e2 の型を推論
+        //     infer(ctx, env, e2)
+        // }
         Expr::If(cond, then_e, else_e) => {
             let t_cond = infer(ctx, env, cond)?;
             // ctx.unify(&t_cond, &Type::Bool)?;

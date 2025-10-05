@@ -85,6 +85,15 @@ pub struct Scheme {
     pub ty: Type,
 }
 
+impl Scheme {
+    pub fn mono(t: Type) -> Scheme {
+        Scheme { vars: vec![], ty: t, }
+    }
+    pub fn poly(vs: Vec<TypeVarId>, t: Type) -> Scheme {
+        Scheme { vars: vs, ty: t, }
+    }
+}
+
 impl fmt::Display for Scheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.vars.is_empty() {
@@ -228,8 +237,8 @@ pub enum Expr {
     Var(String),
     Abs(String, Box<Expr>),
     App(Box<Expr>, Box<Expr>),
-    Let(String, Box<Expr>, Box<Expr>),
-    LetRec(String, Box<Expr>, Box<Expr>),
+    Let(Pat, Box<Expr>, Box<Expr>),
+    LetRec(Pat, Box<Expr>, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
 
     Tuple(Vec<Expr>),
@@ -246,11 +255,11 @@ impl Expr {
     pub fn app(f: Expr, x: Expr) -> Self {
         Expr::App(Box::new(f), Box::new(x))
     }
-    pub fn let_<S: Into<String>>(s: S, e1: Expr, e2: Expr) -> Self {
-        Expr::Let(s.into(), Box::new(e1), Box::new(e2))
+    pub fn let_(p: Pat, e1: Expr, e2: Expr) -> Self {
+        Expr::Let(p, Box::new(e1), Box::new(e2))
     }
-    pub fn let_rec<S: Into<String>>(s: S, e1: Expr, e2: Expr) -> Self {
-        Expr::LetRec(s.into(), Box::new(e1), Box::new(e2))
+    pub fn let_rec(p: Pat, e1: Expr, e2: Expr) -> Self {
+        Expr::LetRec(p, Box::new(e1), Box::new(e2))
     }
     pub fn if_(e1: Expr, e2: Expr, e3: Expr) -> Self {
         Expr::If(Box::new(e1), Box::new(e2), Box::new(e3))
