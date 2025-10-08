@@ -9,6 +9,15 @@ pub Expr: Expr = {
 };
 
 Expr0: Expr = {
+    Expr1,
+    ExprSeq,
+};
+
+ExprSeq: Expr = {
+    <e1:Expr1> ";" <e2:Expr1> => Expr::let_(Pat::Wildcard, e1, e2),
+};
+
+Expr1: Expr = {
     ExprAbs,
     ExprLet,
     ExprLetRec,
@@ -18,19 +27,19 @@ Expr0: Expr = {
 
 // λ抽象や let/if は「一番外側でしか出てこない」ようにする
 ExprAbs: Expr = {
-    "\\" <id:Ident> "." <body:Expr0> => Expr::abs(id, body),
+    "\\" <id:Ident> "." <body:Expr1> => Expr::abs(id, body),
 };
 
 ExprLet: Expr = {
-    "let" <p:Pat> "=" <e1:Expr0> "in" <e2:Expr0> => Expr::let_(p, e1, e2),
+    "let" <p:Pat> "=" <e1:Expr1> ";" <e2:Expr1> => Expr::let_(p, e1, e2),
 };
 
 ExprLetRec: Expr = {
-    "let" "rec" <p:Pat> "=" <e1:Expr0> "in" <e2:Expr0> => Expr::let_rec(p, e1, e2),
+    "let" "rec" <p:Pat> "=" <e1:Expr1> ";" <e2:Expr1> => Expr::let_rec(p, e1, e2),
 };
 
 ExprIf: Expr = {
-    "if" <cond:Expr0> "then" <e1:Expr0> "else" <e2:Expr0> => Expr::if_(cond, e1, e2),
+    "if" <cond:Expr1> "then" <e1:Expr1> "else" <e2:Expr1> => Expr::if_(cond, e1, e2),
 };
 
 // 加減算
@@ -60,6 +69,7 @@ Atom: Expr = {
     ConIdent => Expr::var(<>),
     ExprParen,
     ExprTuple,
+    ExprBlock,
 };
 
 ExprParen: Expr = {
@@ -68,6 +78,10 @@ ExprParen: Expr = {
 
 ExprTuple: Expr = {
     "(" <es:SepByComma<Expr>> ")" => Expr::Tuple(es),
+};
+
+ExprBlock: Expr = {
+    "{" <e:Expr> "}" => e,
 };
 
 // === pattern ===
