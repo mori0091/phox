@@ -2,6 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::syntax::ast::{Kind, Type, TypeVarId, Scheme, Expr, Lit, Pat};
 
+type Env<T> = HashMap<String, T>;
+
 // ===== Type error =====
 #[derive(Debug)]
 pub enum TypeError {
@@ -16,16 +18,13 @@ pub enum TypeError {
     LetRecPatternNotSupported(Pat),
 }
 
-// ===== Type Environment =====
-pub struct TypeEnv {
-    pub kinds: HashMap<String, Kind>, // 型構築子の種類
-}
+// ===== Kind Environment =====
+// maps name of type constructor to Kind
+type KindEnv = Env<Kind>;
 
-// ===== Environment =====
-#[derive(Default, Clone)]
-pub struct Env {
-    pub map: HashMap<String, Scheme>,
-}
+// ===== Type Environment =====
+// maps name of variable to type scheme
+type TypeEnv = Env<Scheme>;
 
 // ===== Type context: union-find + binding =====
 pub struct TypeContext {
@@ -38,7 +37,7 @@ impl TypeContext {
         Self { parent: Vec::new(), binding: Vec::new() }
     }
 
-    pub fn fresh_var(&mut self) -> TypeVarId {
+    fn fresh_var(&mut self) -> TypeVarId {
         let id = TypeVarId(self.parent.len());
         self.parent.push(id);
         self.binding.push(None);
@@ -171,7 +170,7 @@ impl TypeContext {
 }
 
 impl TypeContext {
-    pub fn fresh_type_for_pattern(&mut self, pat: &Pat) -> Type {
+    fn fresh_type_for_pattern(&mut self, pat: &Pat) -> Type {
         match pat {
             Pat::Var(_) | Pat::Wildcard => Type::Var(self.fresh_var()),
             Pat::Lit(lit) => match lit {
@@ -192,10 +191,10 @@ impl TypeContext {
 }
 
 impl TypeContext {
-    fn match_pattern(&mut self, env: &mut Env, pat: &Pat, ty: &Type) -> Result<(), TypeError> {
+    fn match_pattern(&mut self, env: &mut TypeEnv, pat: &Pat, ty: &Type) -> Result<(), TypeError> {
         match pat {
             Pat::Var(x) => {
-                env.map.insert(x.clone(), Scheme::mono(ty.clone()));
+                env.insert(x.clone(), Scheme::mono(ty.clone()));
                 Ok(())
             }
             Pat::Wildcard => Ok(()), // 束縛なし
@@ -226,7 +225,7 @@ impl TypeContext {
                 }
             }
             Pat::Con(name, args) => {
-                let scheme = env.map.get(name).ok_or(TypeError::UnknownConstructor(name.clone()))?;
+                let scheme = env.get(name).ok_or(TypeError::UnknownConstructor(name.clone()))?;
                 let con_ty = instantiate(self, scheme);
 
                 let mut arg_types = Vec::new();
@@ -282,9 +281,9 @@ fn free_ty_vars(ctx: &mut TypeContext, ty: &Type, acc: &mut HashSet<TypeVarId>) 
     }
 }
 
-fn free_env_vars(ctx: &mut TypeContext, env: &Env) -> HashSet<TypeVarId> {
+fn free_env_vars(ctx: &mut TypeContext, env: &TypeEnv) -> HashSet<TypeVarId> {
     let mut acc = HashSet::new();
-    for scheme in env.map.values() {
+    for scheme in env.values() {
         free_ty_vars(ctx, &scheme.ty, &mut acc);
         for v in &scheme.vars {
             acc.remove(v);
@@ -327,7 +326,7 @@ fn substitute(ctx: &mut TypeContext, t: &Type, subst: &HashMap<TypeVarId, TypeVa
     }
 }
 
-pub fn generalize(ctx: &mut TypeContext, env: &Env, ty: &Type) -> Scheme {
+pub fn generalize(ctx: &mut TypeContext, env: &TypeEnv, ty: &Type) -> Scheme {
     let mut fty = HashSet::new();
     free_ty_vars(ctx, ty, &mut fty);
     let fenv = free_env_vars(ctx, env);
@@ -337,10 +336,10 @@ pub fn generalize(ctx: &mut TypeContext, env: &Env, ty: &Type) -> Scheme {
 }
 
 // ===== Inference (Algorithm J core) =====
-pub fn infer(ctx: &mut TypeContext, env: &mut Env, expr: &Expr) -> Result<Type, TypeError> {
+pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Type, TypeError> {
     match expr {
         Expr::Var(x) => {
-            let sch = env.map.get(x).ok_or_else(|| TypeError::UnboundVariable(format!("{}",x)))?;
+            let sch = env.get(x).ok_or_else(|| TypeError::UnboundVariable(format!("{}",x)))?;
             Ok(instantiate(ctx, sch))
         }
         Expr::Abs(x, body) => {
@@ -348,7 +347,7 @@ pub fn infer(ctx: &mut TypeContext, env: &mut Env, expr: &Expr) -> Result<Type, 
             let tv = Type::Var(ctx.fresh_var());
             // extend env temporarily
             let saved = env.clone();
-            env.map.insert(x.clone(), Scheme::mono(tv.clone()));
+            env.insert(x.clone(), Scheme::mono(tv.clone()));
             let tbody = infer(ctx, env, body)?;
             *env = saved;
             Ok(Type::fun(tv, tbody))
@@ -373,7 +372,7 @@ pub fn infer(ctx: &mut TypeContext, env: &mut Env, expr: &Expr) -> Result<Type, 
                 Pat::Var(x) => {
                     let tv = Type::Var(ctx.fresh_var());
                     let mut env2 = env.clone(); // 新しいスコープ
-                    env2.map.insert(x.clone(), Scheme::mono(tv.clone())); // x は e1 にも見える
+                    env2.insert(x.clone(), Scheme::mono(tv.clone())); // x は e1 にも見える
                     let t1 = infer(ctx, &mut env2, e1)?;
                     ctx.unify(&tv, &t1)?;
                     infer(ctx, &mut env2, e2)
@@ -381,24 +380,8 @@ pub fn infer(ctx: &mut TypeContext, env: &mut Env, expr: &Expr) -> Result<Type, 
                 _ => Err(TypeError::LetRecPatternNotSupported(pat.clone()))
             }
         }
-        // Expr::LetRec(x, e1, e2) => {
-        //     // 1. fresh type variable
-        //     let tv = Type::Var(ctx.fresh_var());
-        //     // 2. 環境に仮の型を追加
-        //     env.map.insert(x.clone(), Scheme { vars: vec![], ty: tv.clone() });
-        //     // 3. e1 の型を推論
-        //     let t1 = infer(ctx, env, e1)?;
-        //     // 4. unify で仮の型と一致させる
-        //     ctx.unify(&tv, &t1)?;
-        //     // 5. 一般化して環境に登録し直す
-        //     let sch = generalize(ctx, env, &t1);
-        //     env.map.insert(x.clone(), sch);
-        //     // 6. e2 の型を推論
-        //     infer(ctx, env, e2)
-        // }
         Expr::If(cond, then_e, else_e) => {
             let t_cond = infer(ctx, env, cond)?;
-            // ctx.unify(&t_cond, &Type::Bool)?;
             ctx.unify(&t_cond, &Type::Con("Bool".into()))?;
 
             let t_then = infer(ctx, env, then_e)?;
@@ -425,23 +408,23 @@ pub fn infer(ctx: &mut TypeContext, env: &mut Env, expr: &Expr) -> Result<Type, 
 }
 
 // ------------------------
-pub fn initial_type_env() -> TypeEnv {
-    let mut tenv = TypeEnv { kinds: HashMap::new() };
+pub fn initial_kind_env() -> KindEnv {
+    let mut env = KindEnv::new();
 
-    tenv.kinds.insert("Int".into(), Kind::Star);
-    tenv.kinds.insert("Bool".into(), Kind::Star);
-    tenv.kinds.insert("List".into(), Kind::Arrow(Box::new(Kind::Star), Box::new(Kind::Star)));
-    tenv.kinds.insert("Option".into(), Kind::Arrow(Box::new(Kind::Star), Box::new(Kind::Star)));
+    env.insert("Int".into(), Kind::Star);
+    env.insert("Bool".into(), Kind::Star);
+    env.insert("List".into(), Kind::Arrow(Box::new(Kind::Star), Box::new(Kind::Star)));
+    env.insert("Option".into(), Kind::Arrow(Box::new(Kind::Star), Box::new(Kind::Star)));
 
-    tenv
+    env
 }
 
-pub fn initial_env(ctx: &mut TypeContext) -> Env {
-    let mut env = Env::default();
+pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
+    let mut env = TypeEnv::default();
 
     // None : ∀a. Option a
     let a = ctx.fresh_var();
-    env.map.insert(
+    env.insert(
         "None".into(),
         Scheme {
             vars: vec![a],
@@ -454,7 +437,7 @@ pub fn initial_env(ctx: &mut TypeContext) -> Env {
 
     // Some : ∀a. a -> Option a
     let a = ctx.fresh_var();
-    env.map.insert(
+    env.insert(
         "Some".into(),
         Scheme {
             vars: vec![a],
@@ -470,7 +453,7 @@ pub fn initial_env(ctx: &mut TypeContext) -> Env {
 
     // Nil : ∀a. List a
     let a = ctx.fresh_var();
-    env.map.insert(
+    env.insert(
         "Nil".into(),
         Scheme {
             vars: vec![a],
@@ -480,7 +463,7 @@ pub fn initial_env(ctx: &mut TypeContext) -> Env {
 
     // Cons : ∀a. a -> List a -> List a
     let a = ctx.fresh_var();
-    env.map.insert(
+    env.insert(
         "Cons".into(),
         Scheme {
             vars: vec![a],
@@ -498,7 +481,7 @@ pub fn initial_env(ctx: &mut TypeContext) -> Env {
     let a = ctx.fresh_var();
     let b = ctx.fresh_var();
 
-    env.map.insert(
+    env.insert(
         "map".into(),
         Scheme {
             vars: vec![a, b],
@@ -514,7 +497,7 @@ pub fn initial_env(ctx: &mut TypeContext) -> Env {
 
     // プリミティブ演算子 (+, -, *, ==) も必要なら追加
     let a = ctx.fresh_var();
-    env.map.insert(
+    env.insert(
         "+".into(),
         Scheme {
             vars: vec![a],
@@ -523,7 +506,7 @@ pub fn initial_env(ctx: &mut TypeContext) -> Env {
     );
 
     let a = ctx.fresh_var();
-    env.map.insert(
+    env.insert(
         "-".into(),
         Scheme {
             vars: vec![a],
@@ -532,7 +515,7 @@ pub fn initial_env(ctx: &mut TypeContext) -> Env {
     );
 
     let a = ctx.fresh_var();
-    env.map.insert(
+    env.insert(
         "*".into(),
         Scheme {
             vars: vec![a],
@@ -541,7 +524,7 @@ pub fn initial_env(ctx: &mut TypeContext) -> Env {
     );
 
     let a = ctx.fresh_var();
-    env.map.insert(
+    env.insert(
         "==".into(),
         Scheme {
             vars: vec![a],
