@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::syntax::ast::{Kind, Type, TypeVarId, Scheme, Expr, Lit, Pat};
+use crate::syntax::ast::{Expr, Lit, Pat};
+use crate::typesys::{Kind, Type, TypeVarId, Scheme};
 
 type Env<T> = HashMap<String, T>;
 

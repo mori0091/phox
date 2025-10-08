@@ -1,6 +1,7 @@
 use crate::grammar::ExprParser;
-use crate::typesys::infer::{TypeContext, initial_type_env, infer, generalize};
-use crate::syntax::ast::{Expr, Type, Scheme};
+use crate::syntax::ast::Expr;
+use crate::typesys::{Type, Scheme};
+use crate::typesys::{TypeContext, initial_type_env, infer, generalize};
 
 /// Parse source code of an expression.
 pub fn parse_expr(src: &str) -> Result<Expr, String> {

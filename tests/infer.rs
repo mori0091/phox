@@ -1,5 +1,5 @@
 use algo_j::api::{check, check_scheme};
-use algo_j::syntax::ast::Type;
+use algo_j::typesys::Type;
 
 #[test]
 fn test_lit_unit() {
