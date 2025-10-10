@@ -77,14 +77,16 @@ impl TypeContext {
                     false
                 }
             }
-            Type::Fun(a, b) => {
+            Type::Fun(a, b) | Type::App(a, b) => {
                 self.occurs_in(tv, a) || self.occurs_in(tv, b)
             }
             Type::Tuple(ts) => {
                 ts.iter().any(|t| self.occurs_in(tv, t))
             }
-            Type::Struct(_, _) => todo!(),
-            _ => false,
+            Type::Struct(_name, fields) => {
+                fields.iter().any(|(_, t)| self.occurs_in(tv, t))
+            }
+            Type::Con(_name) => false,
         }
     }
 }
@@ -106,8 +108,22 @@ impl TypeContext {
             Type::Fun(a, b) => Type::fun(self.repr(a), self.repr(b)),
             Type::App(f, x) => Type::app(self.repr(f), self.repr(x)),
             Type::Con(c) => Type::con(c.clone()),
-            Type::Tuple(ts) => Type::Tuple(ts.iter().map(|t| self.repr(t)).collect()),
-            Type::Struct(_, _) => todo!(),
+
+            Type::Tuple(ts) => {
+                Type::Tuple(
+                    ts.iter()
+                      .map(|t| self.repr(t)).collect()
+                )
+            }
+
+            Type::Struct(name, fields) => {
+                Type::Struct(
+                    name.clone(),
+                    fields.iter()
+                          .map(|(field, t)| (field.clone(), self.repr(t)))
+                          .collect()
+                )
+            }
         }
     }
 }
@@ -161,10 +177,16 @@ impl TypeContext {
                 Ok(())
             }
 
-            (Type::Struct(_s1, _fs1), Type::Struct(_s2, _fs2)) => {
-                todo!()
+            (Type::Struct(s1, fs1), Type::Struct(s2, fs2)) if s1 == s2 => {
+                for ((f1, t1), (f2, t2)) in fs1.iter().zip(fs2.iter()) {
+                    if f1 != f2 {
+                        return Err(TypeError::Mismatch(a, b));
+                    }
+                    self.unify(t1, t2)?;
+                }
+                Ok(())
             }
-            (ta, tb) if ta == tb => Ok(()),
+
             _ => Err(TypeError::Mismatch(a, b)),
         }
     }
