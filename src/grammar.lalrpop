@@ -43,6 +43,7 @@ Expr1: Expr = {
 // λ抽象や let/if は「一番外側でしか出てこない」ようにする
 ExprAbs: Expr = {
     "\\" <id:Ident> "." <body:Expr1> => Expr::abs(id, body),
+    "λ" <id:Ident> "." <body:Expr1> => Expr::abs(id, body),
 };
 
 ExprLet: Expr = {
