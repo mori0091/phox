@@ -1,5 +1,5 @@
 use crate::syntax::ast::Expr;
-use super::value::{Value, Env};
+use super::{Value, Env};
 
 /// 評価関数
 pub fn eval(expr: &Expr, env: &Env) -> Value {
@@ -155,7 +155,7 @@ fn match_pat(pat: &Pat, val: &Value) -> Option<Env> {
 
 
 use std::rc::Rc;
-// use super::value::{Value, Env};
+// use super::{Value, Env};
 use crate::syntax::ast::Lit;
 
 /// 評価時の初期環境
@@ -211,7 +211,7 @@ pub fn make_constructor(name: &str, arity: usize) -> Value {
 
 /// 2引数の整数演算子をBuiltinとして作る
 /// Int -> Int -> Int
-fn make_binop<F>(op: F) -> Value
+pub fn make_binop<F>(op: F) -> Value
 where
     F: Fn(i64, i64) -> i64 + 'static,
 {
@@ -241,7 +241,7 @@ where
 
 /// 2引数の比較演算子をBuiltinとして作る
 /// Int -> Int -> Bool
-fn make_cmpop<F>(op: F) -> Value
+pub fn make_cmpop<F>(op: F) -> Value
 where
     F: Fn(i64, i64) -> bool + 'static,
 {
