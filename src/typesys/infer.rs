@@ -192,13 +192,16 @@ impl TypeContext {
 }
 
 impl TypeContext {
-    fn match_pattern(&mut self, env: &mut TypeEnv, pat: &Pat, ty: &Type) -> Result<(), TypeError> {
+    fn match_pattern(
+        &mut self,
+        env: &mut TypeEnv,
+        pat: &Pat,
+        ty: &Type,
+        outer_env: &TypeEnv,
+    ) -> Result<(), TypeError> {
         match pat {
-            Pat::Var(x) => {
-                env.insert(x.clone(), Scheme::mono(ty.clone()));
-                Ok(())
-            }
             Pat::Wildcard => Ok(()), // 束縛なし
+
             Pat::Lit(lit) => {
                 let expected = match lit {
                     Lit::Unit => Type::Con("Unit".to_string()),
@@ -211,20 +214,13 @@ impl TypeContext {
                     Err(TypeError::Mismatch(expected, ty.clone()))
                 }
             }
-            Pat::Tuple(ps) => {
-                match ty {
-                    Type::Tuple(ts) => {
-                        if ps.len() != ts.len() {
-                            return Err(TypeError::TupleLengthMismatch(ps.len(), ts.len()));
-                        }
-                        for (p, t) in ps.iter().zip(ts.iter()) {
-                            self.match_pattern(env, p, t)?;
-                        }
-                        Ok(())
-                    }
-                    _ => Err(TypeError::ExpectedTuple(ty.clone())),
-                }
+
+            Pat::Var(x) => {
+                let sch = generalize(self, outer_env, ty);
+                env.insert(x.clone(), sch);
+                Ok(())
             }
+
             Pat::Con(name, args) => {
                 let scheme = env.get(name).ok_or(TypeError::UnknownConstructor(name.clone()))?;
                 let con_ty = instantiate(self, scheme);
@@ -245,11 +241,27 @@ impl TypeContext {
                 self.unify(&ty_fun, ty)?;
 
                 for (p, t) in args.iter().zip(arg_types.iter()) {
-                    self.match_pattern(env, p, t)?;
+                    self.match_pattern(env, p, t, outer_env)?;
                 }
 
                 Ok(())
             }
+
+            Pat::Tuple(ps) => {
+                match ty {
+                    Type::Tuple(ts) => {
+                        if ps.len() != ts.len() {
+                            return Err(TypeError::TupleLengthMismatch(ps.len(), ts.len()));
+                        }
+                        for (p, t) in ps.iter().zip(ts.iter()) {
+                            self.match_pattern(env, p, t, outer_env)?;
+                        }
+                        Ok(())
+                    }
+                    _ => Err(TypeError::ExpectedTuple(ty.clone())),
+                }
+            }
+
             Pat::Struct(_, _) => {
                 // まだ未対応。構造体型の照合が必要
                 Err(TypeError::UnsupportedPattern(pat.clone()))
@@ -365,20 +377,29 @@ pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Ty
             let t_pat = ctx.fresh_type_for_pattern(&pat); // 例: (α, β)
             ctx.unify(&t1, &t_pat)?;
             let mut env2 = env.clone();               // 新しいスコープ
-            ctx.match_pattern(&mut env2, &pat, &t_pat)?;
+            ctx.match_pattern(&mut env2, &pat, &t_pat, env)?;
             infer(ctx, &mut env2, e2)
         }
         Expr::LetRec(pat, e1, e2) => {
             match pat {
                 Pat::Var(x) => {
                     let tv = Type::Var(ctx.fresh_var());
-                    let mut env2 = env.clone(); // 新しいスコープ
-                    env2.insert(x.clone(), Scheme::mono(tv.clone())); // x は e1 にも見える
+                    let mut env2 = env.clone();
+                    // ★ 先に仮の型を入れてから e1 を推論
+                    env2.insert(x.clone(), Scheme::mono(tv.clone()));
+
                     let t1 = infer(ctx, &mut env2, e1)?;
                     ctx.unify(&tv, &t1)?;
+
+                    // ★ 一般化して確定
+                    // (外側の`env`環境下を使って一般化すること！)
+                    let sch = generalize(ctx, env, &tv);
+                    // ここの `insert` は挿入ではなく「差し替え」
+                    env2.insert(x.clone(), sch);
+
                     infer(ctx, &mut env2, e2)
                 }
-                _ => Err(TypeError::LetRecPatternNotSupported(pat.clone()))
+                _ => Err(TypeError::LetRecPatternNotSupported(pat.clone())),
             }
         }
         Expr::If(cond, then_e, else_e) => {
