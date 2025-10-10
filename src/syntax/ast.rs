@@ -20,9 +20,9 @@ impl fmt::Display for Lit {
 
 #[derive(Debug, Clone)]
 pub enum Pat {
+    Wildcard,                   // `_`
     Lit(Lit),                   // `()`, `true`, `1`, etc.
     Var(String),                // `x`
-    Wildcard,                   // `_`
     Con(String, Vec<Pat>),      // `Cons x xs`
     Tuple(Vec<Pat>),            // `(p,)`, `(p1, p2)`
     Struct(String, Vec<(String, Pat)>),
@@ -66,7 +66,7 @@ impl fmt::Display for Pat {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Expr {
     Lit(Lit),
     Var(String),

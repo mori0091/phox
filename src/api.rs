@@ -2,6 +2,7 @@ use crate::grammar::ExprParser;
 use crate::syntax::ast::Expr;
 use crate::typesys::{Type, Scheme};
 use crate::typesys::{TypeContext, initial_type_env, infer, generalize};
+use crate::interpreter::{eval, initial_env, Value};
 
 /// Parse source code of an expression.
 pub fn parse_expr(src: &str) -> Result<Expr, String> {
@@ -34,4 +35,12 @@ pub fn check_scheme(src: &str) -> Result<Scheme, String> {
 pub fn check(src: &str) -> Result<Type, String> {
     let sch = check_scheme(src)?;
     Ok(sch.ty)
+}
+
+pub fn eval_test(src: &str) -> Result<(Value, Scheme), String> {
+    let ast = parse_expr(src)?;
+    let sch = infer_scheme(&ast)?;
+    let mut env = initial_env();
+    let val = eval(&ast, &mut env);
+    Ok((val, sch))
 }

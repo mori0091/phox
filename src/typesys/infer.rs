@@ -547,7 +547,63 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_var();
     env.insert(
+        "/".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
+        },
+    );
+
+    let a = ctx.fresh_var();
+    env.insert(
         "==".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+        },
+    );
+
+    let a = ctx.fresh_var();
+    env.insert(
+        "!=".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+        },
+    );
+
+    let a = ctx.fresh_var();
+    env.insert(
+        "<".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+        },
+    );
+
+
+    let a = ctx.fresh_var();
+    env.insert(
+        "<=".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+        },
+    );
+
+    let a = ctx.fresh_var();
+    env.insert(
+        ">".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+        },
+    );
+
+
+    let a = ctx.fresh_var();
+    env.insert(
+        ">=".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),

@@ -37,7 +37,7 @@ Expr1: Expr = {
     ExprLet,
     ExprLetRec,
     ExprIf,
-    ExprAdd,
+    ExprCmp,
 };
 
 // λ抽象や let/if は「一番外側でしか出てこない」ようにする
@@ -56,6 +56,17 @@ ExprLetRec: Expr = {
 
 ExprIf: Expr = {
     "if" <cond:Expr1> "then" <e1:Expr1> "else" <e2:Expr1> => Expr::if_(cond, e1, e2),
+};
+
+// 比較演算子
+ExprCmp: Expr = {
+    <l:ExprAdd> "==" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("=="), l), r),
+    <l:ExprAdd> "!=" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("!="), l), r),
+    <l:ExprAdd> "<"  <r:ExprAdd> => Expr::app(Expr::app(Expr::var("<") , l), r),
+    <l:ExprAdd> "<=" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("<="), l), r),
+    <l:ExprAdd> ">"  <r:ExprAdd> => Expr::app(Expr::app(Expr::var(">") , l), r),
+    <l:ExprAdd> ">=" <r:ExprAdd> => Expr::app(Expr::app(Expr::var(">="), l), r),
+    ExprAdd,
 };
 
 // 加減算
