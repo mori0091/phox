@@ -14,7 +14,22 @@ Expr0: Expr = {
 };
 
 ExprSeq: Expr = {
-    <e1:Expr1> ";" <e2:Expr1> => Expr::let_(Pat::Wildcard, e1, e2),
+    <es:ExprList> => {
+        es.into_iter().reduce(|acc, e| Expr::let_(Pat::Wildcard, acc, e)).unwrap()
+    }
+};
+
+ExprList: Vec<Expr> = {
+    <mut v:(<Expr1> ";")+> <e:Expr1?> => match e {
+        None => {
+            v.push(Expr::Lit(Lit::Unit));
+            v
+        }
+        Some(e) => {
+            v.push(e);
+            v
+        }
+    }
 };
 
 Expr1: Expr = {
@@ -81,7 +96,10 @@ ExprTuple: Expr = {
 };
 
 ExprBlock: Expr = {
-    "{" <e:Expr> "}" => e,
+    "{" <e:Expr?> "}" => match e {
+        None    => Expr::Lit(Lit::Unit),
+        Some(e) => e,
+    }
 };
 
 // === pattern ===
