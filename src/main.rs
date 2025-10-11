@@ -29,10 +29,10 @@ fn main() {
         "((), true, 1)",
         "((), true, 1,)",
         "Empty {}",
-        "struct Empty {}",
-        "struct SomeSt {val:1}",
-        "struct Point {x:1, y:2}",
-        "struct RGB { r:100, g: 120, b: 255 }",
+        "Empty @ {}",
+        "SomeSt @{val:1}",
+        "Point@ {x:1, y:2}",
+        "RGB@{ r:100, g: 120, b: 255 }",
     ];
 
     for s in &samples {

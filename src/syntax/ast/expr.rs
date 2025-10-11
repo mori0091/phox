@@ -76,14 +76,14 @@ impl fmt::Display for Expr {
             }
             Expr::Struct(name, fields) => {
                 if fields.is_empty() {
-                    write!(f, "struct {} {{}}", name)
+                    write!(f, "{}@{{}}", name)
                 }
                 else {
                     let s: Vec<String>
                         = fields.iter()
                                 .map(|(k, v)| format!("{}: {}", k, v))
                                 .collect();
-                    write!(f, "struct {} {{ {} }}", name, s.join(", "))
+                    write!(f, "{}@{{ {} }}", name, s.join(", "))
                 }
             }
         }

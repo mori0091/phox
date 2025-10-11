@@ -23,15 +23,15 @@ fn test_match_option_some() {
 
 #[test]
 fn test_struct_value() {
-    let (val, sch) = eval_test("struct Point { x: 1, y: 2 }").unwrap();
-    assert_eq!(format!("{}", val), "struct Point { x: 1, y: 2 }");
-    assert_eq!(format!("{}", sch.pretty()), "struct Point { x: Int, y: Int }");
+    let (val, sch) = eval_test("Point@{ x: 1, y: 2 }").unwrap();
+    assert_eq!(format!("{}", val), "Point@{ x: 1, y: 2 }");
+    assert_eq!(format!("{}", sch.pretty()), "Point@{ x: Int, y: Int }");
 }
 
 #[test]
 fn test_struct_match() {
     let (val, sch) = eval_test(
-        "match(struct Point { x: 1, y: 2 }) { struct Point { x: x, y: y } => x + y }"
+        "match(Point@{ x: 1, y: 2 }) { Point@{ x: x, y: y } => x + y }"
     ).unwrap();
     assert_eq!(format!("{}", val), "3");
     assert_eq!(format!("{}", sch.pretty()), "Int");
@@ -40,7 +40,7 @@ fn test_struct_match() {
 #[test]
 fn test_struct_match_ignore_field() {
     let (val, sch) = eval_test(
-        "match(struct Point { x: 10, y: 20 }) { struct Point { x: x, y: _ } => x }"
+        "match(Point@{ x: 10, y: 20 }) { Point@{ x: x, y: _ } => x }"
     ).unwrap();
     assert_eq!(format!("{}", val), "10");
     assert_eq!(format!("{}", sch.pretty()), "Int");

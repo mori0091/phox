@@ -3,14 +3,14 @@ use crate::syntax::ast::{Expr, Lit, Pat};
 
 grammar;
 
-KeywordStruct: String = {
-    "@" => <>.to_string(),
-    "struct" => <>.to_string(),
-};
-
 KeywordLamda: String = {
     "\\" => <>.to_string(),
     "λ" => <>.to_string(),
+};
+
+KeywordStruct: String = {
+    "@" => <>.to_string(),
+    "struct" => <>.to_string(),
 };
 
 
@@ -129,7 +129,7 @@ ExprTuple: Expr = {
 };
 
 ExprStruct: Expr = {
-    KeywordStruct <name:ConIdent> "{" <fields:SepByComma0<StructField>> "}"
+    <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<StructField>> "}"
         => Expr::Struct(name, fields)
 };
 
@@ -176,7 +176,7 @@ PatTuple: Pat = {
 };
 
 PatStruct: Pat = {
-    KeywordStruct <name:ConIdent> "{" <fields:SepByComma0<StructPatField>> "}"
+    <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<StructPatField>> "}"
         => Pat::Struct(name, fields)
 };
 
