@@ -15,10 +15,10 @@ fn main() {
     let samples = [
         "42",
         "true",
-        "if false then 1 else 2",
+        "if (false) 1 else 2",
         "let x = 5 ; x + 3",
         "\\y. y",
-        "let rec f = \\n. if n then f (n - 1) else 0 ; f 10",
+        "let rec f = \\n. if (0 < n) f (n - 1) else 0 ; f 10",
         "()",
         "(())",
         "((),)",
@@ -28,11 +28,16 @@ fn main() {
         "(1,)",
         "((), true, 1)",
         "((), true, 1,)",
+        "Empty {}",
+        "struct Empty {}",
+        "struct SomeSt {val:1}",
+        "struct Point {x:1, y:2}",
+        "struct RGB { r:100, g: 120, b: 255 }",
     ];
 
     for s in &samples {
         match ExprParser::new().parse(s) {
-            Ok(ast) => println!("{} => {:?}", s, ast),
+            Ok(ast) => println!("{} => {:?} => {}", s, ast, ast),
             Err(e) => println!("parse error: {}", e),
         }
     }

@@ -35,29 +35,38 @@ impl fmt::Display for Type {
             Type::Fun(a, b) => {
                 // 左側は必要なら括弧
                 match **a {
-                    Type::Fun(_, _) => write!(f, "({})", a)?,
-                    _ => write!(f, "{}", a)?,
+                    Type::Fun(_, _) => write!(f, "({}) -> {}", a, b),
+                    _ => write!(f, "{} -> {}", a, b),
                 }
-                write!(f, " -> {}", b)
             }
             Type::App(fun, arg) => {
-                // fun はそのまま表示
-                write!(f, "{}", fun)?;
-                // arg は Con や Var ならそのまま、App や Fun なら括弧
                 match **arg {
-                    Type::Con(_) | Type::Var(_) => write!(f, " {}", arg),
-                    _ => write!(f, " ({})", arg),
+                    Type::Fun(_, _) | Type::App(_, _) => write!(f, "{} ({})", fun, arg),
+                    _ => write!(f, "{} {}", fun, arg),
                 }
             }
             Type::Tuple(ts) => {
-                write!(f, "({},", ts[0])?;
-                if ts.len() > 1 {
-                    let s: Vec<String> = ts[1..].iter().map(|t| t.to_string()).collect();
-                    write!(f, " {}", s.join(", "))?;
+                assert!(!ts.is_empty());
+                if ts.len() == 1 {
+                    write!(f, "({},)", ts[0])
                 }
-                write!(f, ")")
+                else {
+                    let s: Vec<String> = ts.iter().map(|t| t.to_string()).collect();
+                    write!(f, "({})", s.join(", "))
+                }
             }
-            Type::Struct(_, _) => todo!(),
+            Type::Struct(name, fields) => {
+                if fields.is_empty() {
+                    write!(f, "struct {} {{}}", name)
+                }
+                else {
+                    let s: Vec<String>
+                        = fields.iter()
+                                .map(|(k, v)| format!("{}: {}", k, v))
+                                .collect();
+                    write!(f, "struct {} {{ {} }}", name, s.join(", "))
+                }
+            }
         }
     }
 }

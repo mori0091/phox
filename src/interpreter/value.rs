@@ -30,7 +30,18 @@ impl fmt::Display for Value {
                 }
             }
 
-            Value::Struct(_, _) => todo!(),
+            Value::Struct(name, fields) => {
+                if fields.is_empty() {
+                    write!(f, "struct {} {{}}", name)
+                }
+                else {
+                    let s: Vec<String>
+                        = fields.iter()
+                                .map(|(k, v)| format!("{}: {}", k, v))
+                                .collect();
+                    write!(f, "struct {} {{ {} }}", name, s.join(", "))
+                }
+            }
 
             Value::Con(name, args) => {
                 if args.is_empty() {

@@ -86,13 +86,31 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
             }
         }
 
+        Expr::Match(scrut, arms) => {
+            let v_scrut = eval(scrut, env);
+            for (pat, body) in arms {
+                if let Some(bindings) = match_pat(pat, &v_scrut) {
+                    let env2 = env.duplicate();
+                    env2.extend(&bindings);
+                    return eval(body, &env2);
+                }
+            }
+            panic!("non-exhaustive match: no pattern matched value {}", v_scrut);
+        }
+
         Expr::Tuple(es) => {
             let xs: Vec<Value> = es.iter().map(|x| eval(x, env)).collect();
             Value::Tuple(xs)
         }
 
-        // まだ未実装の構文
-        _ => panic!("not implemented: {}", expr)
+        Expr::Struct(name, fields) => {
+            let mut vals = Vec::new();
+            for (fname, fexpr) in fields {
+                let v = eval(fexpr, env);
+                vals.push((fname.clone(), v));
+            }
+            Value::Struct(name.clone(), vals)
+        }
     }
 }
 
@@ -134,16 +152,18 @@ fn match_pat(pat: &Pat, val: &Value) -> Option<Env> {
             Some(env)
         }
 
-        // 構造体パターン（簡易版）
+        // 構造体パターン（フィールド順不同）
         (Pat::Struct(name1, fields1), Value::Struct(name2, fields2))
-            if name1 == name2 && fields1.len() == fields2.len() =>
+            if name1 == name2 =>
         {
-            for ((fname1, p), (fname2, v)) in fields1.iter().zip(fields2.iter()) {
-                if fname1 != fname2 {
-                    return None;
+            for (fname, p) in fields1 {
+                match fields2.iter().find(|(n, _)| n == fname) {
+                    Some((_, v)) => {
+                        let sub = match_pat(p, v)?;
+                        env.extend(&sub);
+                    }
+                    None => return None,
                 }
-                let sub = match_pat(p, v)?;
-                env.extend(&sub);
             }
             Some(env)
         }

@@ -83,22 +83,22 @@ fn test_let_polymorphism_id() {
 
 #[test]
 fn test_if_expression() {
-    let (val, sch) = eval_test("if true then 1 else 2").unwrap();
+    let (val, sch) = eval_test("if (true) 1 else 2").unwrap();
     assert_eq!(format!("{}", val), "1");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 
-    let (val, sch) = eval_test("if false then 1 else 2").unwrap();
+    let (val, sch) = eval_test("if (false) 1 else 2").unwrap();
     assert_eq!(format!("{}", val), "2");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
 
 #[test]
 fn test_cmp_in_if() {
-    let (val, sch) = eval_test("if 0 == 0 then 42 else 99").unwrap();
+    let (val, sch) = eval_test("if (0 == 0) 42 else 99").unwrap();
     assert_eq!(format!("{}", val), "42");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 
-    let (val, sch) = eval_test("if 1 == 0 then 42 else 99").unwrap();
+    let (val, sch) = eval_test("if (1 == 0) 42 else 99").unwrap();
     assert_eq!(format!("{}", val), "99");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
@@ -179,14 +179,14 @@ fn test_cmp_ge() {
 
 #[test]
 fn test_if_with_eq_and_add() {
-    let (val, sch) = eval_test("if 1 + 2 == 3 then 42 else 0").unwrap();
+    let (val, sch) = eval_test("if (1 + 2 == 3) 42 else 0").unwrap();
     assert_eq!(format!("{}", val), "42");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
 
 #[test]
 fn test_cmp_mixed_right() {
-    let (val, sch) = eval_test("if 1 < 2 + 3 then 1 else 0").unwrap();
+    let (val, sch) = eval_test("if (1 < 2 + 3) 1 else 0").unwrap();
     assert_eq!(format!("{}", val), "1");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
@@ -200,9 +200,9 @@ fn test_op_priority() {
 
 #[test]
 fn test_letrec_factorial() {
-    // let rec fact = \n. if n == 0 then 1 else n * fact (n - 1) ; fact 5
+    // let rec fact = \n. if (n == 0) 1 else n * fact (n - 1) ; fact 5
     let (val, sch) = eval_test(
-        "let rec fact = \\n. if n == 0 then 1 else n * fact (n - 1) ; fact 5"
+        "let rec fact = \\n. if (n == 0) 1 else n * fact (n - 1) ; fact 5"
     ).unwrap();
     assert_eq!(format!("{}", val), "120");
     assert_eq!(format!("{}", sch.pretty()), "Int");
@@ -210,9 +210,9 @@ fn test_letrec_factorial() {
 
 #[test]
 fn test_letrec_fibonacci() {
-    // let rec fib = \n. if n == 0 then 0 else if n == 1 then 1 else fib (n-1) + fib (n-2) ; fib 6
+    // let rec fib = \n. if (n == 0) 0 else if (n == 1) 1 else fib (n-1) + fib (n-2) ; fib 6
     let (val, sch) = eval_test(
-        "let rec fib = \\n. if n == 0 then 0 else if n == 1 then 1 else fib (n-1) + fib (n-2) ; fib 6"
+        "let rec fib = \\n. if (n == 0) 0 else if (n == 1) 1 else fib (n-1) + fib (n-2) ; fib 6"
     ).unwrap();
     assert_eq!(format!("{}", val), "8");
     assert_eq!(format!("{}", sch.pretty()), "Int");
@@ -236,13 +236,13 @@ fn test_letrec_mutual_simple() {
 
 #[test]
 fn test_fib_conditions() {
-    let (val, _) = eval_test("let rec fib = \\n. if n == 0 then 0 else if n == 1 then 1 else 999 ; fib 0").unwrap();
+    let (val, _) = eval_test("let rec fib = \\n. if (n == 0) 0 else if (n == 1) 1 else 999 ; fib 0").unwrap();
     assert_eq!(format!("{}", val), "0");
 
-    let (val, _) = eval_test("let rec fib = \\n. if n == 0 then 0 else if n == 1 then 1 else 999 ; fib 1").unwrap();
+    let (val, _) = eval_test("let rec fib = \\n. if (n == 0) 0 else if (n == 1) 1 else 999 ; fib 1").unwrap();
     assert_eq!(format!("{}", val), "1");
 
-    let (val, _) = eval_test("let rec fib = \\n. if n == 0 then 0 else if n == 1 then 1 else 999 ; fib 2").unwrap();
+    let (val, _) = eval_test("let rec fib = \\n. if (n == 0) 0 else if (n == 1) 1 else 999 ; fib 2").unwrap();
     assert_eq!(format!("{}", val), "999");
 }
 

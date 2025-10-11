@@ -17,6 +17,9 @@ pub enum TypeError {
     UnknownConstructor(String),
     ConstructorArityMismatch(String, usize, Type),
     LetRecPatternNotSupported(Pat),
+    EmptyMatch,
+    UnknownField(String, String),
+    ExpectedStruct(String, Type),
 }
 
 // ===== Kind Environment =====
@@ -177,13 +180,37 @@ impl TypeContext {
                 Ok(())
             }
 
-            (Type::Struct(s1, fs1), Type::Struct(s2, fs2)) if s1 == s2 => {
-                for ((f1, t1), (f2, t2)) in fs1.iter().zip(fs2.iter()) {
-                    if f1 != f2 {
-                        return Err(TypeError::Mismatch(a, b));
-                    }
-                    self.unify(t1, t2)?;
+            // // フィールドの並び順も含め全て一致しないとエラー
+            // (Type::Struct(s1, fs1), Type::Struct(s2, fs2)) if s1 == s2 => {
+            //     for ((f1, t1), (f2, t2)) in fs1.iter().zip(fs2.iter()) {
+            //         if f1 != f2 {
+            //             return Err(TypeError::Mismatch(a, b));
+            //         }
+            //         self.unify(t1, t2)?;
+            //     }
+            //     Ok(())
+            // }
+
+            // フィールド名で照合、並び順は問わない
+            (Type::Struct(name1, fields1), Type::Struct(name2, fields2)) if name1 == name2 => {
+                // まずフィールド数が一致しているか確認
+                if fields1.len() != fields2.len() {
+                    return Err(TypeError::Mismatch(
+                        Type::Struct(name1.clone(), fields1.clone()),
+                        Type::Struct(name2.clone(), fields2.clone()),
+                    ));
                 }
+
+                // 名前で対応付けて unify
+                for (fname, ty1) in fields1 {
+                    match fields2.iter().find(|(n, _)| n == fname) {
+                        Some((_, ty2)) => self.unify(ty1, ty2)?,
+                        None => {
+                            return Err(TypeError::UnknownField(name2.clone(), fname.clone()));
+                        }
+                    }
+                }
+
                 Ok(())
             }
 
@@ -208,7 +235,20 @@ impl TypeContext {
             Pat::Con(_, _) => {
                 Type::Var(self.fresh_var()) // パターン全体の型は未知とする
             }
-            Pat::Struct(_, _) => todo!(),
+            Pat::Struct(name, fields) => {
+                let field_types
+                    = fields.iter()
+                            .map(|(_, _)| self.fresh_var())
+                            .collect::<Vec<_>>();
+
+                let typed_fields
+                    = fields.iter()
+                            .zip(field_types.iter())
+                            .map(|((k, _), t)| (k.clone(), Type::Var(*t)))
+                            .collect();
+
+                Type::Struct(name.clone(), typed_fields)
+            }
         }
     }
 }
@@ -284,9 +324,23 @@ impl TypeContext {
                 }
             }
 
-            Pat::Struct(_, _) => {
-                // まだ未対応。構造体型の照合が必要
-                Err(TypeError::UnsupportedPattern(pat.clone()))
+            Pat::Struct(name, fields) => {
+                match ty {
+                    Type::Struct(ty_name, ty_fields) if ty_name == name => {
+                        for (pname, ppat) in fields {
+                            match ty_fields.iter().find(|(k, _)| k == pname) {
+                                Some((_, t_field)) => {
+                                    self.match_pattern(env, ppat, t_field, outer_env)?;
+                                }
+                                None => {
+                                    return Err(TypeError::UnknownField(name.clone(), pname.clone()));
+                                }
+                            }
+                        }
+                        Ok(())
+                    }
+                    _ => Err(TypeError::ExpectedStruct(name.clone(), ty.clone())),
+                }
             }
         }
     }
@@ -312,7 +366,11 @@ fn free_ty_vars(ctx: &mut TypeContext, ty: &Type, acc: &mut HashSet<TypeVarId>) 
                 free_ty_vars(ctx, &ty, acc);
             }
         }
-        Type::Struct(_, _) => todo!(),
+        Type::Struct(_, ref fields) => {
+            for (_, field_ty) in fields {
+                free_ty_vars(ctx, field_ty, acc);
+            }
+        }
     }
 }
 
@@ -434,6 +492,38 @@ pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Ty
             Ok(t_then)
         }
 
+        Expr::Match(scrutinee, arms) => {
+            // 判別対象式の型を推論
+            let t_scrut = infer(ctx, env, scrutinee)?;
+
+            // 各アームの式型を集める
+            let mut result_types = vec![];
+
+            for (pat, body) in arms {
+                // パターンに対応する型を生成（型変数を含む構造）
+                let t_pat = ctx.fresh_type_for_pattern(pat);
+
+                // scrutinee の型とパターン型を unify
+                ctx.unify(&t_scrut, &t_pat)?;
+
+                // 束縛環境を構築
+                let mut env2 = env.clone();
+                ctx.match_pattern(&mut env2, pat, &t_pat, env)?;
+
+                // アーム本体の型を推論
+                let t_body = infer(ctx, &mut env2, body)?;
+                result_types.push(t_body);
+            }
+
+            let mut result_types = result_types.into_iter();
+            let t_result = result_types.next().ok_or(TypeError::EmptyMatch)?;
+            for ty in result_types {
+                ctx.unify(&t_result, &ty)?;
+            }
+
+            Ok(t_result)
+        }
+
         Expr::Lit(Lit::Unit) => Ok(Type::Con("()".into())),
         Expr::Lit(Lit::Bool(_)) => Ok(Type::Con("Bool".into())),
         Expr::Lit(Lit::Int(_)) => Ok(Type::Con("Int".into())),
@@ -447,7 +537,35 @@ pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Ty
             Ok(Type::Tuple(tys))
         }
 
-        Expr::Struct(_, _) => todo!(),
+        Expr::Struct(name, fields) => {
+            // 各フィールドの型を推論
+            let mut typed_fields = Vec::with_capacity(fields.len());
+            for (fname, fexpr) in fields {
+                let t_field = infer(ctx, env, fexpr)?;
+                typed_fields.push((fname.clone(), t_field));
+            }
+
+            // // 既知の構造体型が env にあるなら照合
+            // if let Some(scheme) = env.get_type_of_struct(name) {
+            //     let declared = instantiate(ctx, scheme); // e.g., Type::Struct(name, [(x, α), (y, β)])
+            //     // declared と推論結果をフィールド名で突き合わせて unify
+            //     match (declared, Type::Struct(name.clone(), typed_fields.clone())) {
+            //         (Type::Struct(_, decl_fields), Type::Struct(_, inf_fields)) => {
+            //             for (fname, t_inf) in &inf_fields {
+            //                 if let Some((_, t_decl)) = decl_fields.iter().find(|(n, _)| n == fname) {
+            //                     ctx.unify(t_inf, t_decl)?;
+            //                 } else {
+            //                     return Err(TypeError::UnknownField(name.clone(), fname.clone()));
+            //                 }
+            //             }
+            //         }
+            //         other => return Err(TypeError::Mismatch(other.0, other.1)),
+            //     }
+            // }
+
+            // 構造体型を構築して返す
+            Ok(Type::Struct(name.clone(), typed_fields))
+        }
     }
 }
 
@@ -621,7 +739,6 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
-
 
     let a = ctx.fresh_var();
     env.insert(

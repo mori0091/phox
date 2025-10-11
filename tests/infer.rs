@@ -69,7 +69,7 @@ fn test_option() {
 
 #[test]
 fn test_if() {
-    let sch = check_scheme("if true then 1 else 2").unwrap();
+    let sch = check_scheme("if (true) 1 else 2").unwrap();
     assert_eq!(sch.pretty(), "Int");
 }
 
@@ -105,13 +105,13 @@ fn test_tuple_argument_function() {
 
 #[test]
 fn test_tuple_mismatch_length() {
-    let err = check_scheme("if true then (1,) else (1, 2)").unwrap_err();
+    let err = check_scheme("if (true) (1,) else (1, 2)").unwrap_err();
     assert!(err.contains("TupleLengthMismatch"));
 }
 
 #[test]
 fn test_tuple_mismatch_type() {
-    let err = check_scheme("if true then (1, true) else (1, 1)").unwrap_err();
+    let err = check_scheme("if (true) (1, true) else (1, 1)").unwrap_err();
     assert!(err.contains("Mismatch"));
 }
 

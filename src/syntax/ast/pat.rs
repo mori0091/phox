@@ -31,20 +31,27 @@ impl fmt::Display for Pat {
                     write!(f, "{}", name)
                 }
                 else {
-                    write!(f, "{}", name)?;
                     let s: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
-                    write!(f, " {}", s.join(" "))
+                    write!(f, "{} {}", name, s.join(" "))
                 }
             }
             Pat::Tuple(es) => {
-                write!(f, "({},", es[0])?;
-                if es.len() > 1 {
-                    let s: Vec<String> = es[1..].iter().map(|t| t.to_string()).collect();
-                    write!(f, " {}", s.join(", "))?;
+                assert!(!es.is_empty());
+                if es.len() == 1 {
+                    write!(f, "({},)", es[0])
                 }
-                write!(f, ")")
+                else {
+                    let s: Vec<String> = es.iter().map(|t| t.to_string()).collect();
+                    write!(f, "({})", s.join(", "))
+                }
             }
-            Pat::Struct(_, _) => todo!(),
+            Pat::Struct(name, fields) => {
+                let s: Vec<String>
+                    = fields.iter()
+                            .map(|(k, v)| format!("{}: {}", k, v))
+                            .collect();
+                write!(f, "{} {{ {} }}", name, s.join(", "))
+            }
         }
     }
 }

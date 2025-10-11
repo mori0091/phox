@@ -3,6 +3,17 @@ use crate::syntax::ast::{Expr, Lit, Pat};
 
 grammar;
 
+KeywordStruct: String = {
+    "@" => <>.to_string(),
+    "struct" => <>.to_string(),
+};
+
+KeywordLamda: String = {
+    "\\" => <>.to_string(),
+    "λ" => <>.to_string(),
+};
+
+
 // 最上位: 式
 pub Expr: Expr = {
     Expr0,
@@ -37,13 +48,13 @@ Expr1: Expr = {
     ExprLet,
     ExprLetRec,
     ExprIf,
+    ExprMatch,
     ExprCmp,
 };
 
 // λ抽象や let/if は「一番外側でしか出てこない」ようにする
 ExprAbs: Expr = {
-    "\\" <id:Ident> "." <body:Expr1> => Expr::abs(id, body),
-    "λ" <id:Ident> "." <body:Expr1> => Expr::abs(id, body),
+    KeywordLamda <id:Ident> "." <body:Expr1> => Expr::abs(id, body),
 };
 
 ExprLet: Expr = {
@@ -55,7 +66,16 @@ ExprLetRec: Expr = {
 };
 
 ExprIf: Expr = {
-    "if" <cond:Expr1> "then" <e1:Expr1> "else" <e2:Expr1> => Expr::if_(cond, e1, e2),
+    "if" "(" <cond:Expr1> ")" <e1:Expr1> "else" <e2:Expr1> => Expr::if_(cond, e1, e2),
+};
+
+ExprMatch: Expr = {
+    "match" "(" <scrut:Expr1> ")" "{" <arms:SepByComma0<MatchArm>> "}"
+        => Expr::match_(scrut, arms)
+};
+
+MatchArm: (Pat, Expr) = {
+    <p:Pat> "=>" <e:Expr> => (p, e)
 };
 
 // 比較演算子
@@ -97,6 +117,7 @@ Atom: Expr = {
     ExprParen,
     ExprTuple,
     ExprBlock,
+    ExprStruct,
 };
 
 ExprParen: Expr = {
@@ -105,6 +126,15 @@ ExprParen: Expr = {
 
 ExprTuple: Expr = {
     "(" <es:SepByComma<Expr>> ")" => Expr::Tuple(es),
+};
+
+ExprStruct: Expr = {
+    KeywordStruct <name:ConIdent> "{" <fields:SepByComma0<StructField>> "}"
+        => Expr::Struct(name, fields)
+};
+
+StructField: (String, Expr) = {
+    <name:Ident> ":" <value:Expr> => (name, value)
 };
 
 ExprBlock: Expr = {
@@ -134,6 +164,7 @@ PatAtom: Pat = {
     Ident => Pat::var(<>),
     PatParen,
     PatTuple,
+    PatStruct,
 };
 
 PatParen: Pat = {
@@ -142,6 +173,16 @@ PatParen: Pat = {
 
 PatTuple: Pat = {
     "(" <ps:SepByComma<Pat>> ")" => Pat::Tuple(ps),
+};
+
+PatStruct: Pat = {
+    KeywordStruct <name:ConIdent> "{" <fields:SepByComma0<StructPatField>> "}"
+        => Pat::Struct(name, fields)
+};
+
+StructPatField: (String, Pat) = {
+    <name:Ident> ":" <pat:Pat> => (name, pat),
+    <name:Ident> => (name.clone(), Pat::Var(name)) // 省略形
 };
 
 // === literal ===
@@ -174,10 +215,22 @@ ConIdent: String = {
 };
 
 // === comma-separated list ===
-// A comma-separated list of T elements.
+// A comma-separated list of T elements. (1 or more)
 // Except when there is only one element, the trailing comma is optional.
 SepByComma<T>: Vec<T> = {
     <mut v:(<T> ",")+> <e:T?> => match e {
+        None => v,
+        Some(e) => {
+            v.push(e);
+            v
+        }
+    }
+};
+
+// A comma-separated list of T elements. (0 or more)
+// The trailing comma is optional.
+SepByComma0<T>: Vec<T> = {
+    <mut v:(<T> ",")*> <e:T?> => match e {
         None => v,
         Some(e) => {
             v.push(e);
