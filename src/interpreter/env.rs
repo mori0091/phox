@@ -3,10 +3,12 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use super::Value;
 
+pub type Binding = HashMap<String, Value>;
+
 /// 評価時の環境
 #[derive(Clone)]
 pub struct Env {
-    map: Rc<RefCell<HashMap<String, Value>>>,
+    map: Rc<RefCell<Binding>>,
 }
 
 impl Env {
@@ -22,11 +24,11 @@ impl Env {
         self.map.borrow().get(k).cloned()
     }
 
-    pub fn extend(&self, other: &Env) {
-        self.map.borrow_mut().extend(other.map.borrow().clone());
+    pub fn extend(&self, other: &Binding) {
+        self.map.borrow_mut().extend(other.clone());
     }
 
-    pub fn clone_map(&self) -> HashMap<String, Value> {
+    pub fn clone_map(&self) -> Binding {
         self.map.borrow().clone()
     }
 

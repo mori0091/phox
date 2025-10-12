@@ -1,5 +1,5 @@
 use crate::syntax::ast::Expr;
-use super::{Value, Env};
+use super::{Value, Env, Binding};
 
 /// 評価関数
 pub fn eval(expr: &Expr, env: &Env) -> Value {
@@ -117,8 +117,8 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
 use crate::syntax::ast::Pat;
 // use super::value::{Value, Env};
 
-fn match_pat(pat: &Pat, val: &Value) -> Option<Env> {
-    let env = Env::new();
+fn match_pat(pat: &Pat, val: &Value) -> Option<Binding> {
+    let mut env = Binding::new();
     match (pat, val) {
         // ワイルドカード
         (Pat::Wildcard, _) => Some(env),
@@ -138,7 +138,7 @@ fn match_pat(pat: &Pat, val: &Value) -> Option<Env> {
         {
             for (p, v) in args_p.iter().zip(args_v.iter()) {
                 let sub = match_pat(p, v)?;
-                env.extend(&sub);
+                env.extend(sub);
             }
             Some(env)
         }
@@ -147,7 +147,7 @@ fn match_pat(pat: &Pat, val: &Value) -> Option<Env> {
         (Pat::Tuple(pats), Value::Tuple(vals)) if pats.len() == vals.len() => {
             for (p, v) in pats.iter().zip(vals.iter()) {
                 let sub = match_pat(p, v)?;
-                env.extend(&sub);
+                env.extend(sub);
             }
             Some(env)
         }
@@ -160,7 +160,7 @@ fn match_pat(pat: &Pat, val: &Value) -> Option<Env> {
                 match fields2.iter().find(|(n, _)| n == fname) {
                     Some((_, v)) => {
                         let sub = match_pat(p, v)?;
-                        env.extend(&sub);
+                        env.extend(sub);
                     }
                     None => return None,
                 }

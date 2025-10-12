@@ -3,8 +3,6 @@ use std::collections::{HashMap, HashSet};
 use crate::syntax::ast::{Expr, Lit, Pat};
 use super::{Kind, Type, TypeVarId, Scheme};
 
-type Env<T> = HashMap<String, T>;
-
 // ===== Type error =====
 #[derive(Debug)]
 pub enum TypeError {
@@ -24,11 +22,11 @@ pub enum TypeError {
 
 // ===== Kind Environment =====
 // maps name of type constructor to Kind
-type KindEnv = Env<Kind>;
+type KindEnv = HashMap<String, Kind>;
 
 // ===== Type Environment =====
 // maps name of variable to type scheme
-type TypeEnv = Env<Scheme>;
+type TypeEnv = HashMap<String, Scheme>;
 
 // ===== Type context: union-find + binding =====
 pub struct TypeContext {
