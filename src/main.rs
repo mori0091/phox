@@ -1,15 +1,4 @@
-// use algo_j::infer::infer::{
-//     TypeContext,
-//     initial_env,
-//     initial_type_env,
-//     generalize,
-//     infer,
-// };
-
-// use algo_j::syntax::ast::Expr;
-// use algo_j::syntax::parser::parse_expr;
-
-use algo_j::grammar::ExprParser;
+use algo_j::api::eval_program;
 
 fn main() {
     let samples = [
@@ -19,6 +8,8 @@ fn main() {
         "let x = 5 ; x + 3",
         "\\y. y",
         "let rec f = \\n. if (0 < n) f (n - 1) else 0 ; f 10",
+        "1 ; 2 ; 3 ; 4 ; 5",
+        "1 ; 2 ; 3 ; 4 ; 5 ;",
         "()",
         "(())",
         "((),)",
@@ -35,10 +26,14 @@ fn main() {
         "RGB@{ r:100, g: 120, b: 255 }",
     ];
 
-    for s in &samples {
-        match ExprParser::new().parse(s) {
-            Ok(ast) => println!("{} => {:?} => {}", s, ast, ast),
-            Err(e) => println!("parse error: {}", e),
+    for src in &samples {
+        match eval_program(src) {
+            Ok((val, sch)) => {
+                println!("{} => {}:{}", src, val, sch.pretty())
+            }
+            Err(e) => {
+                println!("{} => {}", src, e)
+            }
         }
     }
 }

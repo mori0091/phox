@@ -1,8 +1,33 @@
 use std::str::FromStr;
-use crate::syntax::ast::{Expr, Lit, Pat};
+// use crate::syntax::ast::{TopLevel, Expr, Lit, Pat, TypeDecl, Variant};
+// use crate::typesys::Type;
+use crate::syntax::ast::{TopLevel, Expr, Lit, Pat};
 
 grammar;
 
+pub Program: Vec<TopLevel> = {
+    <Expr> => vec![TopLevel::Expr(<>)],
+};
+
+// pub Program: Vec<TopLevel> = {
+//     <xs:TopLevel*> => xs,
+// };
+
+// TopLevel: TopLevel = {
+//     <TopLevelExpr> => TopLevel::Expr(<>),
+// };
+
+// TopLevelExpr: Expr = {
+//     ExprAbs,
+//     ExprLet,
+//     ExprLetRec,
+//     ExprIf,
+//     ExprMatch,
+//     // ExprCmp, // <- NG ;
+//     //// 二項演算子や関数適用はトップレベルに記述できない
+// };
+
+// ----------------------------------------------
 KeywordLamda: String = {
     "\\" => <>.to_string(),
     "λ" => <>.to_string(),
@@ -13,7 +38,7 @@ KeywordStruct: String = {
     "struct" => <>.to_string(),
 };
 
-
+// ----------------------------------------------
 // 最上位: 式
 pub Expr: Expr = {
     Expr0,
@@ -238,3 +263,56 @@ SepByComma0<T>: Vec<T> = {
         }
     }
 };
+
+
+// pub TypeDecl: TypeDecl = {
+//     "type" <name:ConIdent> <params:TypeParams> "=" <variants:VariantList>
+//         => TypeDecl::SumType {
+//             name: name.clone(),
+//             params: params,
+//             variants: variants,
+//         }
+// };
+
+// TypeParams: Vec<String> = {
+//     <vars:Ident*> => vars
+// };
+
+// VariantList: Vec<Variant> = {
+//     <mut vs:(<Variant> "|")*> <v:Variant> => {
+//         vs.push(v);
+//         vs
+//     }
+// };
+
+// Variant: Variant = {
+//     VariantRecord,
+//     VariantSimple,
+// };
+
+// VariantRecord: Variant = {
+//     <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<StructTypeField>> "}"
+//         => Variant::Record(name, fields)
+// };
+
+// StructTypeField: (String, Type) = {
+//     <name:Ident> ":" <ty:Type> => (name, ty),
+// };
+
+// VariantSimple: Variant = {
+//     <name:ConIdent> <ts:Type*> => {
+//         if ts.is_empty() {
+//             Variant::Unit(name.to_string())
+//         }
+//         else {
+//             Variant::Tuple(name.to_string(), ts)
+//         }
+//     }
+// };
+
+// Type: Type = {
+//     // oops. cannot use `Type::Var(TypeVarId)` for type variable `a`.
+//     // Ident => Type::var(<>),
+//     Ident => Type::con(<>), //
+//     // todo
+// };
