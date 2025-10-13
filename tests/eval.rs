@@ -210,9 +210,9 @@ fn test_letrec_factorial() {
 
 #[test]
 fn test_letrec_fibonacci() {
-    // let rec fib = \n. if (n == 0) 0 else if (n == 1) 1 else fib (n-1) + fib (n-2) ; fib 6
+    // let rec fib = \n. if (n == 0) 0 else if (n == 1) 1 else fib (n - 1) + fib (n - 2) ; fib 6
     let (val, sch) = eval_expr(
-        "let rec fib = \\n. if (n == 0) 0 else if (n == 1) 1 else fib (n-1) + fib (n-2) ; fib 6"
+        "let rec fib = \\n. if (n == 0) 0 else if (n == 1) 1 else fib (n - 1) + fib (n - 2) ; fib 6"
     ).unwrap();
     assert_eq!(format!("{}", val), "8");
     assert_eq!(format!("{}", sch.pretty()), "Int");

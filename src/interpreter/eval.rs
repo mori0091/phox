@@ -8,8 +8,10 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
         Expr::Lit(lit) => Value::Lit(lit.clone()),
 
         // 変数参照
-        Expr::Var(name) => env.get(name)
-            .unwrap_or_else(|| panic!("unbound variable: {}", name)),
+        Expr::Var(name) => {
+            env.get(name)
+               .unwrap_or_else(|| panic!("unbound variable: {}", name))
+        }
 
         // λ抽象
         Expr::Abs(param, body) => {
@@ -213,6 +215,14 @@ pub fn initial_env() -> Env {
     env.insert("Nil".into(), Value::Con("Nil".into(), vec![]));
     env.insert("Cons".into(), make_constructor("Cons", 2));
 
+    // 比較演算子
+    env.insert("==".into(), make_cmpop(|a, b| a == b));
+    env.insert("!=".into(), make_cmpop(|a, b| a != b));
+    env.insert("<".into() , make_cmpop(|a, b| a < b));
+    env.insert("<=".into(), make_cmpop(|a, b| a <= b));
+    env.insert(">".into() , make_cmpop(|a, b| a > b));
+    env.insert(">=".into(), make_cmpop(|a, b| a >= b));
+
     // 演算子
     env.insert("+".into(), make_binop(|a, b| a + b));
     env.insert("-".into(), make_binop(|a, b| a - b));
@@ -224,13 +234,8 @@ pub fn initial_env() -> Env {
         a / b
     }));
 
-    // 比較演算子
-    env.insert("==".into(), make_cmpop(|a, b| a == b));
-    env.insert("!=".into(), make_cmpop(|a, b| a != b));
-    env.insert("<".into() , make_cmpop(|a, b| a < b));
-    env.insert("<=".into(), make_cmpop(|a, b| a <= b));
-    env.insert(">".into() , make_cmpop(|a, b| a > b));
-    env.insert(">=".into(), make_cmpop(|a, b| a >= b));
+    env.insert("neg".into(), make_unary_op_int(|x| -x));
+    env.insert("not".into(), make_unary_op_bool(|x| !x));
 
     env
 }
@@ -250,6 +255,66 @@ pub fn make_constructor(name: &str, arity: usize) -> Value {
         }
     }
     curry(name, arity, vec![])
+}
+
+/// 単項の整数演算子をBuiltinとして作る
+/// Int -> Int
+pub fn make_unary_op_int<F>(op: F) -> Value
+where
+    F: Fn(i64) -> i64 + 'static,
+{
+    fn curry<F>(op: Rc<F>, args: Vec<Value>) -> Value
+    where
+        F: Fn(i64) -> i64 + 'static,
+    {
+        if args.len() == 1 {
+            match &args[0] {
+                Value::Lit(Lit::Int(a)) => {
+                    Value::Lit(Lit::Int(op(*a)))
+                }
+                _ => panic!("type error: expected Int arguments"),
+            }
+        } else {
+            Value::Builtin(Rc::new(move |mut more: Vec<Value>| {
+                let mut new_args = args.clone();
+                new_args.append(&mut more);
+                curry(op.clone(), new_args)
+            }))
+        }
+    }
+
+    let op = Rc::new(op);
+    curry(op, vec![])
+}
+
+/// 単項のBool演算子をBuiltinとして作る
+/// Bool -> Bool
+pub fn make_unary_op_bool<F>(op: F) -> Value
+where
+    F: Fn(bool) -> bool + 'static,
+{
+    fn curry<F>(op: Rc<F>, args: Vec<Value>) -> Value
+    where
+        F: Fn(bool) -> bool + 'static,
+    {
+        if args.len() == 1 {
+            match &args[0] {
+                Value::Lit(Lit::Bool(a)) => {
+                    Value::Lit(Lit::Bool(op(*a)))
+                }
+                _ => panic!("type error: expected Bool arguments"),
+            }
+        } else {
+            Value::Builtin(Rc::new(move |mut more: Vec<Value>| {
+                let mut new_args = args.clone();
+                new_args.append(&mut more);
+                curry(op.clone(), new_args)
+            }))
+        }
+    }
+
+    let op = Rc::new(op);
+    curry(op, vec![])
 }
 
 /// 2引数の整数演算子をBuiltinとして作る

@@ -69,9 +69,9 @@ swap (MkPair 1 true)
 ",
         "
 let abs = \\x.
-  if (x < 0) 0-x else x;
+  if (x < 0) -x else x;
 
-(abs (0-5), abs 7)
+(abs -5, abs 7)
 ",
         "
 type Tree a = Leaf @{ value: a }
@@ -118,6 +118,9 @@ let tree = (Node @{ left: Leaf @{ value: 10 },
  * ブロックコメント
  */
 
+",
+        "
+-5
 ",
     ];
 

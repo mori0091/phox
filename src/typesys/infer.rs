@@ -749,43 +749,6 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         },
     );
 
-    // プリミティブ演算子 (+, -, *, ==) も必要なら追加
-    let a = ctx.fresh_type_var_id();
-    env.insert(
-        "+".into(),
-        Scheme {
-            vars: vec![a],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
-        },
-    );
-
-    let a = ctx.fresh_type_var_id();
-    env.insert(
-        "-".into(),
-        Scheme {
-            vars: vec![a],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
-        },
-    );
-
-    let a = ctx.fresh_type_var_id();
-    env.insert(
-        "*".into(),
-        Scheme {
-            vars: vec![a],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
-        },
-    );
-
-    let a = ctx.fresh_type_var_id();
-    env.insert(
-        "/".into(),
-        Scheme {
-            vars: vec![a],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
-        },
-    );
-
     let a = ctx.fresh_type_var_id();
     env.insert(
         "==".into(),
@@ -838,6 +801,60 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+        },
+    );
+
+    let a = ctx.fresh_type_var_id();
+    env.insert(
+        "+".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
+        },
+    );
+
+    let a = ctx.fresh_type_var_id();
+    env.insert(
+        "-".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
+        },
+    );
+
+    let a = ctx.fresh_type_var_id();
+    env.insert(
+        "*".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
+        },
+    );
+
+    let a = ctx.fresh_type_var_id();
+    env.insert(
+        "/".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
+        },
+    );
+
+    let a = ctx.fresh_type_var_id();
+    env.insert(
+        "neg".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::var(a)),
+        },
+    );
+
+    let a = ctx.fresh_type_var_id();
+    env.insert(
+        "not".into(),
+        Scheme {
+            vars: vec![a],
+            ty: Type::fun(Type::var(a), Type::var(a)),
         },
     );
 

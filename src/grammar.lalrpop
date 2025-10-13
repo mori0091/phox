@@ -207,8 +207,14 @@ ExprAdd: Expr = {
 
 // 乗除算
 ExprMul: Expr = {
-    <l:ExprMul> "*" <r:ExprApp> => Expr::app(Expr::app(Expr::var("*"), l), r),
-    <l:ExprMul> "/" <r:ExprApp> => Expr::app(Expr::app(Expr::var("/"), l), r),
+    <l:ExprMul> "*" <r:ExprUnary> => Expr::app(Expr::app(Expr::var("*"), l), r),
+    <l:ExprMul> "/" <r:ExprUnary> => Expr::app(Expr::app(Expr::var("/"), l), r),
+    ExprUnary,
+};
+
+ExprUnary: Expr = {
+    "-" <r:ExprUnary> => Expr::app(Expr::var("neg"), r),
+    "!" <r:ExprUnary> => Expr::app(Expr::var("not"), r),
     ExprApp,
 };
 
@@ -332,7 +338,7 @@ LitBool: Lit = {
 };
 
 LitInt: Lit = {
-    r"[0-9]+" => Lit::Int(i64::from_str(<>).unwrap()),
+    r"[+-]?[0-9]+" => Lit::Int(i64::from_str(<>).unwrap()),
 };
 
 // === identifier ===
