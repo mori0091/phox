@@ -1,31 +1,107 @@
 use std::str::FromStr;
-// use crate::syntax::ast::{TopLevel, Expr, Lit, Pat, TypeDecl, Variant};
-// use crate::typesys::Type;
-use crate::syntax::ast::{TopLevel, Expr, Lit, Pat};
+
+use crate::syntax::ast::TopLevel;
+use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType};
+use crate::syntax::ast::{Expr, Lit, Pat};
 
 grammar;
 
 pub Program: Vec<TopLevel> = {
-    <Expr> => vec![TopLevel::Expr(<>)],
+    <mut decls:TopLevelDecl*> <expr:TopLevelExpr?> => {
+        match expr {
+            None => decls,
+            Some(e) => {
+                decls.push(e);
+                decls
+            }
+        }
+    }
 };
 
-// pub Program: Vec<TopLevel> = {
-//     <xs:TopLevel*> => xs,
-// };
+TopLevelExpr: TopLevel = {
+    <Expr> => TopLevel::Expr(<>),
+};
 
-// TopLevel: TopLevel = {
-//     <TopLevelExpr> => TopLevel::Expr(<>),
-// };
+TopLevelDecl: TopLevel = {
+    <TypeDecl> => TopLevel::TypeDecl(<>),
+};
 
-// TopLevelExpr: Expr = {
-//     ExprAbs,
-//     ExprLet,
-//     ExprLetRec,
-//     ExprIf,
-//     ExprMatch,
-//     // ExprCmp, // <- NG ;
-//     //// 二項演算子や関数適用はトップレベルに記述できない
-// };
+TypeDecl: RawTypeDecl = {
+    "type" <name:ConIdent> <params:TypeParams> "=" <variants:VariantList> ";"
+        => RawTypeDecl::SumType {
+            name: name.clone(),
+            params: params,
+            variants: variants,
+        }
+};
+
+TypeParams: Vec<String> = {
+    <vars:Ident*> => vars
+};
+
+VariantList: Vec<RawVariant> = {
+    <mut vs:(<Variant> "|")*> <v:Variant> => {
+        vs.push(v);
+        vs
+    }
+};
+
+Variant: RawVariant = {
+    VariantRecord,
+    VariantSimple,
+};
+
+VariantRecord: RawVariant = {
+    <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<VariantRecordField>> "}"
+        => RawVariant::Record(name, fields)
+};
+
+VariantRecordField: (String, RawType) = {
+    <name:Ident> ":" <ty:Type> => (name, ty),
+};
+
+VariantSimple: RawVariant = {
+    <name:ConIdent> <ts:TypeAtom*> => {
+        if ts.is_empty() {
+            RawVariant::Unit(name.to_string())
+        }
+        else {
+            RawVariant::Tuple(name.to_string(), ts)
+        }
+    }
+};
+
+Type: RawType = {
+    TypeFun,
+};
+
+TypeFun: RawType = {
+    <l:TypeApp> "->" <r:TypeFun> => RawType::Fun(Box::new(l), Box::new(r)),
+    TypeApp,
+};
+
+TypeApp: RawType = {
+    <f:TypeApp> <x:TypeAtom> => RawType::App(Box::new(f), Box::new(x)),
+    TypeAtom,
+};
+
+TypeAtom: RawType = {
+    TypeVar,
+    TypeCon,
+    TypeParen,
+};
+
+TypeVar: RawType = {
+    Ident => RawType::VarName(<>.to_string()),
+};
+
+TypeCon: RawType = {
+    ConIdent => RawType::ConName(<>.to_string()),
+};
+
+TypeParen: RawType = {
+    "(" <t:Type> ")" => t,
+};
 
 // ----------------------------------------------
 KeywordLamda: String = {
@@ -142,7 +218,8 @@ Atom: Expr = {
     ExprParen,
     ExprTuple,
     ExprBlock,
-    ExprStruct,
+    ExprRecord,
+    // ExprStruct,
 };
 
 ExprParen: Expr = {
@@ -153,14 +230,23 @@ ExprTuple: Expr = {
     "(" <es:SepByComma<Expr>> ")" => Expr::Tuple(es),
 };
 
-ExprStruct: Expr = {
-    <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<StructField>> "}"
-        => Expr::Struct(name, fields)
+ExprRecord: Expr = {
+    KeywordStruct "{" <fields:SepByComma0<ExprRecordField>> "}"
+        => Expr::Record(fields)
 };
 
-StructField: (String, Expr) = {
+ExprRecordField: (String, Expr) = {
     <name:Ident> ":" <value:Expr> => (name, value)
 };
+
+// ExprStruct: Expr = {
+//     <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<ExprStructField>> "}"
+//         => Expr::Struct(name, fields)
+// };
+
+// ExprStructField: (String, Expr) = {
+//     <name:Ident> ":" <value:Expr> => (name, value)
+// };
 
 ExprBlock: Expr = {
     "{" <e:Expr?> "}" => match e {
@@ -189,7 +275,8 @@ PatAtom: Pat = {
     Ident => Pat::var(<>),
     PatParen,
     PatTuple,
-    PatStruct,
+    PatRecord,
+    // PatStruct,
 };
 
 PatParen: Pat = {
@@ -200,15 +287,25 @@ PatTuple: Pat = {
     "(" <ps:SepByComma<Pat>> ")" => Pat::Tuple(ps),
 };
 
-PatStruct: Pat = {
-    <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<StructPatField>> "}"
-        => Pat::Struct(name, fields)
+PatRecord: Pat = {
+    KeywordStruct "{" <fields:SepByComma0<PatRecordField>> "}"
+        => Pat::Record(fields)
 };
 
-StructPatField: (String, Pat) = {
+PatRecordField: (String, Pat) = {
     <name:Ident> ":" <pat:Pat> => (name, pat),
     <name:Ident> => (name.clone(), Pat::Var(name)) // 省略形
 };
+
+// PatStruct: Pat = {
+//     <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<PatStructField>> "}"
+//         => Pat::Struct(name, fields)
+// };
+
+// PatStructField: (String, Pat) = {
+//     <name:Ident> ":" <pat:Pat> => (name, pat),
+//     <name:Ident> => (name.clone(), Pat::Var(name)) // 省略形
+// };
 
 // === literal ===
 Lit: Lit = {
@@ -263,56 +360,3 @@ SepByComma0<T>: Vec<T> = {
         }
     }
 };
-
-
-// pub TypeDecl: TypeDecl = {
-//     "type" <name:ConIdent> <params:TypeParams> "=" <variants:VariantList>
-//         => TypeDecl::SumType {
-//             name: name.clone(),
-//             params: params,
-//             variants: variants,
-//         }
-// };
-
-// TypeParams: Vec<String> = {
-//     <vars:Ident*> => vars
-// };
-
-// VariantList: Vec<Variant> = {
-//     <mut vs:(<Variant> "|")*> <v:Variant> => {
-//         vs.push(v);
-//         vs
-//     }
-// };
-
-// Variant: Variant = {
-//     VariantRecord,
-//     VariantSimple,
-// };
-
-// VariantRecord: Variant = {
-//     <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<StructTypeField>> "}"
-//         => Variant::Record(name, fields)
-// };
-
-// StructTypeField: (String, Type) = {
-//     <name:Ident> ":" <ty:Type> => (name, ty),
-// };
-
-// VariantSimple: Variant = {
-//     <name:ConIdent> <ts:Type*> => {
-//         if ts.is_empty() {
-//             Variant::Unit(name.to_string())
-//         }
-//         else {
-//             Variant::Tuple(name.to_string(), ts)
-//         }
-//     }
-// };
-
-// Type: Type = {
-//     // oops. cannot use `Type::Var(TypeVarId)` for type variable `a`.
-//     // Ident => Type::var(<>),
-//     Ident => Type::con(<>), //
-//     // todo
-// };

@@ -71,12 +71,17 @@ impl Scheme {
                 Type::Tuple(ts) => {
                     Type::Tuple(ts.iter().map(|t| rename(t, map)).collect())
                 }
-                Type::Struct(name, fields) => {
-                    Type::Struct(
-                        name.clone(),
+                Type::Record(fields) => {
+                    Type::Record(
                         fields.iter().map(|(f, t)| (f.clone(), rename(t, map))).collect()
                     )
                 }
+                // Type::Struct(name, fields) => {
+                //     Type::Struct(
+                //         name.clone(),
+                //         fields.iter().map(|(f, t)| (f.clone(), rename(t, map))).collect()
+                //     )
+                // }
             }
         }
 

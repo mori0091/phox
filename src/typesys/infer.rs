@@ -22,11 +22,11 @@ pub enum TypeError {
 
 // ===== Kind Environment =====
 // maps name of type constructor to Kind
-type KindEnv = HashMap<String, Kind>;
+pub type KindEnv = HashMap<String, Kind>;
 
 // ===== Type Environment =====
 // maps name of variable to type scheme
-type TypeEnv = HashMap<String, Scheme>;
+pub type TypeEnv = HashMap<String, Scheme>;
 
 // ===== Type context: union-find + binding =====
 pub struct TypeContext {
@@ -39,7 +39,7 @@ impl TypeContext {
         Self { parent: Vec::new(), binding: Vec::new() }
     }
 
-    fn fresh_var(&mut self) -> TypeVarId {
+    pub fn fresh_type_var_id(&mut self) -> TypeVarId {
         let id = TypeVarId(self.parent.len());
         self.parent.push(id);
         self.binding.push(None);
@@ -84,9 +84,12 @@ impl TypeContext {
             Type::Tuple(ts) => {
                 ts.iter().any(|t| self.occurs_in(tv, t))
             }
-            Type::Struct(_name, fields) => {
+            Type::Record(fields) => {
                 fields.iter().any(|(_, t)| self.occurs_in(tv, t))
             }
+            // Type::Struct(_name, fields) => {
+            //     fields.iter().any(|(_, t)| self.occurs_in(tv, t))
+            // }
             Type::Con(_name) => false,
         }
     }
@@ -117,14 +120,22 @@ impl TypeContext {
                 )
             }
 
-            Type::Struct(name, fields) => {
-                Type::Struct(
-                    name.clone(),
+            Type::Record(fields) => {
+                Type::Record(
                     fields.iter()
                           .map(|(field, t)| (field.clone(), self.repr(t)))
                           .collect()
                 )
             }
+
+            // Type::Struct(name, fields) => {
+            //     Type::Struct(
+            //         name.clone(),
+            //         fields.iter()
+            //               .map(|(field, t)| (field.clone(), self.repr(t)))
+            //               .collect()
+            //     )
+            // }
         }
     }
 }
@@ -178,24 +189,13 @@ impl TypeContext {
                 Ok(())
             }
 
-            // // フィールドの並び順も含め全て一致しないとエラー
-            // (Type::Struct(s1, fs1), Type::Struct(s2, fs2)) if s1 == s2 => {
-            //     for ((f1, t1), (f2, t2)) in fs1.iter().zip(fs2.iter()) {
-            //         if f1 != f2 {
-            //             return Err(TypeError::Mismatch(a, b));
-            //         }
-            //         self.unify(t1, t2)?;
-            //     }
-            //     Ok(())
-            // }
-
             // フィールド名で照合、並び順は問わない
-            (Type::Struct(name1, fields1), Type::Struct(name2, fields2)) if name1 == name2 => {
+            (Type::Record(fields1), Type::Record(fields2)) => {
                 // まずフィールド数が一致しているか確認
                 if fields1.len() != fields2.len() {
                     return Err(TypeError::Mismatch(
-                        Type::Struct(name1.clone(), fields1.clone()),
-                        Type::Struct(name2.clone(), fields2.clone()),
+                        Type::Record(fields1.clone()),
+                        Type::Record(fields2.clone()),
                     ));
                 }
 
@@ -204,13 +204,36 @@ impl TypeContext {
                     match fields2.iter().find(|(n, _)| n == fname) {
                         Some((_, ty2)) => self.unify(ty1, ty2)?,
                         None => {
-                            return Err(TypeError::UnknownField(name2.clone(), fname.clone()));
+                            return Err(TypeError::UnknownField("<record>".to_string(), fname.clone()));
                         }
                     }
                 }
 
                 Ok(())
             }
+
+            // // フィールド名で照合、並び順は問わない
+            // (Type::Struct(name1, fields1), Type::Struct(name2, fields2)) if name1 == name2 => {
+            //     // まずフィールド数が一致しているか確認
+            //     if fields1.len() != fields2.len() {
+            //         return Err(TypeError::Mismatch(
+            //             Type::Struct(name1.clone(), fields1.clone()),
+            //             Type::Struct(name2.clone(), fields2.clone()),
+            //         ));
+            //     }
+
+            //     // 名前で対応付けて unify
+            //     for (fname, ty1) in fields1 {
+            //         match fields2.iter().find(|(n, _)| n == fname) {
+            //             Some((_, ty2)) => self.unify(ty1, ty2)?,
+            //             None => {
+            //                 return Err(TypeError::UnknownField(name2.clone(), fname.clone()));
+            //             }
+            //         }
+            //     }
+
+            //     Ok(())
+            // }
 
             _ => Err(TypeError::Mismatch(a, b)),
         }
@@ -220,7 +243,7 @@ impl TypeContext {
 impl TypeContext {
     fn fresh_type_for_pattern(&mut self, pat: &Pat) -> Type {
         match pat {
-            Pat::Var(_) | Pat::Wildcard => Type::Var(self.fresh_var()),
+            Pat::Var(_) | Pat::Wildcard => Type::Var(self.fresh_type_var_id()),
             Pat::Lit(lit) => match lit {
                 Lit::Unit => Type::con("Unit"),
                 Lit::Bool(_) => Type::con("Bool"),
@@ -231,22 +254,28 @@ impl TypeContext {
                 Type::Tuple(ts)
             }
             Pat::Con(_, _) => {
-                Type::Var(self.fresh_var()) // パターン全体の型は未知とする
+                Type::Var(self.fresh_type_var_id()) // パターン全体の型は未知とする
             }
-            Pat::Struct(name, fields) => {
-                let field_types
-                    = fields.iter()
-                            .map(|(_, _)| self.fresh_var())
-                            .collect::<Vec<_>>();
-
-                let typed_fields
-                    = fields.iter()
-                            .zip(field_types.iter())
-                            .map(|((k, _), t)| (k.clone(), Type::Var(*t)))
-                            .collect();
-
-                Type::Struct(name.clone(), typed_fields)
+            Pat::Record(fields) => {
+                let tys = fields.iter()
+                                .map(|(name, _p)| (name.clone(), Type::Var(self.fresh_type_var_id())))
+                                .collect();
+                Type::Record(tys)
             }
+            // Pat::Struct(name, fields) => {
+            //     let field_types
+            //         = fields.iter()
+            //                 .map(|(_, _)| self.fresh_type_var_id())
+            //                 .collect::<Vec<_>>();
+
+            //     let typed_fields
+            //         = fields.iter()
+            //                 .zip(field_types.iter())
+            //                 .map(|((k, _), t)| (k.clone(), Type::Var(*t)))
+            //                 .collect();
+
+            //     Type::Struct(name.clone(), typed_fields)
+            // }
         }
     }
 }
@@ -322,24 +351,60 @@ impl TypeContext {
                 }
             }
 
-            Pat::Struct(name, fields) => {
-                match ty {
-                    Type::Struct(ty_name, ty_fields) if ty_name == name => {
-                        for (pname, ppat) in fields {
-                            match ty_fields.iter().find(|(k, _)| k == pname) {
-                                Some((_, t_field)) => {
-                                    self.match_pattern(env, ppat, t_field, outer_env)?;
-                                }
-                                None => {
-                                    return Err(TypeError::UnknownField(name.clone(), pname.clone()));
-                                }
-                            }
-                        }
-                        Ok(())
+            // Pat::Record(fields) => {
+            //     let ty = self.repr(ty);
+            //     if let Type::Record(ref tys) = ty {
+            //         for (fname, p) in fields {
+            //             let ft = tys.iter().find(|(n, _)| n == fname)
+            //                                .ok_or_else(|| TypeError::UnknownField("<record>".to_string(), fname.clone()))?
+            //                                .1.clone();
+            //             // ここで必要なら p の形に応じて再帰（変数なら束縛、ネストならさらに分解）
+            //             if let Pat::Var(x) = p {
+            //                 env.insert(x.clone(), Scheme::mono(ft));
+            //             } else {
+            //                 // ネストしたパターンに対応するには再帰呼び出し
+            //                 self.match_pattern(env, p, &ft, outer_env)?;
+            //             }
+            //         }
+            //         Ok(())
+            //     } else {
+            //         Err(TypeError::Mismatch(ty, Type::Record(vec![])))
+            //     }
+            // }
+            Pat::Record(fields) => {
+                let ty = self.repr(ty);
+                if let Type::Record(ref tys) = ty {
+                    for (fname, p) in fields {
+                        let ft = tys.iter()
+                                    .find(|(n, _)| n == fname)
+                                    .ok_or_else(|| TypeError::UnknownField("<record>".to_string(), fname.clone()))?
+                                    .1.clone();
+                        self.match_pattern(env, p, &ft, outer_env)?;
                     }
-                    _ => Err(TypeError::ExpectedStruct(name.clone(), ty.clone())),
+                    Ok(())
+                } else {
+                    Err(TypeError::Mismatch(ty, Type::Record(vec![])))
                 }
             }
+
+            // Pat::Struct(name, fields) => {
+            //     match ty {
+            //         Type::Struct(ty_name, ty_fields) if ty_name == name => {
+            //             for (pname, ppat) in fields {
+            //                 match ty_fields.iter().find(|(k, _)| k == pname) {
+            //                     Some((_, t_field)) => {
+            //                         self.match_pattern(env, ppat, t_field, outer_env)?;
+            //                     }
+            //                     None => {
+            //                         return Err(TypeError::UnknownField(name.clone(), pname.clone()));
+            //                     }
+            //                 }
+            //             }
+            //             Ok(())
+            //         }
+            //         _ => Err(TypeError::ExpectedStruct(name.clone(), ty.clone())),
+            //     }
+            // }
         }
     }
 }
@@ -364,11 +429,16 @@ fn free_ty_vars(ctx: &mut TypeContext, ty: &Type, acc: &mut HashSet<TypeVarId>) 
                 free_ty_vars(ctx, &ty, acc);
             }
         }
-        Type::Struct(_, ref fields) => {
+        Type::Record(ref fields) => {
             for (_, field_ty) in fields {
                 free_ty_vars(ctx, field_ty, acc);
             }
         }
+        // Type::Struct(_, ref fields) => {
+        //     for (_, field_ty) in fields {
+        //         free_ty_vars(ctx, field_ty, acc);
+        //     }
+        // }
     }
 }
 
@@ -387,7 +457,7 @@ fn free_env_vars(ctx: &mut TypeContext, env: &TypeEnv) -> HashSet<TypeVarId> {
 fn instantiate(ctx: &mut TypeContext, sch: &Scheme) -> Type {
     let mut subst: HashMap<TypeVarId, TypeVarId> = HashMap::new();
     for &v in &sch.vars {
-        subst.insert(v, ctx.fresh_var());
+        subst.insert(v, ctx.fresh_type_var_id());
     }
     substitute(ctx, &sch.ty, &subst)
 }
@@ -413,7 +483,21 @@ fn substitute(ctx: &mut TypeContext, t: &Type, subst: &HashMap<TypeVarId, TypeVa
         Type::Tuple(ts) => {
             Type::Tuple(ts.iter().map(|t| substitute(ctx, t, subst)).collect())
         }
-        Type::Struct(_, _) => todo!(),
+        Type::Record(fields) => {
+            Type::Record(
+                fields.iter()
+                      .map(|(f, t)| (f.clone(), substitute(ctx, t, subst)))
+                      .collect()
+            )
+        }
+        // Type::Struct(name, fields) => {
+        //     Type::Struct(
+        //         name,
+        //         fields.iter()
+        //               .map(|(f, t)| (f.clone(), substitute(ctx, t, subst)))
+        //               .collect(),
+        //     )
+        // }
     }
 }
 
@@ -435,7 +519,7 @@ pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Ty
         }
         Expr::Abs(x, body) => {
             // introduce parameter with fresh monomorphic type variable
-            let tv = Type::Var(ctx.fresh_var());
+            let tv = Type::Var(ctx.fresh_type_var_id());
             // extend env temporarily
             let saved = env.clone();
             env.insert(x.clone(), Scheme::mono(tv.clone()));
@@ -446,7 +530,7 @@ pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Ty
         Expr::App(f, a) => {
             let tf = infer(ctx, env, f)?;
             let ta = infer(ctx, env, a)?;
-            let tr = Type::Var(ctx.fresh_var()); // result type variable
+            let tr = Type::Var(ctx.fresh_type_var_id()); // result type variable
             ctx.unify(&tf, &Type::fun(ta, tr.clone()))?;
             Ok(tr)
         }
@@ -461,7 +545,7 @@ pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Ty
         Expr::LetRec(pat, e1, e2) => {
             match pat {
                 Pat::Var(x) => {
-                    let tv = Type::Var(ctx.fresh_var());
+                    let tv = Type::Var(ctx.fresh_type_var_id());
                     let mut env2 = env.clone();
                     // ★ 先に仮の型を入れてから e1 を推論
                     env2.insert(x.clone(), Scheme::mono(tv.clone()));
@@ -535,35 +619,45 @@ pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Ty
             Ok(Type::Tuple(tys))
         }
 
-        Expr::Struct(name, fields) => {
+        Expr::Record(fields) => {
             // 各フィールドの型を推論
             let mut typed_fields = Vec::with_capacity(fields.len());
             for (fname, fexpr) in fields {
                 let t_field = infer(ctx, env, fexpr)?;
                 typed_fields.push((fname.clone(), t_field));
             }
-
-            // // 既知の構造体型が env にあるなら照合
-            // if let Some(scheme) = env.get_type_of_struct(name) {
-            //     let declared = instantiate(ctx, scheme); // e.g., Type::Struct(name, [(x, α), (y, β)])
-            //     // declared と推論結果をフィールド名で突き合わせて unify
-            //     match (declared, Type::Struct(name.clone(), typed_fields.clone())) {
-            //         (Type::Struct(_, decl_fields), Type::Struct(_, inf_fields)) => {
-            //             for (fname, t_inf) in &inf_fields {
-            //                 if let Some((_, t_decl)) = decl_fields.iter().find(|(n, _)| n == fname) {
-            //                     ctx.unify(t_inf, t_decl)?;
-            //                 } else {
-            //                     return Err(TypeError::UnknownField(name.clone(), fname.clone()));
-            //                 }
-            //             }
-            //         }
-            //         other => return Err(TypeError::Mismatch(other.0, other.1)),
-            //     }
-            // }
-
-            // 構造体型を構築して返す
-            Ok(Type::Struct(name.clone(), typed_fields))
+            Ok(Type::Record(typed_fields))
         }
+
+        // Expr::Struct(name, fields) => {
+        //     // 各フィールドの型を推論
+        //     let mut typed_fields = Vec::with_capacity(fields.len());
+        //     for (fname, fexpr) in fields {
+        //         let t_field = infer(ctx, env, fexpr)?;
+        //         typed_fields.push((fname.clone(), t_field));
+        //     }
+
+        //     // // 既知の構造体型が env にあるなら照合
+        //     // if let Some(scheme) = env.get_type_of_struct(name) {
+        //     //     let declared = instantiate(ctx, scheme); // e.g., Type::Struct(name, [(x, α), (y, β)])
+        //     //     // declared と推論結果をフィールド名で突き合わせて unify
+        //     //     match (declared, Type::Struct(name.clone(), typed_fields.clone())) {
+        //     //         (Type::Struct(_, decl_fields), Type::Struct(_, inf_fields)) => {
+        //     //             for (fname, t_inf) in &inf_fields {
+        //     //                 if let Some((_, t_decl)) = decl_fields.iter().find(|(n, _)| n == fname) {
+        //     //                     ctx.unify(t_inf, t_decl)?;
+        //     //                 } else {
+        //     //                     return Err(TypeError::UnknownField(name.clone(), fname.clone()));
+        //     //                 }
+        //     //             }
+        //     //         }
+        //     //         other => return Err(TypeError::Mismatch(other.0, other.1)),
+        //     //     }
+        //     // }
+
+        //     // 構造体型を構築して返す
+        //     Ok(Type::Struct(name.clone(), typed_fields))
+        // }
     }
 }
 
@@ -583,7 +677,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     let mut env = TypeEnv::default();
 
     // None : ∀a. Option a
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "None".into(),
         Scheme {
@@ -596,7 +690,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     );
 
     // Some : ∀a. a -> Option a
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "Some".into(),
         Scheme {
@@ -612,7 +706,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     );
 
     // Nil : ∀a. List a
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "Nil".into(),
         Scheme {
@@ -622,7 +716,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     );
 
     // Cons : ∀a. a -> List a -> List a
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "Cons".into(),
         Scheme {
@@ -638,8 +732,8 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     );
 
     // map : ∀a b. (a -> b) -> List a -> List b
-    let a = ctx.fresh_var();
-    let b = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
+    let b = ctx.fresh_type_var_id();
 
     env.insert(
         "map".into(),
@@ -656,7 +750,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     );
 
     // プリミティブ演算子 (+, -, *, ==) も必要なら追加
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "+".into(),
         Scheme {
@@ -665,7 +759,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         },
     );
 
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "-".into(),
         Scheme {
@@ -674,7 +768,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         },
     );
 
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "*".into(),
         Scheme {
@@ -683,7 +777,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         },
     );
 
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "/".into(),
         Scheme {
@@ -692,7 +786,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         },
     );
 
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "==".into(),
         Scheme {
@@ -701,7 +795,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         },
     );
 
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "!=".into(),
         Scheme {
@@ -710,7 +804,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         },
     );
 
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "<".into(),
         Scheme {
@@ -720,7 +814,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     );
 
 
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         "<=".into(),
         Scheme {
@@ -729,7 +823,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         },
     );
 
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         ">".into(),
         Scheme {
@@ -738,7 +832,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         },
     );
 
-    let a = ctx.fresh_var();
+    let a = ctx.fresh_type_var_id();
     env.insert(
         ">=".into(),
         Scheme {

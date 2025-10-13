@@ -103,14 +103,23 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
             Value::Tuple(xs)
         }
 
-        Expr::Struct(name, fields) => {
+        Expr::Record(fields) => {
             let mut vals = Vec::new();
             for (fname, fexpr) in fields {
                 let v = eval(fexpr, env);
                 vals.push((fname.clone(), v));
             }
-            Value::Struct(name.clone(), vals)
+            Value::Record(vals)
         }
+
+        // Expr::Struct(name, fields) => {
+        //     let mut vals = Vec::new();
+        //     for (fname, fexpr) in fields {
+        //         let v = eval(fexpr, env);
+        //         vals.push((fname.clone(), v));
+        //     }
+        //     Value::Struct(name.clone(), vals)
+        // }
     }
 }
 
@@ -152,10 +161,8 @@ fn match_pat(pat: &Pat, val: &Value) -> Option<Binding> {
             Some(env)
         }
 
-        // 構造体パターン（フィールド順不同）
-        (Pat::Struct(name1, fields1), Value::Struct(name2, fields2))
-            if name1 == name2 =>
-        {
+        // レコードパターン（フィールド順不同）
+        (Pat::Record(fields1), Value::Record(fields2)) => {
             for (fname, p) in fields1 {
                 match fields2.iter().find(|(n, _)| n == fname) {
                     Some((_, v)) => {
@@ -167,6 +174,22 @@ fn match_pat(pat: &Pat, val: &Value) -> Option<Binding> {
             }
             Some(env)
         }
+
+        // // 構造体パターン（フィールド順不同）
+        // (Pat::Struct(name1, fields1), Value::Struct(name2, fields2))
+        //     if name1 == name2 =>
+        // {
+        //     for (fname, p) in fields1 {
+        //         match fields2.iter().find(|(n, _)| n == fname) {
+        //             Some((_, v)) => {
+        //                 let sub = match_pat(p, v)?;
+        //                 env.extend(sub);
+        //             }
+        //             None => return None,
+        //         }
+        //     }
+        //     Some(env)
+        // }
 
         // それ以外は失敗
         _ => None,

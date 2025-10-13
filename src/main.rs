@@ -21,15 +21,102 @@ fn main() {
         "((), true, 1,)",
         "Empty {}",
         "Empty @ {}",
+        "@{}",
+        "type Empty = Empty@{}; Empty@{}",
+
         "SomeSt @{val:1}",
+        "@{val:10}",
+        "type SomeSt a = SomeSt@{val:a}; @{val:10}",
+
         "Point@ {x:1, y:2}",
+        "@{x:1, y:2}",
+        "type Point a = Point@{x:a, y:a}; Point@{x:1, y:2}",
+
         "RGB@{ r:100, g: 120, b: 255 }",
+        "@{ r:100, g: 120, b: 255 }",
+        "type RGB a = RGB@{r:a, g:a, b:a}; RGB@{ r:100, g: 120, b: 255 }",
+
+        "Foo@{x:1, y:2, flag: true}",
+        "@{x:1, y:2, flag: true}",
+        "type Foo a b = Foo@{x:a, y:a, flag:b}; Foo@{x:1, y:2, flag: true}",
+
+        "type Result a e = Ok a | Err e; (Ok 10, Err false)",
+        "type A a = R @ {x:a, y:a}; R@{x:1,y:2}",
+
+        "
+type Tree = Leaf @{ value: Int }
+          | Node @{ left: Tree, right: Tree };
+
+let rec sum = λt.
+  match (t) {
+    Leaf @{ value: x } => x,
+    Node @{ left, right } => sum left + sum right
+  };
+
+sum (Node @{ left: Leaf @{ value: 10 },
+             right: Node @{ left: Leaf @{ value: 20 },
+                            right: Leaf @{ value: 30 } } })
+",
+        "
+type Pair a b = MkPair a b;
+
+let swap = \\p.
+  match (p) {
+    MkPair x y => MkPair y x
+  };
+
+swap (MkPair 1 true)
+",
+        "
+let abs = \\x.
+  if (x < 0) 0-x else x;
+
+(abs (0-5), abs 7)
+",
+        "
+type Tree a = Leaf @{ value: a }
+            | Node @{ left: Tree a, right: Tree a };
+
+let rec mapTree = \\f.
+  \\t.
+    match (t) {
+      Leaf @{ value: x } => Leaf @{ value: f x },
+      Node @{ left, right } =>
+        Node @{ left: mapTree f left, right: mapTree f right }
+    };
+
+mapTree (\\x. x + x)
+  (Node @{ left: Leaf @{ value: 1 },
+           right: Node @{ left: Leaf @{ value: 2 },
+                          right: Leaf @{ value: 3 } } })
+",
+        "
+type Tree a = Leaf @{ value: a }
+            | Node @{ left: Tree a, right: Tree a };
+
+let rec foldTree = λleaf. λnode. λt.
+  match (t) {
+    Leaf @{ value: x } => leaf x,
+    Node @{ left, right } =>
+      node (foldTree leaf node left) (foldTree leaf node right)
+  };
+
+let sum = foldTree (λx. x) (λl. λr. l + r);
+let size = foldTree (λx. 1) (λl. λr. l + r);
+let depth = foldTree (λx. 1) (λl. λr. 1 + (if (l < r) r else l));
+
+let tree = (Node @{ left: Leaf @{ value: 10 },
+                    right: Node @{ left: Leaf @{ value: 20 },
+                                   right: Leaf @{ value: 30 } } });
+
+(sum tree, size tree, depth tree)
+"
     ];
 
     for src in &samples {
         match eval_program(src) {
             Ok((val, sch)) => {
-                println!("{} => {}:{}", src, val, sch.pretty())
+                println!("{} => {}: {}", src, val, sch.pretty())
             }
             Err(e) => {
                 println!("{} => {}", src, e)

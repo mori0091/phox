@@ -13,7 +13,9 @@ pub enum Expr {
     Match(Box<Expr>, Vec<(Pat, Expr)>),
 
     Tuple(Vec<Expr>),
-    Struct(String, Vec<(String, Expr)>),
+    Record(Vec<(String, Expr)>),
+
+    // Struct(String, Vec<(String, Expr)>),
 }
 
 impl Expr {
@@ -74,18 +76,30 @@ impl fmt::Display for Expr {
                     write!(f, "({})", s.join(", "))
                 }
             }
-            Expr::Struct(name, fields) => {
+            Expr::Record(fields) => {
                 if fields.is_empty() {
-                    write!(f, "{}@{{}}", name)
+                    write!(f, "@{{}}")
                 }
                 else {
                     let s: Vec<String>
                         = fields.iter()
                                 .map(|(k, v)| format!("{}: {}", k, v))
                                 .collect();
-                    write!(f, "{}@{{ {} }}", name, s.join(", "))
+                    write!(f, "@{{ {} }}", s.join(", "))
                 }
             }
+            // Expr::Struct(name, fields) => {
+            //     if fields.is_empty() {
+            //         write!(f, "{}@{{}}", name)
+            //     }
+            //     else {
+            //         let s: Vec<String>
+            //             = fields.iter()
+            //                     .map(|(k, v)| format!("{}: {}", k, v))
+            //                     .collect();
+            //         write!(f, "{}@{{ {} }}", name, s.join(", "))
+            //     }
+            // }
         }
     }
 }

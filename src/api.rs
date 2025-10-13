@@ -1,9 +1,14 @@
 use crate::grammar::ProgramParser;
 use crate::grammar::ExprParser;
+
 use crate::syntax::ast::{Program, TopLevel};
-use crate::syntax::ast::Expr;
+use crate::syntax::ast::resolve_raw_type_decl;
+use crate::syntax::ast::register_type_decl;
+
+use crate::typesys::{initial_kind_env, initial_type_env};
 use crate::typesys::{Type, Scheme};
-use crate::typesys::{TypeContext, initial_type_env, infer, generalize};
+use crate::typesys::{TypeContext, infer, generalize};
+use crate::syntax::ast::Expr;
 use crate::interpreter::{eval, initial_env, Value};
 
 /// Parse an expression.
@@ -59,6 +64,7 @@ pub fn parse_program(src: &str) -> Result<Program, String> {
 pub fn eval_program(src: &str) -> Result<(Value, Scheme), String> {
     let tops = parse_program(src)?;
 
+    let mut kenv = initial_kind_env();
     let mut ctx = TypeContext::new();
     let mut tenv = initial_type_env(&mut ctx);
     let mut env = initial_env();
@@ -66,6 +72,10 @@ pub fn eval_program(src: &str) -> Result<(Value, Scheme), String> {
     let mut last = None;
     for top in tops {
         match top {
+            TopLevel::TypeDecl(raw) => {
+                let tydecl = resolve_raw_type_decl(&mut ctx, raw);
+                register_type_decl(&tydecl, &mut kenv, &mut tenv, &mut env);
+            }
             TopLevel::Expr(expr) => {
                 let ty = infer(&mut ctx, &mut tenv, &expr)
                     .map_err(|e| format!("infer error: {e:?}"))?;

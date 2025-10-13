@@ -8,8 +8,11 @@ pub enum Value {
     Closure { param: String, body: Box<Expr>, env: Env },
     Con(String, Vec<Value>),
     Builtin(Rc<dyn Fn(Vec<Value>) -> Value>), // ← Rust 側の関数をラップ
+
     Tuple(Vec<Value>),
-    Struct(String, Vec<(String, Value)>),
+    Record(Vec<(String, Value)>),
+
+    // Struct(String, Vec<(String, Value)>),
 }
 
 use std::fmt;
@@ -30,27 +33,42 @@ impl fmt::Display for Value {
                 }
             }
 
-            Value::Struct(name, fields) => {
+            Value::Record(fields) => {
                 if fields.is_empty() {
-                    write!(f, "{}@{{}}", name)
+                    write!(f, "@{{}}")
                 }
                 else {
                     let s: Vec<String>
                         = fields.iter()
                                 .map(|(k, v)| format!("{}: {}", k, v))
                                 .collect();
-                    write!(f, "{}@{{ {} }}", name, s.join(", "))
+                    write!(f, "@{{ {} }}", s.join(", "))
                 }
             }
+
+            // Value::Struct(name, fields) => {
+            //     if fields.is_empty() {
+            //         write!(f, "{}@{{}}", name)
+            //     }
+            //     else {
+            //         let s: Vec<String>
+            //             = fields.iter()
+            //                     .map(|(k, v)| format!("{}: {}", k, v))
+            //                     .collect();
+            //         write!(f, "{}@{{ {} }}", name, s.join(", "))
+            //     }
+            // }
 
             Value::Con(name, args) => {
                 if args.is_empty() {
                     write!(f, "{name}")
-                } else {
+                }
+                else {
                     // 引数が複雑なら括弧を付ける
                     let inner: Vec<String> = args.iter().map(|v| {
                         match v {
                             Value::Lit(_)  => v.to_string(),
+                            Value::Record(_)  => v.to_string(),
                             Value::Con(_, ref a) if a.is_empty() => v.to_string(),
                             _ => format!("({})", v),
                         }
