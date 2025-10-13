@@ -6,6 +6,14 @@ use crate::syntax::ast::{Expr, Lit, Pat};
 
 grammar;
 
+match {
+    r"\s*" => { }, // The default whitespace skipping is disabled if an `ignore pattern` is specified
+    r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
+    r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
+} else {
+    _
+}
+
 pub Program: Vec<TopLevel> = {
     <mut decls:TopLevelDecl*> <expr:TopLevelExpr?> => {
         match expr {

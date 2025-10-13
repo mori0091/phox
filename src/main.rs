@@ -110,7 +110,15 @@ let tree = (Node @{ left: Leaf @{ value: 10 },
                                    right: Leaf @{ value: 30 } } });
 
 (sum tree, size tree, depth tree)
-"
+",
+        "
+// 行コメント
+
+/*
+ * ブロックコメント
+ */
+
+",
     ];
 
     for src in &samples {
