@@ -1,5 +1,5 @@
 use std::fmt;
-use super::{Lit, Pat};
+use super::{Item, Lit, Pat};
 
 #[derive(Clone, Debug)]
 pub enum Expr {
@@ -7,15 +7,19 @@ pub enum Expr {
     Var(String),
     Abs(String, Box<Expr>),
     App(Box<Expr>, Box<Expr>),
-    Let(Pat, Box<Expr>, Box<Expr>),
-    LetRec(Pat, Box<Expr>, Box<Expr>),
+
+    // /// `let p = e1 in e2` ; binds and evaluate in local scope
+    // Let(Pat, Box<Expr>, Box<Expr>),
+    // /// `let rec p = e1 in e2`
+    // LetRec(Pat, Box<Expr>, Box<Expr>),
+
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     Match(Box<Expr>, Vec<(Pat, Expr)>),
 
     Tuple(Vec<Expr>),
     Record(Vec<(String, Expr)>),
 
-    // Struct(String, Vec<(String, Expr)>),
+    Block(Vec<Item>),
 }
 
 impl Expr {
@@ -28,12 +32,12 @@ impl Expr {
     pub fn app(f: Expr, x: Expr) -> Self {
         Expr::App(Box::new(f), Box::new(x))
     }
-    pub fn let_(p: Pat, e1: Expr, e2: Expr) -> Self {
-        Expr::Let(p, Box::new(e1), Box::new(e2))
-    }
-    pub fn let_rec(p: Pat, e1: Expr, e2: Expr) -> Self {
-        Expr::LetRec(p, Box::new(e1), Box::new(e2))
-    }
+    // pub fn let_(p: Pat, e1: Expr, e2: Expr) -> Self {
+    //     Expr::Let(p, Box::new(e1), Box::new(e2))
+    // }
+    // pub fn let_rec(p: Pat, e1: Expr, e2: Expr) -> Self {
+    //     Expr::LetRec(p, Box::new(e1), Box::new(e2))
+    // }
     pub fn if_(e1: Expr, e2: Expr, e3: Expr) -> Self {
         Expr::If(Box::new(e1), Box::new(e2), Box::new(e3))
     }
@@ -56,8 +60,8 @@ impl fmt::Display for Expr {
                     write!(f, "{} {}", e1, e2)
                 }
             }
-            Expr::Let(x, e1, e2)    => write!(f, "let {} = {} ; {}", x, e1, e2),
-            Expr::LetRec(x, e1, e2) => write!(f, "let rec {} = {} ; {}", x, e1, e2),
+            // Expr::Let(x, e1, e2)    => write!(f, "let {} = {} ; {}", x, e1, e2),
+            // Expr::LetRec(x, e1, e2) => write!(f, "let rec {} = {} ; {}", x, e1, e2),
             Expr::If(e1, e2, e3)    => write!(f, "if ({}) {} else {}", e1, e2, e3),
             Expr::Match(expr, arms) => {
                 let s: Vec<String>
@@ -88,18 +92,9 @@ impl fmt::Display for Expr {
                     write!(f, "@{{ {} }}", s.join(", "))
                 }
             }
-            // Expr::Struct(name, fields) => {
-            //     if fields.is_empty() {
-            //         write!(f, "{}@{{}}", name)
-            //     }
-            //     else {
-            //         let s: Vec<String>
-            //             = fields.iter()
-            //                     .map(|(k, v)| format!("{}: {}", k, v))
-            //                     .collect();
-            //         write!(f, "{}@{{ {} }}", name, s.join(", "))
-            //     }
-            // }
+            Expr::Block(_items) => {
+                todo!()
+            }
         }
     }
 }

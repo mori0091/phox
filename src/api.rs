@@ -1,14 +1,16 @@
 use crate::grammar::ProgramParser;
 use crate::grammar::ExprParser;
 
+use crate::interpreter::eval_stmt;
 use crate::syntax::ast::{Program, TopLevel};
+use crate::syntax::ast::{Item, Expr};
 use crate::syntax::ast::resolve_raw_type_decl;
 use crate::syntax::ast::register_type_decl;
 
+use crate::typesys::infer_stmt;
 use crate::typesys::{initial_kind_env, initial_type_env};
 use crate::typesys::{Type, Scheme};
 use crate::typesys::{TypeContext, infer, generalize};
-use crate::syntax::ast::Expr;
 use crate::interpreter::{eval, initial_env, Value};
 
 /// Parse an expression.
@@ -76,12 +78,23 @@ pub fn eval_program(src: &str) -> Result<(Value, Scheme), String> {
                 let tydecl = resolve_raw_type_decl(&mut ctx, raw);
                 register_type_decl(&tydecl, &mut kenv, &mut tenv, &mut env);
             }
-            TopLevel::Expr(expr) => {
-                let ty = infer(&mut ctx, &mut tenv, &expr)
-                    .map_err(|e| format!("infer error: {e:?}"))?;
-                let sch = generalize(&mut ctx, &tenv, &ty);
-                let val = eval(&expr, &mut env);
-                last = Some((val, sch));
+            TopLevel::Item(item) => {
+                match item {
+                    Item::Stmt(stmt) => {
+                        let ty = infer_stmt(&mut ctx, &mut tenv, &stmt)
+                            .map_err(|e| format!("infer error: {e:?}"))?;
+                        let _sch = generalize(&mut ctx, &tenv, &ty);
+                        let _val = eval_stmt(&stmt, &mut env);
+                        // last = Some((val, sch));
+                    }
+                    Item::Expr(expr) => {
+                        let ty = infer(&mut ctx, &mut tenv, &expr)
+                            .map_err(|e| format!("infer error: {e:?}"))?;
+                        let sch = generalize(&mut ctx, &tenv, &ty);
+                        let val = eval(&expr, &mut env);
+                        last = Some((val, sch));
+                    }
+                }
             }
         }
     }

@@ -122,6 +122,16 @@ let tree = (Node @{ left: Leaf @{ value: 10 },
         "
 -5
 ",
+        r#"
+let x = 1;
+let y = 2;
+x + y;
+2 * x + y
+"#,
+            "
+1 + 2;
+3 + 5
+",
     ];
 
     for src in &samples {

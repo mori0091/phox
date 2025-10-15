@@ -1,5 +1,30 @@
-use crate::syntax::ast::Expr;
+use crate::syntax::ast::{Expr, Stmt, Item};
 use super::{Value, Env, Binding};
+
+pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
+    match stmt {
+        Stmt::Let(pat, expr) => {
+            let val = eval(expr, env);
+            if let Some(bindings) = match_pat(pat, &val) {
+                env.extend(&bindings);
+            } else {
+                panic!("pattern match failed in let");
+            }
+        }
+        Stmt::LetRec(pat, expr) => {
+            match pat {
+                Pat::Var(x) => {
+                    env.insert(x.clone(), Value::Builtin(Rc::new(|_| {
+                        panic!("recursive value used before initialization")
+                    })));
+                    let val = eval(expr, env);
+                    env.insert(x.clone(), val);
+                }
+                _ => panic!("let rec pattern not supported (only variable)"),
+            }
+        }
+    }
+}
 
 /// 評価関数
 pub fn eval(expr: &Expr, env: &Env) -> Value {
@@ -45,39 +70,55 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
             }
         }
 
-        Expr::Let(pat, e1, e2) => {
-            let v1 = eval(e1, env);
-            if let Some(new_bindings) = match_pat(pat, &v1) {
-                let env2 = env.duplicate();
-                env2.extend(&new_bindings);
-                eval(e2, &env2)
-            } else {
-                panic!("pattern match failed in let");
-            }
-        }
+        // Expr::Let(pat, e1, e2) => {
+        //     let v1 = eval(e1, env);
+        //     if let Some(new_bindings) = match_pat(pat, &v1) {
+        //         let env2 = env.duplicate();
+        //         env2.extend(&new_bindings);
+        //         eval(e2, &env2)
+        //     } else {
+        //         panic!("pattern match failed in let");
+        //     }
+        // }
 
-        Expr::LetRec(pat, e1, e2) => {
-            match pat {
-                Pat::Var(x) => {
-                    let env2 = env.clone();
+        // Expr::LetRec(pat, e1, e2) => {
+        //     match pat {
+        //         Pat::Var(x) => {
+        //             let env2 = env.clone();
 
-                    // 仮の未初期化プレースホルダ（呼ばれたら明示的にエラー）
-                    env2.insert(x.clone(), Value::Builtin(Rc::new(|_| {
-                        // panic!("recursive value '{}' used before initialization", x)
-                        panic!("recursive value used before initialization")
-                    })));
+        //             // 仮の未初期化プレースホルダ（呼ばれたら明示的にエラー）
+        //             env2.insert(x.clone(), Value::Builtin(Rc::new(|_| {
+        //                 // panic!("recursive value '{}' used before initialization", x)
+        //                 panic!("recursive value used before initialization")
+        //             })));
 
-                    // 本体を評価（env2 で自分を参照できる）
-                    let v1 = eval(e1, &env2);
+        //             // 本体を評価（env2 で自分を参照できる）
+        //             let v1 = eval(e1, &env2);
 
-                    // 完成した値に置き換え
-                    env2.insert(x.clone(), v1);
+        //             // 完成した値に置き換え
+        //             env2.insert(x.clone(), v1);
 
-                    // 続きの式を評価
-                    eval(e2, &env2)
+        //             // 続きの式を評価
+        //             eval(e2, &env2)
+        //         }
+        //         _ => panic!("let rec pattern not supported (only variable)"),
+        //     }
+        // }
+
+        Expr::Block(items) => {
+            let mut env2 = env.duplicate(); // 新しいスコープ
+            let mut last_val = Value::Lit(Lit::Unit);
+            for item in items {
+                match item {
+                    Item::Stmt(stmt) => {
+                        eval_stmt(stmt, &mut env2);
+                    }
+                    Item::Expr(expr) => {
+                        last_val = eval(expr, &env2);
+                    }
                 }
-                _ => panic!("let rec pattern not supported (only variable)"),
             }
+            last_val
         }
 
         Expr::If(e1, e2, e3) => {
@@ -113,15 +154,6 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
             }
             Value::Record(vals)
         }
-
-        // Expr::Struct(name, fields) => {
-        //     let mut vals = Vec::new();
-        //     for (fname, fexpr) in fields {
-        //         let v = eval(fexpr, env);
-        //         vals.push((fname.clone(), v));
-        //     }
-        //     Value::Struct(name.clone(), vals)
-        // }
     }
 }
 
@@ -176,22 +208,6 @@ fn match_pat(pat: &Pat, val: &Value) -> Option<Binding> {
             }
             Some(env)
         }
-
-        // // 構造体パターン（フィールド順不同）
-        // (Pat::Struct(name1, fields1), Value::Struct(name2, fields2))
-        //     if name1 == name2 =>
-        // {
-        //     for (fname, p) in fields1 {
-        //         match fields2.iter().find(|(n, _)| n == fname) {
-        //             Some((_, v)) => {
-        //                 let sub = match_pat(p, v)?;
-        //                 env.extend(sub);
-        //             }
-        //             None => return None,
-        //         }
-        //     }
-        //     Some(env)
-        // }
 
         // それ以外は失敗
         _ => None,

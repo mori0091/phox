@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::syntax::ast::TopLevel;
 use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType};
-use crate::syntax::ast::{Expr, Lit, Pat};
+use crate::syntax::ast::{Item, Stmt, Expr, Lit, Pat};
 
 grammar;
 
@@ -19,16 +19,20 @@ pub Program: Vec<TopLevel> = {
         match expr {
             None => decls,
             Some(e) => {
-                decls.push(e);
+                decls.push(TopLevel::Item(Item::Expr(e)));
                 decls
             }
         }
     }
 };
 
-TopLevelExpr: TopLevel = {
-    <Expr> => TopLevel::Expr(<>),
+TopLevelExpr: Expr = {
+    <items:ItemList> => Expr::Block(items),
 };
+
+// TopLevelItem: TopLevel = {
+//     <Item> => TopLevel::Item(<>),
+// };
 
 TopLevelDecl: TopLevel = {
     <TypeDecl> => TopLevel::TypeDecl(<>),
@@ -60,7 +64,7 @@ Variant: RawVariant = {
 };
 
 VariantRecord: RawVariant = {
-    <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<VariantRecordField>> "}"
+    <name:ConIdent> "@" "{" <fields:SepByComma0<VariantRecordField>> "}"
         => RawVariant::Record(name, fields)
 };
 
@@ -117,61 +121,55 @@ KeywordLamda: String = {
     "λ" => <>.to_string(),
 };
 
-KeywordStruct: String = {
-    "@" => <>.to_string(),
-    "struct" => <>.to_string(),
+// ----------------------------------------------
+ItemList: Vec<Item> = {
+    <mut v:(<Item> ";")*> <tail:Expr> => {
+        v.push(Item::Expr(tail));
+        v
+    },
+    <mut v:(<Item> ";")+> => {
+        v.push(Item::Expr(Expr::Lit(Lit::Unit)));
+        v
+    },
+};
+
+Item: Item = {
+    Stmt => Item::Stmt(<>),
+    Expr => Item::Expr(<>),
 };
 
 // ----------------------------------------------
-// 最上位: 式
+Stmt: Stmt = {
+    StmtLet,
+    StmtLetRec,
+};
+
+StmtLet: Stmt = {
+    "let" <p:Pat> "=" <e:Expr> => Stmt::Let(p, Box::new(e)),
+};
+
+StmtLetRec: Stmt = {
+    "let" "rec" <p:Pat> "=" <e:Expr> => Stmt::LetRec(p, Box::new(e)),
+};
+
+// ----------------------------------------------
 pub Expr: Expr = {
     Expr0,
 };
 
 Expr0: Expr = {
     Expr1,
-    ExprSeq,
-};
-
-ExprSeq: Expr = {
-    <es:ExprList> => {
-        es.into_iter().reduce(|acc, e| Expr::let_(Pat::Wildcard, acc, e)).unwrap()
-    }
-};
-
-ExprList: Vec<Expr> = {
-    <mut v:(<Expr1> ";")+> <e:Expr1?> => match e {
-        None => {
-            v.push(Expr::Lit(Lit::Unit));
-            v
-        }
-        Some(e) => {
-            v.push(e);
-            v
-        }
-    }
 };
 
 Expr1: Expr = {
     ExprAbs,
-    ExprLet,
-    ExprLetRec,
     ExprIf,
     ExprMatch,
     ExprCmp,
 };
 
-// λ抽象や let/if は「一番外側でしか出てこない」ようにする
 ExprAbs: Expr = {
     KeywordLamda <id:Ident> "." <body:Expr1> => Expr::abs(id, body),
-};
-
-ExprLet: Expr = {
-    "let" <p:Pat> "=" <e1:Expr1> ";" <e2:Expr1> => Expr::let_(p, e1, e2),
-};
-
-ExprLetRec: Expr = {
-    "let" "rec" <p:Pat> "=" <e1:Expr1> ";" <e2:Expr1> => Expr::let_rec(p, e1, e2),
 };
 
 ExprIf: Expr = {
@@ -187,7 +185,7 @@ MatchArm: (Pat, Expr) = {
     <p:Pat> "=>" <e:Expr> => (p, e)
 };
 
-// 比較演算子
+// 比較演算子 (infix)
 ExprCmp: Expr = {
     <l:ExprAdd> "==" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("=="), l), r),
     <l:ExprAdd> "!=" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("!="), l), r),
@@ -198,20 +196,21 @@ ExprCmp: Expr = {
     ExprAdd,
 };
 
-// 加減算
+// 加減算 (infixl)
 ExprAdd: Expr = {
     <l:ExprAdd> "+" <r:ExprMul> => Expr::app(Expr::app(Expr::var("+"), l), r),
     <l:ExprAdd> "-" <r:ExprMul> => Expr::app(Expr::app(Expr::var("-"), l), r),
     ExprMul,
 };
 
-// 乗除算
+// 乗除算 (infixl)
 ExprMul: Expr = {
     <l:ExprMul> "*" <r:ExprUnary> => Expr::app(Expr::app(Expr::var("*"), l), r),
     <l:ExprMul> "/" <r:ExprUnary> => Expr::app(Expr::app(Expr::var("/"), l), r),
     ExprUnary,
 };
 
+// 単項演算子 (prefix)
 ExprUnary: Expr = {
     "-" <r:ExprUnary> => Expr::app(Expr::var("neg"), r),
     "!" <r:ExprUnary> => Expr::app(Expr::var("not"), r),
@@ -231,9 +230,8 @@ Atom: Expr = {
     ConIdent => Expr::var(<>),
     ExprParen,
     ExprTuple,
-    ExprBlock,
     ExprRecord,
-    // ExprStruct,
+    ExprBlock,
 };
 
 ExprParen: Expr = {
@@ -245,7 +243,7 @@ ExprTuple: Expr = {
 };
 
 ExprRecord: Expr = {
-    KeywordStruct "{" <fields:SepByComma0<ExprRecordField>> "}"
+    "@" "{" <fields:SepByComma0<ExprRecordField>> "}"
         => Expr::Record(fields)
 };
 
@@ -253,20 +251,13 @@ ExprRecordField: (String, Expr) = {
     <name:Ident> ":" <value:Expr> => (name, value)
 };
 
-// ExprStruct: Expr = {
-//     <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<ExprStructField>> "}"
-//         => Expr::Struct(name, fields)
-// };
-
-// ExprStructField: (String, Expr) = {
-//     <name:Ident> ":" <value:Expr> => (name, value)
-// };
-
 ExprBlock: Expr = {
-    "{" <e:Expr?> "}" => match e {
-        None    => Expr::Lit(Lit::Unit),
-        Some(e) => e,
-    }
+    "{" "}" => {
+        Expr::Block(vec![Item::Expr(Expr::Lit(Lit::Unit))])
+    },
+    "{" <items:ItemList> "}" => {
+        Expr::Block(items)
+    },
 };
 
 // === pattern ===
@@ -290,7 +281,6 @@ PatAtom: Pat = {
     PatParen,
     PatTuple,
     PatRecord,
-    // PatStruct,
 };
 
 PatParen: Pat = {
@@ -302,7 +292,7 @@ PatTuple: Pat = {
 };
 
 PatRecord: Pat = {
-    KeywordStruct "{" <fields:SepByComma0<PatRecordField>> "}"
+    "@" "{" <fields:SepByComma0<PatRecordField>> "}"
         => Pat::Record(fields)
 };
 
@@ -310,16 +300,6 @@ PatRecordField: (String, Pat) = {
     <name:Ident> ":" <pat:Pat> => (name, pat),
     <name:Ident> => (name.clone(), Pat::Var(name)) // 省略形
 };
-
-// PatStruct: Pat = {
-//     <name:ConIdent> KeywordStruct "{" <fields:SepByComma0<PatStructField>> "}"
-//         => Pat::Struct(name, fields)
-// };
-
-// PatStructField: (String, Pat) = {
-//     <name:Ident> ":" <pat:Pat> => (name, pat),
-//     <name:Ident> => (name.clone(), Pat::Var(name)) // 省略形
-// };
 
 // === literal ===
 Lit: Lit = {

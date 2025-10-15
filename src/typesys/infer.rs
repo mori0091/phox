@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::syntax::ast::{Expr, Lit, Pat};
+use crate::syntax::ast::{Expr, Lit, Pat, Stmt, Item};
 use super::{Kind, Type, TypeVarId, Scheme};
 
 // ===== Type error =====
@@ -245,7 +245,7 @@ impl TypeContext {
         match pat {
             Pat::Var(_) | Pat::Wildcard => Type::Var(self.fresh_type_var_id()),
             Pat::Lit(lit) => match lit {
-                Lit::Unit => Type::con("Unit"),
+                Lit::Unit => Type::con("()"),
                 Lit::Bool(_) => Type::con("Bool"),
                 Lit::Int(_) => Type::con("Int"),
             },
@@ -511,72 +511,114 @@ pub fn generalize(ctx: &mut TypeContext, env: &TypeEnv, ty: &Type) -> Scheme {
 }
 
 // ===== Inference (Algorithm J core) =====
-pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Type, TypeError> {
+pub fn infer_stmt(ctx: &mut TypeContext, tenv: &mut TypeEnv, stmt: &Stmt) -> Result<Type, TypeError> {
+    match stmt {
+        Stmt::Let(pat, expr) => {
+            let t_expr = infer(ctx, tenv, expr)?;
+            let t_pat = ctx.fresh_type_for_pattern(pat);
+            ctx.unify(&t_expr, &t_pat)?;
+            let ref_tenv = tenv.clone(); // snapshot for reference
+            ctx.match_pattern(tenv, pat, &t_pat, &ref_tenv)?;
+            Ok(Type::con("()"))
+        }
+        Stmt::LetRec(pat, expr) => {
+            match pat {
+                Pat::Var(x) => {
+                    let tv = Type::Var(ctx.fresh_type_var_id());
+                    tenv.insert(x.clone(), Scheme::mono(tv.clone()));
+                    let t_expr = infer(ctx, tenv, expr)?;
+                    ctx.unify(&tv, &t_expr)?;
+                    let sch = generalize(ctx, tenv, &tv);
+                    tenv.insert(x.clone(), sch);
+                    Ok(Type::con("()"))
+                }
+                _ => Err(TypeError::LetRecPatternNotSupported(pat.clone())),
+            }
+        }
+    }
+}
+
+pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<Type, TypeError> {
     match expr {
         Expr::Var(x) => {
-            let sch = env.get(x).ok_or_else(|| TypeError::UnboundVariable(format!("{}",x)))?;
+            let sch = tenv.get(x).ok_or_else(|| TypeError::UnboundVariable(format!("{}",x)))?;
             Ok(instantiate(ctx, sch))
         }
         Expr::Abs(x, body) => {
             // introduce parameter with fresh monomorphic type variable
             let tv = Type::Var(ctx.fresh_type_var_id());
             // extend env temporarily
-            let saved = env.clone();
-            env.insert(x.clone(), Scheme::mono(tv.clone()));
-            let tbody = infer(ctx, env, body)?;
-            *env = saved;
+            let saved = tenv.clone();
+            tenv.insert(x.clone(), Scheme::mono(tv.clone()));
+            let tbody = infer(ctx, tenv, body)?;
+            *tenv = saved;
             Ok(Type::fun(tv, tbody))
         }
         Expr::App(f, a) => {
-            let tf = infer(ctx, env, f)?;
-            let ta = infer(ctx, env, a)?;
+            let tf = infer(ctx, tenv, f)?;
+            let ta = infer(ctx, tenv, a)?;
             let tr = Type::Var(ctx.fresh_type_var_id()); // result type variable
             ctx.unify(&tf, &Type::fun(ta, tr.clone()))?;
             Ok(tr)
         }
-        Expr::Let(pat, e1, e2) => {
-            let t1 = infer(ctx, env, e1)?;
-            let t_pat = ctx.fresh_type_for_pattern(&pat); // 例: (α, β)
-            ctx.unify(&t1, &t_pat)?;
-            let mut env2 = env.clone();               // 新しいスコープ
-            ctx.match_pattern(&mut env2, &pat, &t_pat, env)?;
-            infer(ctx, &mut env2, e2)
-        }
-        Expr::LetRec(pat, e1, e2) => {
-            match pat {
-                Pat::Var(x) => {
-                    let tv = Type::Var(ctx.fresh_type_var_id());
-                    let mut env2 = env.clone();
-                    // ★ 先に仮の型を入れてから e1 を推論
-                    env2.insert(x.clone(), Scheme::mono(tv.clone()));
+        // Expr::Let(pat, e1, e2) => {
+        //     let t1 = infer(ctx, tenv, e1)?;
+        //     let t_pat = ctx.fresh_type_for_pattern(&pat); // 例: (α, β)
+        //     ctx.unify(&t1, &t_pat)?;
+        //     let mut env2 = tenv.clone();               // 新しいスコープ
+        //     ctx.match_pattern(&mut env2, &pat, &t_pat, tenv)?;
+        //     infer(ctx, &mut env2, e2)
+        // }
+        // Expr::LetRec(pat, e1, e2) => {
+        //     match pat {
+        //         Pat::Var(x) => {
+        //             let tv = Type::Var(ctx.fresh_type_var_id());
+        //             let mut env2 = tenv.clone();
+        //             // ★ 先に仮の型を入れてから e1 を推論
+        //             env2.insert(x.clone(), Scheme::mono(tv.clone()));
 
-                    let t1 = infer(ctx, &mut env2, e1)?;
-                    ctx.unify(&tv, &t1)?;
+        //             let t1 = infer(ctx, &mut env2, e1)?;
+        //             ctx.unify(&tv, &t1)?;
 
-                    // ★ 一般化して確定
-                    // (外側の`env`環境下を使って一般化すること！)
-                    let sch = generalize(ctx, env, &tv);
-                    // ここの `insert` は挿入ではなく「差し替え」
-                    env2.insert(x.clone(), sch);
+        //             // ★ 一般化して確定
+        //             // (外側の`env`環境下を使って一般化すること！)
+        //             let sch = generalize(ctx, tenv, &tv);
+        //             // ここの `insert` は挿入ではなく「差し替え」
+        //             env2.insert(x.clone(), sch);
 
-                    infer(ctx, &mut env2, e2)
+        //             infer(ctx, &mut env2, e2)
+        //         }
+        //         _ => Err(TypeError::LetRecPatternNotSupported(pat.clone())),
+        //     }
+        // }
+        Expr::Block(items) => {
+            let mut tenv2 = tenv.clone(); // 新しいスコープ
+            let mut last_ty = Type::con("()");
+            for item in items {
+                match item {
+                    Item::Stmt(stmt) => {
+                        infer_stmt(ctx, &mut tenv2, stmt)?;
+                    }
+                    Item::Expr(expr) => {
+                        last_ty = infer(ctx, &mut tenv2, expr)?;
+                    }
                 }
-                _ => Err(TypeError::LetRecPatternNotSupported(pat.clone())),
             }
+            Ok(last_ty)
         }
         Expr::If(cond, then_e, else_e) => {
-            let t_cond = infer(ctx, env, cond)?;
+            let t_cond = infer(ctx, tenv, cond)?;
             ctx.unify(&t_cond, &Type::Con("Bool".into()))?;
 
-            let t_then = infer(ctx, env, then_e)?;
-            let t_else = infer(ctx, env, else_e)?;
+            let t_then = infer(ctx, tenv, then_e)?;
+            let t_else = infer(ctx, tenv, else_e)?;
             ctx.unify(&t_then, &t_else)?;
             Ok(t_then)
         }
 
         Expr::Match(scrutinee, arms) => {
             // 判別対象式の型を推論
-            let t_scrut = infer(ctx, env, scrutinee)?;
+            let t_scrut = infer(ctx, tenv, scrutinee)?;
 
             // 各アームの式型を集める
             let mut result_types = vec![];
@@ -589,8 +631,8 @@ pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Ty
                 ctx.unify(&t_scrut, &t_pat)?;
 
                 // 束縛環境を構築
-                let mut env2 = env.clone();
-                ctx.match_pattern(&mut env2, pat, &t_pat, env)?;
+                let mut env2 = tenv.clone();
+                ctx.match_pattern(&mut env2, pat, &t_pat, tenv)?;
 
                 // アーム本体の型を推論
                 let t_body = infer(ctx, &mut env2, body)?;
@@ -613,7 +655,7 @@ pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Ty
         Expr::Tuple(es) => {
             let mut tys = Vec::new();
             for e in es {
-                let ty = infer(ctx, env, e)?;
+                let ty = infer(ctx, tenv, e)?;
                 tys.push(ty);
             }
             Ok(Type::Tuple(tys))
@@ -623,41 +665,11 @@ pub fn infer(ctx: &mut TypeContext, env: &mut TypeEnv, expr: &Expr) -> Result<Ty
             // 各フィールドの型を推論
             let mut typed_fields = Vec::with_capacity(fields.len());
             for (fname, fexpr) in fields {
-                let t_field = infer(ctx, env, fexpr)?;
+                let t_field = infer(ctx, tenv, fexpr)?;
                 typed_fields.push((fname.clone(), t_field));
             }
             Ok(Type::Record(typed_fields))
         }
-
-        // Expr::Struct(name, fields) => {
-        //     // 各フィールドの型を推論
-        //     let mut typed_fields = Vec::with_capacity(fields.len());
-        //     for (fname, fexpr) in fields {
-        //         let t_field = infer(ctx, env, fexpr)?;
-        //         typed_fields.push((fname.clone(), t_field));
-        //     }
-
-        //     // // 既知の構造体型が env にあるなら照合
-        //     // if let Some(scheme) = env.get_type_of_struct(name) {
-        //     //     let declared = instantiate(ctx, scheme); // e.g., Type::Struct(name, [(x, α), (y, β)])
-        //     //     // declared と推論結果をフィールド名で突き合わせて unify
-        //     //     match (declared, Type::Struct(name.clone(), typed_fields.clone())) {
-        //     //         (Type::Struct(_, decl_fields), Type::Struct(_, inf_fields)) => {
-        //     //             for (fname, t_inf) in &inf_fields {
-        //     //                 if let Some((_, t_decl)) = decl_fields.iter().find(|(n, _)| n == fname) {
-        //     //                     ctx.unify(t_inf, t_decl)?;
-        //     //                 } else {
-        //     //                     return Err(TypeError::UnknownField(name.clone(), fname.clone()));
-        //     //                 }
-        //     //             }
-        //     //         }
-        //     //         other => return Err(TypeError::Mismatch(other.0, other.1)),
-        //     //     }
-        //     // }
-
-        //     // 構造体型を構築して返す
-        //     Ok(Type::Struct(name.clone(), typed_fields))
-        // }
     }
 }
 

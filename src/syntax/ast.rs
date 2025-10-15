@@ -7,6 +7,12 @@ pub use pat::Pat;
 mod expr;
 pub use expr::Expr;
 
+mod stmt;
+pub use stmt::Stmt;
+
+mod item;
+pub use item::Item;
+
 mod rawdecl;
 pub use rawdecl::{RawTypeDecl, RawVariant, RawType};
 

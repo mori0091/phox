@@ -1,8 +1,8 @@
-use super::{Expr, RawTypeDecl};
+use super::{Item, RawTypeDecl};
 
 pub type Program = Vec<TopLevel>;
 
 pub enum TopLevel {
     TypeDecl(RawTypeDecl),
-    Expr(Expr),
+    Item(Item),
 }
