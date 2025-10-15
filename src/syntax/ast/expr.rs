@@ -92,8 +92,9 @@ impl fmt::Display for Expr {
                     write!(f, "@{{ {} }}", s.join(", "))
                 }
             }
-            Expr::Block(_items) => {
-                todo!()
+            Expr::Block(items) => {
+                let s: Vec<_> = items.iter().map(|e| format!("{}", e)).collect();
+                write!(f, "{{{}}}", s.join("; "))
             }
         }
     }
