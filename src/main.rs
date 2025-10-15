@@ -132,6 +132,10 @@ x + y;
 1 + 2;
 3 + 5
 ",
+        "
+let rec (**) = λx.λy. if (y <= 1) x else x * ((**) x (y - 1));
+2 ** 5
+",
     ];
 
     for src in &samples {

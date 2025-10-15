@@ -205,8 +205,23 @@ ExprAdd: Expr = {
 
 // 乗除算 (infixl)
 ExprMul: Expr = {
-    <l:ExprMul> "*" <r:ExprUnary> => Expr::app(Expr::app(Expr::var("*"), l), r),
-    <l:ExprMul> "/" <r:ExprUnary> => Expr::app(Expr::app(Expr::var("/"), l), r),
+    <l:ExprMul> "*" <r:ExprInfixApp> => Expr::app(Expr::app(Expr::var("*"), l), r),
+    <l:ExprMul> "/" <r:ExprInfixApp> => Expr::app(Expr::app(Expr::var("/"), l), r),
+    ExprInfixApp,
+};
+
+// 中置構文
+ExprInfixApp: Expr = {
+    <l:ExprInfixApp> "`" <f:Ident> "`" <r:ExprInfixOp> => {
+        Expr::app(Expr::app(Expr::var(f), l), r)
+    },
+    ExprInfixOp,
+};
+
+ExprInfixOp: Expr = {
+    <l:ExprInfixOp> <op:Symbol> <r:ExprUnary> => {
+        Expr::app(Expr::app(Expr::var(op), l), r)
+    },
     ExprUnary,
 };
 
@@ -324,6 +339,11 @@ LitInt: Lit = {
 // === identifier ===
 Ident: String = {
     r"[a-z_][a-zA-Z0-9_]*" => <>.to_string(),
+    "(" <Symbol> ")" => <>.to_string(),
+};
+
+Symbol: String = {
+    r"[*+-/!$%&=^?<>]+" => <>.to_string(),
 };
 
 ConIdent: String = {
