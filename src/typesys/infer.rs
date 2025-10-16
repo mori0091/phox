@@ -8,16 +8,21 @@ use super::{Kind, Type, TypeVarId, Scheme};
 pub enum TypeError {
     UnboundVariable(String),
     Mismatch(Type, Type),
-    TupleLengthMismatch(usize, usize),
-    ExpectedTuple(Type),
-    UnsupportedPattern(Pat),
     RecursiveType,
+
+    ExpectedTuple(Type),
+    IndexOutOfBounds(usize, Type),
+    TupleLengthMismatch(usize, usize),
+
     UnknownConstructor(String),
     ConstructorArityMismatch(String, usize, Type),
-    LetRecPatternNotSupported(Pat),
+
     EmptyMatch,
-    UnknownField(String, String),
-    ExpectedStruct(String, Type),
+    UnsupportedPattern(Pat),
+    LetRecPatternNotSupported(Pat),
+
+    ExpectedRecord(Type),
+    UnknownField(String, Type),
 }
 
 // ===== Kind Environment =====
@@ -204,7 +209,10 @@ impl TypeContext {
                     match fields2.iter().find(|(n, _)| n == fname) {
                         Some((_, ty2)) => self.unify(ty1, ty2)?,
                         None => {
-                            return Err(TypeError::UnknownField("<record>".to_string(), fname.clone()));
+                            return Err(TypeError::UnknownField(
+                                fname.clone(),
+                                Type::Record(fields2.clone())
+                            ));
                         }
                     }
                 }
@@ -377,7 +385,7 @@ impl TypeContext {
                     for (fname, p) in fields {
                         let ft = tys.iter()
                                     .find(|(n, _)| n == fname)
-                                    .ok_or_else(|| TypeError::UnknownField("<record>".to_string(), fname.clone()))?
+                                    .ok_or_else(|| TypeError::UnknownField(fname.clone(), ty.clone()))?
                                     .1.clone();
                         self.match_pattern(env, p, &ft, outer_env)?;
                     }
@@ -669,6 +677,32 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
                 typed_fields.push((fname.clone(), t_field));
             }
             Ok(Type::Record(typed_fields))
+        }
+        Expr::FieldAccess(base, field) => {
+            let t_base = infer(ctx, tenv, base)?;
+            match t_base {
+                Type::Record(fields) => {
+                    if let Some((_, ty)) = fields.iter().find(|(fname, _)| fname == field) {
+                        Ok(ty.clone())
+                    } else {
+                        Err(TypeError::UnknownField(field.clone(), Type::Record(fields)))
+                    }
+                }
+                other => Err(TypeError::ExpectedRecord(other)),
+            }
+        }
+        Expr::TupleAccess(base, index) => {
+            let t_base = infer(ctx, tenv, base)?;
+            match t_base {
+                Type::Tuple(elems) => {
+                    if *index < elems.len() {
+                        Ok(elems[*index].clone())
+                    } else {
+                        Err(TypeError::IndexOutOfBounds(*index, Type::Tuple(elems)))
+                    }
+                }
+                other => Err(TypeError::ExpectedTuple(other)),
+            }
         }
     }
 }

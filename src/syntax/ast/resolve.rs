@@ -46,13 +46,13 @@ pub fn resolve_raw_variant(
                 .collect();
             Variant::Tuple(name, elems2)
         }
-        RawVariant::Record(name, fields) => {
-            let fields2 = fields
-                .into_iter()
-                .map(|(fname, ty)| (fname, resolve_raw_type(ctx, ty, param_map)))
-                .collect();
-            Variant::Record(name, fields2)
-        }
+        // RawVariant::Record(name, fields) => {
+        //     let fields2 = fields
+        //         .into_iter()
+        //         .map(|(fname, ty)| (fname, resolve_raw_type(ctx, ty, param_map)))
+        //         .collect();
+        //     Variant::Record(name, fields2)
+        // }
     }
 }
 
@@ -86,6 +86,20 @@ pub fn resolve_raw_type(
             let r2 = resolve_raw_type(ctx, *r, param_map);
             Type::Fun(Box::new(l2), Box::new(r2))
         }
+        RawType::Tuple(elems) => {
+            let elems2 = elems
+                .into_iter()
+                .map(|t| resolve_raw_type(ctx, t, param_map))
+                .collect();
+            Type::Tuple(elems2)
+        }
+        RawType::Record(fields) => {
+            let fields2 = fields
+                .into_iter()
+                .map(|(fname, ty)| (fname, resolve_raw_type(ctx, ty, param_map)))
+                .collect();
+            Type::Record(fields2)
+        }
     }
 }
 
@@ -115,7 +129,7 @@ pub fn register_type_decl(
                 let arity = match v {
                     Variant::Unit(_) => 0,
                     Variant::Tuple(_, ts) => ts.len(),
-                    Variant::Record(_, _) => 1,
+                    // Variant::Record(_, _) => 1,
                 };
                 env.insert(ctor_name.clone(),
                            make_constructor(&ctor_name, arity));

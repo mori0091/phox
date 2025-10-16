@@ -154,6 +154,31 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
             }
             Value::Record(vals)
         }
+        Expr::FieldAccess(base, field) => {
+            let v_base = eval(base, env);
+            match v_base {
+                Value::Record(fields) => {
+                    match fields.iter().find(|(name, _)| name == field) {
+                        Some((_, val)) => val.clone(),
+                        None => panic!("field '{}' not found in record", field),
+                    }
+                }
+                other => panic!("field access on non-record value: {}", other),
+            }
+        }
+        Expr::TupleAccess(base, index) => {
+            let v_base = eval(base, env);
+            match v_base {
+                Value::Tuple(elems) => {
+                    if *index < elems.len() {
+                        elems[*index].clone()
+                    } else {
+                        panic!("index out of bounds: {}", index)
+                    }
+                }
+                other => panic!("index access on non-tuple value: {}", other),
+            }
+        }
     }
 }
 

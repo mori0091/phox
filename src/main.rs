@@ -136,6 +136,25 @@ x + y;
 let rec (**) = λx.λy. if (y <= 1) x else x * ((**) x (y - 1));
 2 ** 5
 ",
+        "
+@{x:1, y: @{z: 2, w: 3}}.y.z
+",
+        "
+(1, @{x:2, y:3}, 4).1.y
+",
+        "
+type Point = P @{ x: Int, y: Int};
+match (P@{x:1, y:2}) {
+  P a => a.x + a.y,
+  _ => 0,
+}
+",
+        "
+(Cons 1 (Cons 2 (Cons 3 Nil))).1.0  // => error
+",
+        "
+(Some 1).0  // => error
+"
     ];
 
     for src in &samples {

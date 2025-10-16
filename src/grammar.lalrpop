@@ -59,18 +59,18 @@ VariantList: Vec<RawVariant> = {
 };
 
 Variant: RawVariant = {
-    VariantRecord,
+    // VariantRecord,
     VariantSimple,
 };
 
-VariantRecord: RawVariant = {
-    <name:ConIdent> "@" "{" <fields:SepByComma0<VariantRecordField>> "}"
-        => RawVariant::Record(name, fields)
-};
+// VariantRecord: RawVariant = {
+//     <name:ConIdent> "@" "{" <fields:SepByComma0<VariantRecordField>> "}"
+//         => RawVariant::Record(name, fields)
+// };
 
-VariantRecordField: (String, RawType) = {
-    <name:Ident> ":" <ty:Type> => (name, ty),
-};
+// VariantRecordField: (String, RawType) = {
+//     <name:Ident> ":" <ty:Type> => (name, ty),
+// };
 
 VariantSimple: RawVariant = {
     <name:ConIdent> <ts:TypeAtom*> => {
@@ -101,6 +101,8 @@ TypeAtom: RawType = {
     TypeVar,
     TypeCon,
     TypeParen,
+    TypeTuple,
+    TypeRecord,
 };
 
 TypeVar: RawType = {
@@ -113,6 +115,19 @@ TypeCon: RawType = {
 
 TypeParen: RawType = {
     "(" <t:Type> ")" => t,
+};
+
+TypeTuple: RawType = {
+    "(" <ts:SepByComma<Type>> ")" => RawType::Tuple(ts),
+};
+
+TypeRecord: RawType = {
+    "@" "{" <fields:SepByComma0<TypeRecordField>> "}"
+        => RawType::Record(fields)
+};
+
+TypeRecordField: (String, RawType) = {
+    <name:Ident> ":" <value:Type> => (name, value)
 };
 
 // ----------------------------------------------
@@ -247,6 +262,8 @@ Atom: Expr = {
     ExprTuple,
     ExprRecord,
     ExprBlock,
+    ExprFieldAccess,
+    ExprTupleAccess,
 };
 
 ExprParen: Expr = {
@@ -264,6 +281,14 @@ ExprRecord: Expr = {
 
 ExprRecordField: (String, Expr) = {
     <name:Ident> ":" <value:Expr> => (name, value)
+};
+
+ExprFieldAccess: Expr = {
+    <base:Atom> "." <field:Ident> => Expr::field_access(base, field),
+};
+
+ExprTupleAccess: Expr = {
+    <base:Atom> "." <index:Int> => Expr::tuple_access(base, index as usize),
 };
 
 ExprBlock: Expr = {
@@ -333,7 +358,11 @@ LitBool: Lit = {
 };
 
 LitInt: Lit = {
-    r"[+-]?[0-9]+" => Lit::Int(i64::from_str(<>).unwrap()),
+    <Int> => Lit::Int(<>),
+};
+
+Int: i64 = {
+    r"[+-]?[0-9]+" => i64::from_str(<>).unwrap(),
 };
 
 // === identifier ===
