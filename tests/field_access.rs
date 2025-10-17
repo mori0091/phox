@@ -54,7 +54,7 @@ fn test_field_access_missing_field() {
 }
 
 #[test]
-#[should_panic(expected = "ExpectedRecord(")]
+#[should_panic(expected = "ExpectedRecord")]
 fn test_field_access_non_record() {
     let _ = eval_expr("{ let n = 42; n.x }").unwrap();
 }
@@ -97,4 +97,122 @@ fn test_user_defined_record_variant_direct_field_access() {
     ).unwrap();
     assert_eq!(format!("{}", val), "7");
     assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_named_record_field_access() {
+    // 型名とコンストラクタ名が一致する newtype レコード
+    let (val, sch) = eval_program(
+        "type Point = Point @{ x: Int, y: Int };
+         let p = Point @{ x: 1, y: 2 };
+         p.x"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "1");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_named_record_field_access_y() {
+    let (val, sch) = eval_program(
+        "type Point = Point @{ x: Int, y: Int };
+         let p = Point @{ x: 1, y: 2 };
+         p.y"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "2");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_named_tuple_field_access() {
+    // 型名とコンストラクタ名が一致する newtype タプル
+    let (val, sch) = eval_program(
+        "type Pair = Pair (Int, Bool);
+         let p = Pair (42, true);
+         p.0"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "42");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_named_tuple_field_access_second() {
+    let (val, sch) = eval_program(
+        "type Pair = Pair (Int, Bool);
+         let p = Pair (42, true);
+         p.1"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "true");
+    assert_eq!(format!("{}", sch.pretty()), "Bool");
+}
+
+#[test]
+fn test_newtype_parametric_record_field_access() {
+    // 型引数付き newtype レコード
+    let (val, sch) = eval_program(
+        "type Point a = Point @{ x: a, y: a };
+         let p = Point @{ x: 100, y: 200 };
+         p.x"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "100");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_parametric_record_field_access_y() {
+    let (val, sch) = eval_program(
+        "type Point a = Point @{ x: a, y: a };
+         let p = Point @{ x: 100, y: 200 };
+         p.y"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "200");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_parametric_tuple_field_access_first() {
+    // 型引数付き newtype タプル
+    let (val, sch) = eval_program(
+        "type Pair a b = Pair (a, b);
+         let p = Pair (42, true);
+         p.0"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "42");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_parametric_tuple_field_access_second() {
+    let (val, sch) = eval_program(
+        "type Pair a b = Pair (a, b);
+         let p = Pair (42, true);
+         p.1"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "true");
+    assert_eq!(format!("{}", sch.pretty()), "Bool");
+}
+
+#[test]
+fn test_newtype_parametric_record_field_access_function_lambda() {
+    // Point a = Point @{ x: a, y: a }
+    // f = \p. p.x
+    let (val, sch) = eval_program(
+        "type Point a = Point @{ x: a, y: a };
+         let f = \\p. { let Point r = p; r.x };
+         f (Point @{ x: 123, y: 456 })"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "123");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_parametric_tuple_field_access_function_lambda() {
+    // Pair a b = Pair (a, b)
+    // g = \p. p.1
+    let (val, sch) = eval_program(
+        "type Pair a b = Pair (a, b);
+         let g = \\p. { let Pair t = p; t.1 };
+         g (Pair (42, true))"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "true");
+    assert_eq!(format!("{}", sch.pretty()), "Bool");
 }

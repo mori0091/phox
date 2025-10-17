@@ -150,11 +150,58 @@ match (P@{x:1, y:2}) {
 }
 ",
         "
-(Cons 1 (Cons 2 (Cons 3 Nil))).1.0  // => error
+type P a = P @{ x: a, y: a};
+let p = P@{x:1, y:2};
+p.x // => { let P r = p; r.x } => 1
+",
+        "
+type P a = P (a, a);
+let p = P (1, 2);
+p.1 // => { let P t = p; t.1 } => 2
+",
+        "
+type P a = @{ x: a, y: a};
+let p = P@{x:1, y:2};
+p.x // => { let P r = p; r.x } => 1
+",
+        "
+type P a = (a, a);
+let p = P (1, 2);
+p.1 // => { let P t = p; t.1 } => 2
+",
+        "
+let p = @{x:1, y:2};
+match (p) {
+  @{x, y} => x,
+  _ => 0,
+}  // => 1
+",
+        "
+type P a = @{ x: a, y: a};
+let p = P@{x:1, y:2};
+match (p) {
+  P@{x, y} => y,
+  _ => 0,
+}  // => 2
+",
+        "
+type P a = (a, a);
+let p = P (1, 2);
+p.1 // => { let P t = p; t.1 } => 2
 ",
         "
 (Some 1).0  // => error
-"
+",
+            "
+type Pair a b = Pair (a, b);
+let g = \\p. p.1;  // => error
+g
+",
+            "
+type Pair a b = Pair (a, b);
+let g = \\p. p.1;  // => error
+g (Pair (42, true))
+",
     ];
 
     for src in &samples {

@@ -163,6 +163,17 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
                         None => panic!("field '{}' not found in record", field),
                     }
                 }
+                Value::Con(_, args) if args.len() == 1 => {
+                    match &args[0] {
+                        Value::Record(fields) => {
+                            match fields.iter().find(|(name, _)| name == field) {
+                                Some((_, val)) => val.clone(),
+                                None => panic!("field '{}' not found in record", field),
+                            }
+                        }
+                        other => panic!("field access on non-record value: {}", other),
+                    }
+                }
                 other => panic!("field access on non-record value: {}", other),
             }
         }
@@ -174,6 +185,18 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
                         elems[*index].clone()
                     } else {
                         panic!("index out of bounds: {}", index)
+                    }
+                }
+                Value::Con(_, args) if args.len() == 1 => {
+                    match &args[0] {
+                        Value::Tuple(elems) => {
+                            if *index < elems.len() {
+                                elems[*index].clone()
+                            } else {
+                                panic!("index out of bounds: {}", index)
+                            }
+                        }
+                        other => panic!("index access on non-tuple value: {}", other),
                     }
                 }
                 other => panic!("index access on non-tuple value: {}", other),

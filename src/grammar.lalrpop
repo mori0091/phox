@@ -44,7 +44,19 @@ TypeDecl: RawTypeDecl = {
             name: name.clone(),
             params: params,
             variants: variants,
-        }
+        },
+    "type" <name:ConIdent> <params:TypeParams> "=" <tuple:TypeTuple> ";"
+        => RawTypeDecl::SumType {
+            name: name.clone(),
+            params: params,
+            variants: vec![RawVariant::Tuple(name.clone(), vec![tuple])],
+        },
+    "type" <name:ConIdent> <params:TypeParams> "=" <record:TypeRecord> ";"
+        => RawTypeDecl::SumType {
+            name: name.clone(),
+            params: params,
+            variants: vec![RawVariant::Tuple(name.clone(), vec![record])],
+        },
 };
 
 TypeParams: Vec<String> = {

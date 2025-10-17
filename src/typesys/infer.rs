@@ -678,6 +678,7 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
             }
             Ok(Type::Record(typed_fields))
         }
+
         Expr::FieldAccess(base, field) => {
             let t_base = infer(ctx, tenv, base)?;
             match t_base {
@@ -688,9 +689,23 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
                         Err(TypeError::UnknownField(field.clone(), Type::Record(fields)))
                     }
                 }
-                other => Err(TypeError::ExpectedRecord(other)),
+                other => {
+                    if let Some(con) = is_tycon(&other) {
+                        let pat = Pat::con(con, vec![Pat::var("r")]);
+                        let p = base.clone();
+                        let expr = Expr::Block(vec![
+                            Item::Stmt(Stmt::Let(pat, p)),
+                            Item::Expr(Expr::field_access(Expr::var("r"), field.clone()))
+                        ]);
+                        infer(ctx, tenv, &expr).map_err(|_| TypeError::ExpectedRecord(other))
+                    }
+                    else {
+                        Err(TypeError::ExpectedRecord(other))
+                    }
+                }
             }
         }
+
         Expr::TupleAccess(base, index) => {
             let t_base = infer(ctx, tenv, base)?;
             match t_base {
@@ -701,9 +716,32 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
                         Err(TypeError::IndexOutOfBounds(*index, Type::Tuple(elems)))
                     }
                 }
-                other => Err(TypeError::ExpectedTuple(other)),
+                other => {
+                    if let Some(con) = is_tycon(&other) {
+                        let pat = Pat::con(con, vec![Pat::var("t")]);
+                        let p = base.clone();
+                        let expr = Expr::Block(vec![
+                            Item::Stmt(Stmt::Let(pat, p)),
+                            Item::Expr(Expr::tuple_access(Expr::var("t"), *index))
+                        ]);
+                        infer(ctx, tenv, &expr).map_err(|_| TypeError::ExpectedTuple(other))
+                    }
+                    else {
+                        Err(TypeError::ExpectedTuple(other))
+                    }
+                }
             }
         }
+    }
+}
+
+fn is_tycon(mut t: &Type) -> Option<String> {
+    while let Type::App(a, _) = t {
+        t = a;
+    }
+    match t {
+        Type::Con(con) => Some(con.clone()),
+        _ => None,
     }
 }
 
@@ -720,7 +758,7 @@ pub fn initial_kind_env() -> KindEnv {
 }
 
 pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
-    let mut env = TypeEnv::default();
+    let mut env = TypeEnv::new();
 
     // None : ∀a. Option a
     let a = ctx.fresh_type_var_id();
