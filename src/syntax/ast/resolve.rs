@@ -46,13 +46,6 @@ pub fn resolve_raw_variant(
                 .collect();
             Variant::Tuple(name, elems2)
         }
-        // RawVariant::Record(name, fields) => {
-        //     let fields2 = fields
-        //         .into_iter()
-        //         .map(|(fname, ty)| (fname, resolve_raw_type(ctx, ty, param_map)))
-        //         .collect();
-        //     Variant::Record(name, fields2)
-        // }
     }
 }
 

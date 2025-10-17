@@ -33,7 +33,6 @@ impl fmt::Display for TypeDecl {
 pub enum Variant {
     Unit(String),                        // ex. `None, `Nil`,
     Tuple(String, Vec<Type>),            // ex. `Some a`, `Result a e`,
-    // Record(String, Vec<(String, Type)>), // ex. `Point@{ x:a, y:a }`
 }
 
 impl fmt::Display for Variant {
@@ -51,18 +50,6 @@ impl fmt::Display for Variant {
                     .collect();
                 write!(f, "{} {}", name, s.join(" "))
             }
-            // Variant::Record(name, fields) => {
-            //     if fields.is_empty() {
-            //         write!(f, "{}@{{}}", name)
-            //     }
-            //     else {
-            //         let s: Vec<String> = fields
-            //             .iter()
-            //             .map(|(k, v)| format!("{}: {}", k, v))
-            //             .collect();
-            //         write!(f, "{}@{{ {} }}", name, s.join(", "))
-            //     }
-            // }
         }
     }
 }
@@ -70,10 +57,6 @@ impl fmt::Display for Variant {
 impl Variant {
     pub fn name(&self) -> String {
         match self {
-            // Variant::Unit(n)     |
-            // Variant::Tuple(n, _) |
-            // Variant::Record(n, _)
-            //     => n.clone(),
             Variant::Unit(n) | Variant::Tuple(n, _) => n.clone(),
         }
     }
@@ -97,16 +80,6 @@ impl Variant {
                 }
                 t
             }
-            // Variant::Record(_, fields) => {
-            //     // レコード型を1引数として扱う
-            //     let record_ty = Type::Record(
-            //         fields
-            //             .iter()
-            //             .map(|(fname, ty)| (fname.clone(), ty.clone()))
-            //             .collect(),
-            //     );
-            //     Type::Fun(Box::new(record_ty), Box::new(applied))
-            // }
         };
 
         // Scheme 化

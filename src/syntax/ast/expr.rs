@@ -7,10 +7,6 @@ pub enum Expr {
     Var(String),
     App(Box<Expr>, Box<Expr>),
 
-    // /// `let p = e1 in e2` ; binds and evaluate in local scope
-    // Let(Pat, Box<Expr>, Box<Expr>),
-    // /// `let rec p = e1 in e2`
-    // LetRec(Pat, Box<Expr>, Box<Expr>),
     Abs(String, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     Match(Box<Expr>, Vec<(Pat, Expr)>),
@@ -29,12 +25,6 @@ impl Expr {
     pub fn app(f: Expr, x: Expr) -> Self {
         Expr::App(Box::new(f), Box::new(x))
     }
-    // pub fn let_(p: Pat, e1: Expr, e2: Expr) -> Self {
-    //     Expr::Let(p, Box::new(e1), Box::new(e2))
-    // }
-    // pub fn let_rec(p: Pat, e1: Expr, e2: Expr) -> Self {
-    //     Expr::LetRec(p, Box::new(e1), Box::new(e2))
-    // }
     pub fn abs<S: Into<String>>(s: S, e: Expr) -> Self {
         Expr::Abs(s.into(), Box::new(e))
     }
@@ -67,8 +57,6 @@ impl fmt::Display for Expr {
                     write!(f, "{} {}", e1, e2)
                 }
             }
-            // Expr::Let(x, e1, e2)    => write!(f, "let {} = {} ; {}", x, e1, e2),
-            // Expr::LetRec(x, e1, e2) => write!(f, "let rec {} = {} ; {}", x, e1, e2),
             Expr::If(e1, e2, e3)    => write!(f, "if ({}) {} else {}", e1, e2, e3),
             Expr::Match(expr, arms) => {
                 let s: Vec<String>

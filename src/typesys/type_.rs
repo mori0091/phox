@@ -10,8 +10,6 @@ pub enum Type {
 
     Tuple(Vec<Type>),
     Record(Vec<(String, Type)>),
-
-    // Struct(String, Vec<(String, Type)>),
 }
 
 impl Type {
@@ -69,18 +67,6 @@ impl fmt::Display for Type {
                     write!(f, "@{{ {} }}", s.join(", "))
                 }
             }
-            // Type::Struct(name, fields) => {
-            //     if fields.is_empty() {
-            //         write!(f, "{}@{{}}", name)
-            //     }
-            //     else {
-            //         let s: Vec<String>
-            //             = fields.iter()
-            //                     .map(|(k, v)| format!("{}: {}", k, v))
-            //                     .collect();
-            //         write!(f, "{}@{{ {} }}", name, s.join(", "))
-            //     }
-            // }
         }
     }
 }

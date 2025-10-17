@@ -11,8 +11,6 @@ pub enum Value {
 
     Tuple(Vec<Value>),
     Record(Vec<(String, Value)>),
-
-    // Struct(String, Vec<(String, Value)>),
 }
 
 use std::fmt;
@@ -45,19 +43,6 @@ impl fmt::Display for Value {
                     write!(f, "@{{ {} }}", s.join(", "))
                 }
             }
-
-            // Value::Struct(name, fields) => {
-            //     if fields.is_empty() {
-            //         write!(f, "{}@{{}}", name)
-            //     }
-            //     else {
-            //         let s: Vec<String>
-            //             = fields.iter()
-            //                     .map(|(k, v)| format!("{}: {}", k, v))
-            //                     .collect();
-            //         write!(f, "{}@{{ {} }}", name, s.join(", "))
-            //     }
-            // }
 
             Value::Con(name, args) => {
                 if args.is_empty() {

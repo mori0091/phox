@@ -30,10 +30,6 @@ TopLevelExpr: Expr = {
     <items:ItemList> => Expr::Block(items),
 };
 
-// TopLevelItem: TopLevel = {
-//     <Item> => TopLevel::Item(<>),
-// };
-
 TopLevelDecl: TopLevel = {
     <TypeDecl> => TopLevel::TypeDecl(<>),
 };
@@ -74,15 +70,6 @@ Variant: RawVariant = {
     // VariantRecord,
     VariantSimple,
 };
-
-// VariantRecord: RawVariant = {
-//     <name:ConIdent> "@" "{" <fields:SepByComma0<VariantRecordField>> "}"
-//         => RawVariant::Record(name, fields)
-// };
-
-// VariantRecordField: (String, RawType) = {
-//     <name:Ident> ":" <ty:Type> => (name, ty),
-// };
 
 VariantSimple: RawVariant = {
     <name:ConIdent> <ts:TypeAtom*> => {

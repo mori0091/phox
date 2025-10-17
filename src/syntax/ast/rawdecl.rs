@@ -17,9 +17,6 @@ pub enum RawVariant {
 
     /// タプルバリアント (例: Some a)
     Tuple(String, Vec<RawType>),
-
-    // /// レコードバリアント (例: Point @ { x:Int, y:Int })
-    // Record(String, Vec<(String, RawType)>),
 }
 
 /// 型式（まだ名前ベース）
