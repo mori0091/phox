@@ -1,5 +1,9 @@
 # Phox
 
+![CI](https://github.com/mori0091/phox/actions/workflows/ci.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+![Rust](https://img.shields.io/badge/rust-1.80+-orange)
+
 Phox is a small functional programming language with **Hindley–Milner type inference**, **algebraic data types**, and **pattern matching**.  
 It aims to be a simple yet expressive tool — your clever companion for exploring type theory and practical programming.
 
