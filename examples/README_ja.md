@@ -99,7 +99,7 @@ let unwrapOr = λr. λdefault.
     Err _ => default
   };
 
-(unwrapOr (Ok 42) 0, unwrapOr (Err "oops") 0)
+(unwrapOr (Ok 42) 0, unwrapOr (Err ()) 0)
 // => (42, 0): (Int, Int)
 ```
 
