@@ -3,6 +3,10 @@
 Phox is a small functional programming language with **Hindley–Milner type inference**, **algebraic data types**, and **pattern matching**.  
 It aims to be a simple yet expressive tool — your clever companion for exploring type theory and practical programming.
 
+> Note: Phox currently has no string type or I/O.  
+> That means you can’t even write “Hello, World!” yet —  
+> but you can prove that `fact 5 = 120` with full type safety 😉
+
 ---
 
 ## ✨ Features
@@ -115,6 +119,9 @@ unwrapOr (Err ()) 0
 // => 0: Int
 ```
 
+
+👉 More examples (with Japanese explanations) are available in [examples/README_ja.md](examples/README_ja.md).
+
 ---
 
 ## 🚀 Getting Started
@@ -122,13 +129,21 @@ unwrapOr (Err ()) 0
 > ⚠️ Work in progress — Phox is under active development.
 
 1. Clone this repository
-2. Build with Rust (requires Rust 1.7x+)
-3. Run the REPL or compile `.phx` files (not implented yet)
+2. Build with Rust (tested on 1.80+, may work on earlier versions)
+3. Run with `.phx` files
 
 ```sh
 cargo build
 cargo run examples/hello.phx
 ```
+
+You can also pipe code from stdin:
+
+```sh
+echo "1 + 2" | cargo run
+```
+
+Example programs are available in the `examples/` directory.
 
 ---
 

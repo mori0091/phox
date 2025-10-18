@@ -1,0 +1,3 @@
+let id = λx. x;
+(id 42, id true)
+// => (42, true): (Int, Bool)

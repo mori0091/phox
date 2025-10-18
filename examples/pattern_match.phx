@@ -1,0 +1,10 @@
+type Option a = Some a | None;
+
+let getOrZero = λopt.
+  match (opt) {
+    Some x => x,
+    None   => 0
+  };
+
+(getOrZero (Some 42), getOrZero None)
+// => (42, 0): (Int, Int)

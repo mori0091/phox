@@ -1,0 +1,10 @@
+type Result a e = Ok a | Err e;
+
+let unwrapOr = λr. λdefault.
+  match (r) {
+    Ok x  => x,
+    Err _ => default
+  };
+
+(unwrapOr (Ok 42) 0, unwrapOr (Err "oops") 0)
+// => (42, 0): (Int, Int)
