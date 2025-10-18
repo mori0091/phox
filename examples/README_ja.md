@@ -121,15 +121,21 @@ applyTwice (add 1) 40
 cargo run examples/higher_order_function.phx
 ```
 
+> Phox ではユーザー定義の演算子も可能です。
+> 例えば、次のように冪乗演算子 (**) を定義できます。
+> これにより 2 ** 3 のように自然な記法で利用できます。
+
 ```ml
-// 演算子も関数として使える
-let eq = (==);
-(eq 2 2, eq 2 3)
-// => (true, false): (Bool, Bool)
+let rec (**) = λx. λy.
+  if (y <= 0) 1
+  else x * (x ** (y - 1));
+
+2 ** 3
+// => 8
 ```
 
 ```sh
-cargo run examples/operator_as_function.phx
+cargo run examples/operator_pow.phx
 ```
 
 ---
