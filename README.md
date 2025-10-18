@@ -64,18 +64,20 @@ match (opt) {
 
 ### Tuples and records
 ```ml
-let t = (1, true, "hi");
+let t = (1, true, ());
 let r = @{ x: 10, y: 20 };
-(t.0, r.x)   // tuple index is 0-based
+(t.1, r.x)   // tuple index is 0-based
+// => (true, 10): (Bool, Int)
 ```
 
 ### Functions as operators
-
 ``` ml
 let normSq = λx.λy. x * x + y * y;
 (normSq 2 3, 3 `normSq` 4)
-// => (13, 25)
+// => (13, 25): (Int, Int)
 ```
+
+- Infix notation with backticks allows any function to be used as an operator.
 
 ### Operators as functions / User-defined operators
 ```ml
@@ -86,6 +88,8 @@ let rec (**) = λx.λy.
 ((**) 2 3, 3 ** 4)
 // => (8, 81): (Int, Int)
 ```
+
+- Built-in operators like == are currently infix-only, but user-defined operators can always be used as functions.
 
 ---
 
