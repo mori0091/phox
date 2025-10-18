@@ -1,5 +1,5 @@
-use algo_j::api::{check_expr_type, check_expr_scheme};
-use algo_j::typesys::Type;
+use phox::api::{check_expr_type, check_expr_scheme};
+use phox::typesys::Type;
 
 #[test]
 fn test_lit_unit() {

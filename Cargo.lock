@@ -12,14 +12,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "algo_j"
-version = "0.1.0"
-dependencies = [
- "lalrpop",
- "lalrpop-util",
-]
-
-[[package]]
 name = "ascii-canvas"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -276,6 +268,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67eabc2ef2a60eb7faa00097bd1ffdb5bd28e62bf39990626a582201b7a754e5"
 dependencies = [
  "siphasher",
+]
+
+[[package]]
+name = "phox"
+version = "0.1.0"
+dependencies = [
+ "lalrpop",
+ "lalrpop-util",
 ]
 
 [[package]]

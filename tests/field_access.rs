@@ -1,4 +1,4 @@
-use algo_j::api::check_expr_scheme;
+use phox::api::check_expr_scheme;
 
 #[test]
 fn test_field_access_type_simple() {
@@ -24,7 +24,7 @@ fn test_field_access_type_non_record() {
     assert!(format!("{:?}", err).contains("ExpectedRecord"));
 }
 
-use algo_j::api::eval_expr;
+use phox::api::eval_expr;
 
 #[test]
 fn test_field_access_simple() {
@@ -59,7 +59,7 @@ fn test_field_access_non_record() {
     let _ = eval_expr("{ let n = 42; n.x }").unwrap();
 }
 
-use algo_j::api::eval_program;
+use phox::api::eval_program;
 
 #[test]
 fn test_user_defined_record_variant_field_access() {
