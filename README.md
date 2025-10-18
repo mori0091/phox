@@ -1,6 +1,6 @@
 # Phox
 
-![CI](https://github.com/mori0091/phox/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/mori0091/phox/actions/workflows/ci.yaml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Rust](https://img.shields.io/badge/rust-1.80+-orange)
 
