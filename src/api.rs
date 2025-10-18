@@ -10,8 +10,9 @@ use crate::syntax::ast::register_type_decl;
 use crate::typesys::infer_stmt;
 use crate::typesys::{initial_kind_env, initial_type_env};
 use crate::typesys::{Type, Scheme};
-use crate::typesys::{TypeContext, infer, generalize};
-use crate::interpreter::{eval, initial_env, Value};
+use crate::typesys::{TypeContext, infer_expr, generalize};
+use crate::interpreter::{initial_env, Value};
+use crate::interpreter::eval;
 
 /// Parse an expression.
 pub fn parse_expr(src: &str) -> Result<Expr, String> {
@@ -22,7 +23,7 @@ pub fn parse_expr(src: &str) -> Result<Expr, String> {
 pub fn infer_expr_scheme(ast: &Expr) -> Result<Scheme, String> {
     let mut ctx = TypeContext::new();
     let mut env = initial_type_env(&mut ctx);
-    let ty = infer(&mut ctx, &mut env, &ast)
+    let ty = infer_expr(&mut ctx, &mut env, &ast)
         .map_err(|e| format!("infer error: {e:?}"))?;
     let sch = generalize(&mut ctx, &env, &ty);
     Ok(sch)
@@ -51,7 +52,7 @@ pub fn eval_expr(src: &str) -> Result<(Value, Scheme), String> {
     let ast = parse_expr(src)?;
     let sch = infer_expr_scheme(&ast)?;
     let mut env = initial_env();
-    let val = eval(&ast, &mut env);
+    let val = eval::eval_expr(&ast, &mut env);
     Ok((val, sch))
 }
 
@@ -88,10 +89,10 @@ pub fn eval_program(src: &str) -> Result<(Value, Scheme), String> {
                         // last = Some((val, sch));
                     }
                     Item::Expr(expr) => {
-                        let ty = infer(&mut ctx, &mut tenv, &expr)
+                        let ty = infer_expr(&mut ctx, &mut tenv, &expr)
                             .map_err(|e| format!("infer error: {e:?}"))?;
                         let sch = generalize(&mut ctx, &tenv, &ty);
-                        let val = eval(&expr, &mut env);
+                        let val = eval::eval_expr(&expr, &mut env);
                         last = Some((val, sch));
                     }
                 }

@@ -426,7 +426,7 @@ pub fn generalize(ctx: &mut TypeContext, env: &TypeEnv, ty: &Type) -> Scheme {
 pub fn infer_stmt(ctx: &mut TypeContext, tenv: &mut TypeEnv, stmt: &Stmt) -> Result<Type, TypeError> {
     match stmt {
         Stmt::Let(pat, expr) => {
-            let t_expr = infer(ctx, tenv, expr)?;
+            let t_expr = infer_expr(ctx, tenv, expr)?;
             let t_pat = ctx.fresh_type_for_pattern(pat);
             ctx.unify(&t_expr, &t_pat)?;
             let ref_tenv = tenv.clone(); // snapshot for reference
@@ -438,7 +438,7 @@ pub fn infer_stmt(ctx: &mut TypeContext, tenv: &mut TypeEnv, stmt: &Stmt) -> Res
                 Pat::Var(x) => {
                     let tv = Type::Var(ctx.fresh_type_var_id());
                     tenv.insert(x.clone(), Scheme::mono(tv.clone()));
-                    let t_expr = infer(ctx, tenv, expr)?;
+                    let t_expr = infer_expr(ctx, tenv, expr)?;
                     ctx.unify(&tv, &t_expr)?;
                     let sch = generalize(ctx, tenv, &tv);
                     tenv.insert(x.clone(), sch);
@@ -450,7 +450,7 @@ pub fn infer_stmt(ctx: &mut TypeContext, tenv: &mut TypeEnv, stmt: &Stmt) -> Res
     }
 }
 
-pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<Type, TypeError> {
+pub fn infer_expr(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<Type, TypeError> {
     match expr {
         Expr::Var(x) => {
             let sch = tenv.get(x).ok_or_else(|| TypeError::UnboundVariable(format!("{}",x)))?;
@@ -466,15 +466,15 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
             ctx.match_pattern(&mut env2, pat, &t_pat, tenv, false)?;
 
             // 本体を推論
-            let t_body = infer(ctx, &mut env2, body)?;
+            let t_body = infer_expr(ctx, &mut env2, body)?;
 
             // 関数型を返す
             Ok(Type::fun(t_pat, t_body))
         }
 
         Expr::App(f, a) => {
-            let tf = infer(ctx, tenv, f)?;
-            let ta = infer(ctx, tenv, a)?;
+            let tf = infer_expr(ctx, tenv, f)?;
+            let ta = infer_expr(ctx, tenv, a)?;
             let tr = Type::Var(ctx.fresh_type_var_id()); // result type variable
             ctx.unify(&tf, &Type::fun(ta, tr.clone()))?;
             Ok(tr)
@@ -488,25 +488,25 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
                         infer_stmt(ctx, &mut tenv2, stmt)?;
                     }
                     Item::Expr(expr) => {
-                        last_ty = infer(ctx, &mut tenv2, expr)?;
+                        last_ty = infer_expr(ctx, &mut tenv2, expr)?;
                     }
                 }
             }
             Ok(last_ty)
         }
         Expr::If(cond, then_e, else_e) => {
-            let t_cond = infer(ctx, tenv, cond)?;
+            let t_cond = infer_expr(ctx, tenv, cond)?;
             ctx.unify(&t_cond, &Type::Con("Bool".into()))?;
 
-            let t_then = infer(ctx, tenv, then_e)?;
-            let t_else = infer(ctx, tenv, else_e)?;
+            let t_then = infer_expr(ctx, tenv, then_e)?;
+            let t_else = infer_expr(ctx, tenv, else_e)?;
             ctx.unify(&t_then, &t_else)?;
             Ok(t_then)
         }
 
         Expr::Match(scrutinee, arms) => {
             // 判別対象式の型を推論
-            let t_scrut = infer(ctx, tenv, scrutinee)?;
+            let t_scrut = infer_expr(ctx, tenv, scrutinee)?;
 
             // 各アームの式型を集める
             let mut result_types = vec![];
@@ -523,7 +523,7 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
                 ctx.match_pattern(&mut env2, pat, &t_pat, tenv, false)?;
 
                 // アーム本体の型を推論
-                let t_body = infer(ctx, &mut env2, body)?;
+                let t_body = infer_expr(ctx, &mut env2, body)?;
                 result_types.push(t_body);
             }
 
@@ -543,7 +543,7 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
         Expr::Tuple(es) => {
             let mut tys = Vec::new();
             for e in es {
-                let ty = infer(ctx, tenv, e)?;
+                let ty = infer_expr(ctx, tenv, e)?;
                 tys.push(ty);
             }
             Ok(Type::Tuple(tys))
@@ -553,14 +553,14 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
             // 各フィールドの型を推論
             let mut typed_fields = Vec::with_capacity(fields.len());
             for (fname, fexpr) in fields {
-                let t_field = infer(ctx, tenv, fexpr)?;
+                let t_field = infer_expr(ctx, tenv, fexpr)?;
                 typed_fields.push((fname.clone(), t_field));
             }
             Ok(Type::Record(typed_fields))
         }
 
         Expr::FieldAccess(base, field) => {
-            let t_base = infer(ctx, tenv, base)?;
+            let t_base = infer_expr(ctx, tenv, base)?;
             match t_base {
                 Type::Record(fields) => {
                     if let Some((_, ty)) = fields.iter().find(|(fname, _)| fname == field) {
@@ -577,7 +577,7 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
                             Item::Stmt(Stmt::Let(pat, p)),
                             Item::Expr(Expr::field_access(Expr::var("r"), field.clone()))
                         ]);
-                        infer(ctx, tenv, &expr).map_err(|_| TypeError::ExpectedRecord(other))
+                        infer_expr(ctx, tenv, &expr).map_err(|_| TypeError::ExpectedRecord(other))
                     }
                     else {
                         Err(TypeError::ExpectedRecord(other))
@@ -587,7 +587,7 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
         }
 
         Expr::TupleAccess(base, index) => {
-            let t_base = infer(ctx, tenv, base)?;
+            let t_base = infer_expr(ctx, tenv, base)?;
             match t_base {
                 Type::Tuple(elems) => {
                     if *index < elems.len() {
@@ -604,7 +604,7 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
                             Item::Stmt(Stmt::Let(pat, p)),
                             Item::Expr(Expr::tuple_access(Expr::var("t"), *index))
                         ]);
-                        infer(ctx, tenv, &expr).map_err(|_| TypeError::ExpectedTuple(other))
+                        infer_expr(ctx, tenv, &expr).map_err(|_| TypeError::ExpectedTuple(other))
                     }
                     else {
                         Err(TypeError::ExpectedTuple(other))

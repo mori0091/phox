@@ -4,7 +4,7 @@ use super::{Value, Env, Binding};
 pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
     match stmt {
         Stmt::Let(pat, expr) => {
-            let val = eval(expr, env);
+            let val = eval_expr(expr, env);
             if let Some(bindings) = match_pat(pat, &val) {
                 env.extend(&bindings);
             } else {
@@ -17,7 +17,7 @@ pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
                     env.insert(x.clone(), Value::Builtin(Rc::new(|_| {
                         panic!("recursive value used before initialization")
                     })));
-                    let val = eval(expr, env);
+                    let val = eval_expr(expr, env);
                     env.insert(x.clone(), val);
                 }
                 _ => panic!("let rec pattern not supported (only variable)"),
@@ -27,7 +27,7 @@ pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
 }
 
 /// 評価関数
-pub fn eval(expr: &Expr, env: &Env) -> Value {
+pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
     match expr {
         // リテラル
         Expr::Lit(lit) => Value::Lit(lit.clone()),
@@ -49,15 +49,15 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
 
         // 関数適用
         Expr::App(f, arg) => {
-            let f_val = eval(f, env);
-            let arg_val = eval(arg, env);
+            let f_val = eval_expr(f, env);
+            let arg_val = eval_expr(arg, env);
             match f_val {
                 // ユーザ定義関数（Closure）
                 Value::Closure { pat, body, env: closure_env } => {
                     if let Some(bindings) = match_pat(&pat, &arg_val) {
                         let env2 = closure_env.duplicate();
                         env2.extend(&bindings);
-                        eval(&body, &env2)
+                        eval_expr(&body, &env2)
                     } else {
                         panic!("function argument pattern match failed");
                     }
@@ -117,7 +117,7 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
                         eval_stmt(stmt, &mut env2);
                     }
                     Item::Expr(expr) => {
-                        last_val = eval(expr, &env2);
+                        last_val = eval_expr(expr, &env2);
                     }
                 }
             }
@@ -125,40 +125,40 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
         }
 
         Expr::If(e1, e2, e3) => {
-            match eval(e1, env) {
-                Value::Lit(Lit::Bool(true))  => eval(e2, env),
-                Value::Lit(Lit::Bool(false)) => eval(e3, env),
+            match eval_expr(e1, env) {
+                Value::Lit(Lit::Bool(true))  => eval_expr(e2, env),
+                Value::Lit(Lit::Bool(false)) => eval_expr(e3, env),
                 v => panic!("if condition must be Bool, got {}", v),
             }
         }
 
         Expr::Match(scrut, arms) => {
-            let v_scrut = eval(scrut, env);
+            let v_scrut = eval_expr(scrut, env);
             for (pat, body) in arms {
                 if let Some(bindings) = match_pat(pat, &v_scrut) {
                     let env2 = env.duplicate();
                     env2.extend(&bindings);
-                    return eval(body, &env2);
+                    return eval_expr(body, &env2);
                 }
             }
             panic!("non-exhaustive match: no pattern matched value {}", v_scrut);
         }
 
         Expr::Tuple(es) => {
-            let xs: Vec<Value> = es.iter().map(|x| eval(x, env)).collect();
+            let xs: Vec<Value> = es.iter().map(|x| eval_expr(x, env)).collect();
             Value::Tuple(xs)
         }
 
         Expr::Record(fields) => {
             let mut vals = Vec::new();
             for (fname, fexpr) in fields {
-                let v = eval(fexpr, env);
+                let v = eval_expr(fexpr, env);
                 vals.push((fname.clone(), v));
             }
             Value::Record(vals)
         }
         Expr::FieldAccess(base, field) => {
-            let v_base = eval(base, env);
+            let v_base = eval_expr(base, env);
             match v_base {
                 Value::Record(fields) => {
                     match fields.iter().find(|(name, _)| name == field) {
@@ -181,7 +181,7 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
             }
         }
         Expr::TupleAccess(base, index) => {
-            let v_base = eval(base, env);
+            let v_base = eval_expr(base, env);
             match v_base {
                 Value::Tuple(elems) => {
                     if *index < elems.len() {
