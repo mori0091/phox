@@ -1,0 +1,4 @@
+// 演算子も関数として使える
+let eq = (==);
+(eq 2 2, eq 2 3)
+// => (true, false): (Bool, Bool)

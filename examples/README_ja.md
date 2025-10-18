@@ -115,7 +115,13 @@ let add = λx. λy. x + y;
 let applyTwice = λf. λx. f (f x);
 applyTwice (add 1) 40
 // => 42: Int
+```
 
+```sh
+cargo run examples/higher_order_function.phx
+```
+
+```ml
 // 演算子も関数として使える
 let eq = (==);
 (eq 2 2, eq 2 3)
@@ -123,7 +129,7 @@ let eq = (==);
 ```
 
 ```sh
-cargo run examples/higher_order_function.phx
+cargo run examples/operator_as_function.phx
 ```
 
 ---

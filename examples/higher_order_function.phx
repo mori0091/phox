@@ -2,8 +2,3 @@ let add = λx. λy. x + y;
 let applyTwice = λf. λx. f (f x);
 applyTwice (add 1) 40
 // => 42: Int
-
-// 演算子も関数として使える
-let eq = (==);
-(eq 2 2, eq 2 3)
-// => (true, false): (Bool, Bool)
