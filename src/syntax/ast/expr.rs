@@ -7,7 +7,7 @@ pub enum Expr {
     Var(String),
     App(Box<Expr>, Box<Expr>),
 
-    Abs(String, Box<Expr>),
+    Abs(Pat, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     Match(Box<Expr>, Vec<(Pat, Expr)>),
 
@@ -25,8 +25,8 @@ impl Expr {
     pub fn app(f: Expr, x: Expr) -> Self {
         Expr::App(Box::new(f), Box::new(x))
     }
-    pub fn abs<S: Into<String>>(s: S, e: Expr) -> Self {
-        Expr::Abs(s.into(), Box::new(e))
+    pub fn abs(pat: Pat, e: Expr) -> Self {
+        Expr::Abs(pat, Box::new(e))
     }
     pub fn if_(e1: Expr, e2: Expr, e3: Expr) -> Self {
         Expr::If(Box::new(e1), Box::new(e2), Box::new(e3))

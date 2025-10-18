@@ -183,7 +183,7 @@ Expr1: Expr = {
 };
 
 ExprAbs: Expr = {
-    KeywordLamda <id:Ident> "." <body:Expr1> => Expr::abs(id, body),
+    KeywordLamda <p:Pat> "." <body:Expr1> => Expr::abs(p, body),
 };
 
 ExprIf: Expr = {

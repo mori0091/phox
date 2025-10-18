@@ -216,3 +216,29 @@ fn test_newtype_parametric_tuple_field_access_function_lambda() {
     assert_eq!(format!("{}", val), "true");
     assert_eq!(format!("{}", sch.pretty()), "Bool");
 }
+
+#[test]
+fn test_newtype_parametric_record_field_access_function_lambda_pat() {
+    // Point a = Point @{ x: a, y: a }
+    // f = \p. p.x
+    let (val, sch) = eval_program(
+        "type Point a = Point @{ x: a, y: a };
+         let f = \\Point r. r.x;
+         f (Point @{ x: 123, y: 456 })"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "123");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_parametric_tuple_field_access_function_lambda_pat() {
+    // Pair a b = Pair (a, b)
+    // g = \p. p.1
+    let (val, sch) = eval_program(
+        "type Pair a b = Pair (a, b);
+         let g = \\Pair t. t.1;
+         g (Pair (42, true))"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "true");
+    assert_eq!(format!("{}", sch.pretty()), "Bool");
+}

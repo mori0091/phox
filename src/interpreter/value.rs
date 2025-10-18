@@ -1,11 +1,11 @@
 use std::rc::Rc;
-use crate::syntax::ast::{Expr, Lit};
+use crate::syntax::ast::{Expr, Pat, Lit};
 use super::Env;
 
 #[derive(Clone)]
 pub enum Value {
     Lit(Lit),
-    Closure { param: String, body: Box<Expr>, env: Env },
+    Closure { pat: Pat, body: Box<Expr>, env: Env },
     Con(String, Vec<Value>),
     Builtin(Rc<dyn Fn(Vec<Value>) -> Value>), // ← Rust 側の関数をラップ
 
@@ -14,6 +14,21 @@ pub enum Value {
 }
 
 use std::fmt;
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Lit(l) => write!(f, "{:?}", l),
+            Value::Closure { .. } => write!(f, "<closure>"),
+            Value::Con(name, _) => write!(f, "<con {}>", name),
+            Value::Builtin(_) => write!(f, "<builtin>"),
+            Value::Tuple(vs) => f.debug_tuple("Tuple").field(vs).finish(),
+            Value::Record(fields) => f.debug_map()
+                .entries(fields.iter().map(|(n, v)| (n, v)))
+                .finish(),
+        }
+    }
+}
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

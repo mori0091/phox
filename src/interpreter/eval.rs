@@ -39,9 +39,9 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
         }
 
         // λ抽象
-        Expr::Abs(param, body) => {
+        Expr::Abs(pat, body) => {
             Value::Closure {
-                param: param.clone(),
+                pat: pat.clone(),
                 body: body.clone(),
                 env: env.clone(), // クロージャは定義時の環境をキャプチャ（Rc<RefCell<_>>共有）
             }
@@ -53,10 +53,14 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
             let arg_val = eval(arg, env);
             match f_val {
                 // ユーザ定義関数（Closure）
-                Value::Closure { param, body, env: closure_env } => {
-                    let env2 = closure_env.duplicate();
-                    env2.insert(param, arg_val);
-                    eval(&body, &env2)
+                Value::Closure { pat, body, env: closure_env } => {
+                    if let Some(bindings) = match_pat(&pat, &arg_val) {
+                        let env2 = closure_env.duplicate();
+                        env2.extend(&bindings);
+                        eval(&body, &env2)
+                    } else {
+                        panic!("function argument pattern match failed");
+                    }
                 }
 
                 // 組み込み関数（Builtin）
@@ -65,8 +69,7 @@ pub fn eval(expr: &Expr, env: &Env) -> Value {
                     func(vec![arg_val])
                 }
 
-                // _ => panic!("attempted to apply non-function value: {:?}", f_val),
-                _ => panic!("attempted to apply non-function value: {}", f),
+                _ => panic!("attempted to apply non-function"),
             }
         }
 

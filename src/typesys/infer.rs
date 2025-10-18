@@ -99,7 +99,7 @@ impl TypeContext {
 
 impl TypeContext {
     // Normalize a type by chasing bindings and compressing vars
-    fn repr(&mut self, ty: &Type) -> Type {
+    pub fn repr(&mut self, ty: &Type) -> Type {
         match ty {
             Type::Var(v) => {
                 let r = self.find(*v);
@@ -246,6 +246,7 @@ impl TypeContext {
         pat: &Pat,
         ty: &Type,
         outer_env: &TypeEnv,
+        generalize_bindings: bool,
     ) -> Result<(), TypeError> {
         match pat {
             Pat::Wildcard => Ok(()), // 束縛なし
@@ -264,7 +265,11 @@ impl TypeContext {
             }
 
             Pat::Var(x) => {
-                let sch = generalize(self, outer_env, ty);
+                let sch = if generalize_bindings {
+                    generalize(self, outer_env, ty)   // let の場合
+                } else {
+                    Scheme::mono(self.repr(ty))       // Abs や match の場合は単相
+                };
                 env.insert(x.clone(), sch);
                 Ok(())
             }
@@ -289,7 +294,7 @@ impl TypeContext {
                 self.unify(&ty_fun, ty)?;
 
                 for (p, t) in args.iter().zip(arg_types.iter()) {
-                    self.match_pattern(env, p, t, outer_env)?;
+                    self.match_pattern(env, p, t, outer_env, generalize_bindings)?;
                 }
 
                 Ok(())
@@ -302,7 +307,7 @@ impl TypeContext {
                             return Err(TypeError::TupleLengthMismatch(ps.len(), ts.len()));
                         }
                         for (p, t) in ps.iter().zip(ts.iter()) {
-                            self.match_pattern(env, p, t, outer_env)?;
+                            self.match_pattern(env, p, t, outer_env, generalize_bindings)?;
                         }
                         Ok(())
                     }
@@ -318,7 +323,7 @@ impl TypeContext {
                                     .find(|(n, _)| n == fname)
                                     .ok_or_else(|| TypeError::UnknownField(fname.clone(), ty.clone()))?
                                     .1.clone();
-                        self.match_pattern(env, p, &ft, outer_env)?;
+                        self.match_pattern(env, p, &ft, outer_env, generalize_bindings)?;
                     }
                     Ok(())
                 } else {
@@ -425,7 +430,7 @@ pub fn infer_stmt(ctx: &mut TypeContext, tenv: &mut TypeEnv, stmt: &Stmt) -> Res
             let t_pat = ctx.fresh_type_for_pattern(pat);
             ctx.unify(&t_expr, &t_pat)?;
             let ref_tenv = tenv.clone(); // snapshot for reference
-            ctx.match_pattern(tenv, pat, &t_pat, &ref_tenv)?;
+            ctx.match_pattern(tenv, pat, &t_pat, &ref_tenv, true)?;
             Ok(Type::con("()"))
         }
         Stmt::LetRec(pat, expr) => {
@@ -451,16 +456,22 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
             let sch = tenv.get(x).ok_or_else(|| TypeError::UnboundVariable(format!("{}",x)))?;
             Ok(instantiate(ctx, sch))
         }
-        Expr::Abs(x, body) => {
-            // introduce parameter with fresh monomorphic type variable
-            let tv = Type::Var(ctx.fresh_type_var_id());
-            // extend env temporarily
-            let saved = tenv.clone();
-            tenv.insert(x.clone(), Scheme::mono(tv.clone()));
-            let tbody = infer(ctx, tenv, body)?;
-            *tenv = saved;
-            Ok(Type::fun(tv, tbody))
+        Expr::Abs(pat, body) => {
+            // パターンに対応する型を生成
+            let t_pat = ctx.fresh_type_for_pattern(pat);
+
+            // 環境を拡張
+            let mut env2 = tenv.clone();
+            // ctx.match_pattern(&mut env2, pat, &t_pat, tenv)?;
+            ctx.match_pattern(&mut env2, pat, &t_pat, tenv, false)?;
+
+            // 本体を推論
+            let t_body = infer(ctx, &mut env2, body)?;
+
+            // 関数型を返す
+            Ok(Type::fun(t_pat, t_body))
         }
+
         Expr::App(f, a) => {
             let tf = infer(ctx, tenv, f)?;
             let ta = infer(ctx, tenv, a)?;
@@ -509,7 +520,7 @@ pub fn infer(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<T
 
                 // 束縛環境を構築
                 let mut env2 = tenv.clone();
-                ctx.match_pattern(&mut env2, pat, &t_pat, tenv)?;
+                ctx.match_pattern(&mut env2, pat, &t_pat, tenv, false)?;
 
                 // アーム本体の型を推論
                 let t_body = infer(ctx, &mut env2, body)?;
