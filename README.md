@@ -1,0 +1,146 @@
+# Phox
+
+Phox is a small functional programming language with **Hindley–Milner type inference**, **algebraic data types**, and **pattern matching**.  
+It aims to be a simple yet expressive tool — your clever companion for exploring type theory and practical programming.
+
+---
+
+## ✨ Features
+
+- **Hindley–Milner type inference**  
+  No need to annotate types in most cases.
+- **Algebraic data types (ADT)**  
+  Define expressive data structures with variants.
+- **Pattern matching**  
+  Concise and powerful destructuring.
+- **Newtype shorthand**  
+  Cleaner syntax for single-constructor wrapper types.
+- **First-class functions**  
+  Functions are values, operators are functions too.
+- **Simple syntax**  
+  Inspired by ML-family languages, with a focus on clarity.
+
+---
+
+## 📘 Language Overview
+
+### Type definitions
+```ml
+type Option a = Some a | None;
+type Pair a b = Pair a b;
+type Result a e = Ok a | Err e;
+```
+
+- Variants can take **0 or more arguments**.
+- **Newtype shorthand** is available when:
+  - There is only one variant, and
+  - The type name and constructor name are the same, and
+  - The variant has exactly one tuple or one record argument.
+
+```ml
+// Normal form
+type Point a = Point @{ x: a, y: a };
+
+// Newtype shorthand
+type Point a = @{ x: a, y: a };
+type Wrapper a = (a,);
+```
+
+### Pattern matching
+```ml
+match (opt) {
+  Some x => x,
+  None   => 0
+}
+```
+
+### Tuples and records
+```ml
+let t = (1, true, "hi");
+let r = @{ x: 10, y: 20 };
+(t.0, r.x)   // tuple index is 0-based
+```
+
+### Operators as functions
+```ml
+let eq = (==);
+(eq 2 2, eq 2 3)  // => (true, false): (Bool, Bool)
+```
+
+---
+
+## 📚 Sample Programs
+
+### Identity
+```ml
+let id = \x. x;
+id 42
+// => 42: Int
+```
+
+### Factorial
+```ml
+let rec fact = \n.
+  if (n == 0) 1 else n * fact (n - 1);
+
+fact 5
+// => 120: Int
+```
+
+### Option
+```ml
+type Option a = Some a | None;
+
+let getOrZero = \opt.
+  match (opt) {
+    Some x => x,
+    None   => 0
+  };
+
+getOrZero (Some 42)
+// => 42: Int
+```
+
+### Result
+```ml
+type Result a e = Ok a | Err e;
+
+let unwrapOr = \r. \default.
+  match (r) {
+    Ok x  => x,
+    Err _ => default
+  };
+
+unwrapOr (Err ()) 0
+// => 0: Int
+```
+
+---
+
+## 🚀 Getting Started
+
+> ⚠️ Work in progress — Phox is under active development.
+
+1. Clone this repository
+2. Build with Rust (requires Rust 1.7x+)
+3. Run the REPL or compile `.phx` files (not implented yet)
+
+```sh
+cargo build
+cargo run examples/hello.phx
+```
+
+---
+
+## 🛠 Roadmap
+
+- [ ] REPL with type inference output
+- [ ] Standard library (Option, Result, List, etc.)
+- [ ] Module system
+- [ ] Constraint-based type classes (future)
+
+---
+
+## 📄 License
+
+MIT License
