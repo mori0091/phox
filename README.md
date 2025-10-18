@@ -69,10 +69,22 @@ let r = @{ x: 10, y: 20 };
 (t.0, r.x)   // tuple index is 0-based
 ```
 
-### Operators as functions
+### Functions as operators
+
+``` ml
+let normSq = λx.λy. x * x + y * y;
+(normSq 2 3, 3 `normSq` 4)
+// => (13, 25)
+```
+
+### Operators as functions / User-defined operators
 ```ml
-let eq = (==);
-(eq 2 2, eq 2 3)  // => (true, false): (Bool, Bool)
+let rec (**) = λx.λy.
+    if (y <= 0) 1
+    else x * x ** (y - 1);
+
+((**) 2 3, 3 ** 4)
+// => (8, 81): (Int, Int)
 ```
 
 ---
@@ -81,14 +93,14 @@ let eq = (==);
 
 ### Identity
 ```ml
-let id = \x. x;
+let id = λx. x;
 id 42
 // => 42: Int
 ```
 
 ### Factorial
 ```ml
-let rec fact = \n.
+let rec fact = λn.
   if (n == 0) 1 else n * fact (n - 1);
 
 fact 5
@@ -99,7 +111,7 @@ fact 5
 ```ml
 type Option a = Some a | None;
 
-let getOrZero = \opt.
+let getOrZero = λopt.
   match (opt) {
     Some x => x,
     None   => 0
@@ -113,7 +125,7 @@ getOrZero (Some 42)
 ```ml
 type Result a e = Ok a | Err e;
 
-let unwrapOr = \r. \default.
+let unwrapOr = λr. λdefault.
   match (r) {
     Ok x  => x,
     Err _ => default
