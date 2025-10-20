@@ -32,6 +32,55 @@ It aims to be a simple yet expressive tool — your clever companion for explori
 
 ## 📘 Language Overview
 
+> - In code examples, `// => ` shows the result as a comment.
+> - In REPL examples, `=>` shows the evaluated result.
+
+### Semicolons
+
+- `;` separates multiple items (type declarations / statements / expressions) in a block or at the top level.
+- Each item is evaluated in order; only the last expression's value is returned.
+- If a block or top-level input ends with `;`, an implicit `()` is added.
+
+``` ml
+// Multiple items in a block
+{
+    let x = 1; // => (): ()  (discarded)
+    let y = 2; // => (): ()  (discarded)
+    x + y;     // => 3: Int  (discarded)
+    2 * x + y  // => 4: Int  (result)
+}
+// => 4: Int
+```
+
+``` ml
+// Multiple items in the top level
+let x = 1; // => (): ()  (discarded)
+let y = 2; // => (): ()  (discarded)
+x + y;     // => 3: Int  (discarded)
+2 * x + y  // => 4: Int  (result)
+// => 4: Int
+```
+
+``` ml
+// Items in a block ends with `;`
+{
+    1 + 2; // => 3: Int  (discarded)
+}
+// => (): ()
+```
+
+``` ml
+// Items in the top level ends with `;`
+1 + 2; // => 3: Int  (discarded)
+// => (): ()
+```
+
+``` ml
+// No items in a block
+{}
+// => (): ()
+```
+
 ### Type definitions
 ```ml
 type Option a = Some a | None;
@@ -89,7 +138,19 @@ let rec (**) = λx.λy.
 // => (8, 81): (Int, Int)
 ```
 
-- Built-in operators like == are currently infix-only, but user-defined operators can always be used as functions.
+- Built-in operators like `==` are currently **infix-only**.  
+  (Future plan: allow them to be used as functions, e.g. `(==) 1 2`.)
+- User-defined operators, however, can always be used both infix and prefix.
+
+``` ml
+// OK: user-defined operator
+let rec (**) = λx.λy. if (y <= 0) 1 else x * x ** (y - 1);
+(**) 2 3   // => 8: Int
+3 ** 4     // => 81: Int
+
+// NG: built-in operator
+// let eq = (==);   // error: built-in operators are infix-only
+```
 
 ---
 
@@ -148,19 +209,56 @@ unwrapOr (Err ()) 0
 
 > ⚠️ Work in progress — Phox is under active development.
 
-1. Clone this repository
-2. Build with Rust (tested on 1.80+, may work on earlier versions)
-3. Run with `.phx` files
+### Build
+
+Clone this repository and build with Rust (tested on 1.80+, may work on earlier versions):
 
 ```sh
 cargo build
-cargo run examples/hello.phx
 ```
 
-You can also pipe code from stdin:
+### Run in REPL
+
+If you run without arguments, Phox starts an interactive REPL:
+
+``` sh
+cargo run
+> let rec fact = λn. if (n == 0) 1 else n * fact (n - 1);
+> fact 5
+=> 120: Int
+```
+
+### Run a program file
+
+Pass a `.phx` file to execute it:
+
+> - `.phx` is the conventional extension for Phox source files (plain text).  
+> - `.txt` files are also accepted.
+
+``` sh
+cargo run examples/fact.phx
+=> 120: Int
+```
+
+### Run from stdin
+
+You can also pipe code from stdin (use `-` explicitly):
 
 ```sh
-echo "1 + 2" | cargo run
+echo "1 + 2" | cargo run -
+=> 3: Int
+```
+
+Resulting `value` and inferred `type` are printed on success, like this:
+
+``` sh
+=> value: type
+```
+
+On error, an error message is printed, like this:
+
+``` sh
+parse error: UnrecognizedToken { /* snip... */ }
 ```
 
 Example programs are available in the `examples/` directory.
@@ -169,10 +267,10 @@ Example programs are available in the `examples/` directory.
 
 ## 🛠 Roadmap
 
-- [ ] REPL with type inference output
-- [ ] Standard library (Option, Result, List, etc.)
+- [X] REPL with type inference output
+- [ ] Standard library (currently `Option`/`List` are built-in types as a temporary measure; will be moved out as a library)
 - [ ] Module system
-- [ ] Constraint-based type classes (future)
+- [ ] Constraint-based type classes (future; Haskell-style type classes)
 
 ---
 
