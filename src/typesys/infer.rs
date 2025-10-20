@@ -253,7 +253,7 @@ impl TypeContext {
 
             Pat::Lit(lit) => {
                 let expected = match lit {
-                    Lit::Unit => Type::Con("Unit".to_string()),
+                    Lit::Unit => Type::Con("()".to_string()),
                     Lit::Bool(_) => Type::Con("Bool".to_string()),
                     Lit::Int(_) => Type::Con("Int".to_string()),
                 };

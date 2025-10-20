@@ -166,6 +166,7 @@ TypeVar: RawType = {
 
 TypeCon: RawType = {
     ConIdent => RawType::ConName(<>),
+    <"()"> => RawType::ConName("()".to_string()),
 };
 
 TypeParen: RawType = {
