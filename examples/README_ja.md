@@ -91,7 +91,7 @@ cargo run examples/newtype_record.phx
 type Point a = (a, a);
 
 let p = Point (3, 4);
-p._0 + p._1
+p.0 + p.1
 // => 7: Int
 ```
 
