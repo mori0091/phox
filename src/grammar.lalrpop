@@ -72,7 +72,7 @@ pub Program: Vec<Item> = {
 };
 
 // ----------------------------------------------
-ItemList: Vec<Item> = {
+pub ItemList: Vec<Item> = {
     <mut v:(<Item> ";")*> <tail:Expr> => {
         v.push(Item::Expr(tail));
         v

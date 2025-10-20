@@ -1,8 +1,8 @@
-use crate::grammar::ProgramParser;
+use crate::grammar::ItemListParser;
 use crate::grammar::ExprParser;
 
 use crate::interpreter::eval_item;
-use crate::syntax::ast::Program;
+use crate::syntax::ast::Item;
 use crate::syntax::ast::Expr;
 use crate::syntax::ast::resolve_item;
 
@@ -61,13 +61,16 @@ pub fn eval_expr(src: &str) -> Result<(Value, Scheme), String> {
     Ok((val, sch))
 }
 
-/// Parse a program.
-pub fn parse_program(src: &str) -> Result<Program, String> {
+/// Parse list of items.
+pub fn parse_items(src: &str) -> Result<Vec<Item>, String> {
     let mut lexer = Lexer::new(src);
-    ProgramParser::new()
+    ItemListParser::new()
         .parse(&mut lexer)
         .map_err(|e| format!("parse error: {e:?}"))
 }
+
+/// Parse a program.
+pub use parse_items as parse_program;
 
 /// Parse, infer type scheme, and evaluate of a program.
 pub fn eval_program(src: &str) -> Result<(Value, Scheme), String> {
