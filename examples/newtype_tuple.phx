@@ -1,0 +1,5 @@
+type Point a = (a, a);
+
+let p = Point (3, 4);
+p._0 + p._1
+// => 7: Int

@@ -84,7 +84,19 @@ p.x + p.y
 ```
 
 ```sh
-cargo run examples/newtype.phx
+cargo run examples/newtype_record.phx
+```
+
+```ml
+type Point a = (a, a);
+
+let p = Point (3, 4);
+p._0 + p._1
+// => 7: Int
+```
+
+```sh
+cargo run examples/newtype_tuple.phx
 ```
 
 ---
