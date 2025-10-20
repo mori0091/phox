@@ -292,8 +292,8 @@ pub fn initial_env() -> Env {
     env.insert("Cons".into(), make_constructor("Cons", 2));
 
     // 比較演算子
-    env.insert("==".into(), make_cmpop(|a, b| a == b));
-    env.insert("!=".into(), make_cmpop(|a, b| a != b));
+    env.insert("==".into(), make_eq());
+    env.insert("!=".into(), make_neq());
     env.insert("<".into() , make_cmpop(|a, b| a < b));
     env.insert("<=".into(), make_cmpop(|a, b| a <= b));
     env.insert(">".into() , make_cmpop(|a, b| a > b));
@@ -451,4 +451,49 @@ where
 
     let op = Rc::new(op);
     curry(op, vec![])
+}
+
+pub fn make_eq() -> Value {
+    fn curry(args: Vec<Value>) -> Value {
+        if args.len() == 2 {
+            match eq_values(&args[0], &args[1]) {
+                Some(b) => Value::Lit(Lit::Bool(b)),
+                None => panic!("type error: unsupported operands for =="),
+            }
+        } else {
+            Value::Builtin(Rc::new(move |mut more: Vec<Value>| {
+                let mut new_args = args.clone();
+                new_args.append(&mut more);
+                curry(new_args)
+            }))
+        }
+    }
+    curry(vec![])
+}
+
+pub fn make_neq() -> Value {
+    fn curry(args: Vec<Value>) -> Value {
+        if args.len() == 2 {
+            match eq_values(&args[0], &args[1]) {
+                Some(b) => Value::Lit(Lit::Bool(!b)),
+                None => panic!("type error: unsupported operands for !="),
+            }
+        } else {
+            Value::Builtin(Rc::new(move |mut more: Vec<Value>| {
+                let mut new_args = args.clone();
+                new_args.append(&mut more);
+                curry(new_args)
+            }))
+        }
+    }
+    curry(vec![])
+}
+
+fn eq_values(a: &Value, b: &Value) -> Option<bool> {
+    match (a, b) {
+        (Value::Lit(Lit::Int(x)), Value::Lit(Lit::Int(y))) => Some(x == y),
+        (Value::Lit(Lit::Bool(x)), Value::Lit(Lit::Bool(y))) => Some(x == y),
+        (Value::Lit(Lit::Unit), Value::Lit(Lit::Unit)) => Some(true),
+        _ => None,
+    }
 }
