@@ -13,17 +13,18 @@ It aims to be a simple yet expressive tool — your clever companion for explori
 
 ## 📑 Table of Contents
 
-- [✨ Features](#-features)
-- [📘 Language Overview](#-language-overview)
-- [💡 Sample Programs](#-sample-programs)
-- [🚀 Getting Started](#-getting-started)
-- [🛠 Roadmap](#️-roadmap)
-- [📄 License](#-license)
+- ✨ [Features](#features)
+- 📘 [Language Overview](#language-overview)
+- 💡 [Sample Programs](#sample-programs)
+- 🚀 [Getting Started](#getting-started)
+- 🧭 [Roadmap](#️roadmap)
+- 📄 [License](#license)
 
-_New to Phox? Start with [🚀 Getting Started](#-getting-started)._
+_New to Phox? Start with [🚀 Getting Started](#getting-started)._
 
 ---
-## ✨ Features
+
+## Features
 
 - **Hindley–Milner type inference**  
   No need to annotate types in most cases.
@@ -40,7 +41,7 @@ _New to Phox? Start with [🚀 Getting Started](#-getting-started)._
 
 ---
 
-## 📘 Language Overview
+## Language Overview
 
 > - In code examples, `// => ` shows the result as a comment.
 > - In REPL examples, `=>` shows the evaluated result.
@@ -182,7 +183,7 @@ let rec (**) = λx.λy. if (y <= 0) 1 else x * x ** (y - 1);
 
 ---
 
-## 💡 Sample Programs
+## Sample Programs
 
 ### Identity
 ```ml
@@ -233,7 +234,8 @@ unwrapOr (Err ()) 0
 
 ---
 
-## 🚀 Getting Started
+<a id="geting-started"></a>
+## Getting Started
 
 > ⚠️ Work in progress — Phox is under active development.
 
@@ -293,7 +295,7 @@ Example programs are available in the `examples/` directory.
 
 ---
 
-## 🛠 Roadmap
+## Roadmap
 
 - [X] REPL with type inference output
 - [ ] Standard library (currently `Option`/`List` are built-in types as a temporary measure; will be moved out as a library)
@@ -302,6 +304,6 @@ Example programs are available in the `examples/` directory.
 
 ---
 
-## 📄 License
+## License
 
 MIT License
