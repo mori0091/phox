@@ -119,6 +119,24 @@ let r = @{ x: 10, y: 20 };
 // => (true, 10): (Bool, Int)
 ```
 
+👉 Field access is also available for **newtype shorthand** types.
+
+```ml
+type Point a = @{ x: a, y: a };
+
+let p = Point @{ x: 3, y: 4 };
+p.x + p.y
+// => 7: Int
+```
+
+```ml
+type Point a = (a, a);
+
+let p = Point (3, 4);
+p.0 + p.1
+// => 7: Int
+```
+
 ### Functions as operators
 ``` ml
 let normSq = λx.λy. x * x + y * y;
