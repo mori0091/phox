@@ -1,12 +1,16 @@
+use lalrpop_util::ParseError;
+
 use crate::grammar::ItemListParser;
 use crate::grammar::ExprParser;
 
 use crate::interpreter::eval_item;
+use crate::syntax::ast::Program;
 use crate::syntax::ast::Item;
 use crate::syntax::ast::Expr;
 use crate::syntax::ast::resolve_item;
 
 use crate::syntax::lexer::Lexer;
+use crate::syntax::token::{Token, LexicalError};
 
 use crate::typesys::infer_item;
 use crate::typesys::initial_type_env;
@@ -62,19 +66,20 @@ pub fn eval_expr(src: &str) -> Result<(Value, Scheme), String> {
 }
 
 /// Parse list of items.
-pub fn parse_items(src: &str) -> Result<Vec<Item>, String> {
+pub fn parse_items(src: &str) -> Result<Vec<Item>, ParseError<usize, Token, LexicalError>> {
     let mut lexer = Lexer::new(src);
-    ItemListParser::new()
-        .parse(&mut lexer)
-        .map_err(|e| format!("parse error: {e:?}"))
+    ItemListParser::new().parse(&mut lexer)
 }
 
 /// Parse a program.
-pub use parse_items as parse_program;
+pub fn parse_program(src: &str) -> Result<Program, ParseError<usize, Token, LexicalError>> {
+    parse_items(src)
+}
 
 /// Parse, infer type scheme, and evaluate of a program.
 pub fn eval_program(src: &str) -> Result<(Value, Scheme), String> {
-    let tops = parse_program(src)?;
+    let tops = parse_program(src)
+        .map_err(|e| format!("parse error: {e:?}"))?;
 
     // let mut kenv = initial_kind_env();
     let mut ctx = TypeContext::new();
