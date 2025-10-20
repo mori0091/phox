@@ -1,15 +1,16 @@
 use crate::grammar::ProgramParser;
 use crate::grammar::ExprParser;
 
-use crate::interpreter::eval_stmt;
-use crate::syntax::ast::{Program, TopLevel};
-use crate::syntax::ast::{Item, Expr};
-use crate::syntax::ast::resolve_raw_type_decl;
-use crate::syntax::ast::register_type_decl;
+use crate::interpreter::eval_item;
+use crate::syntax::ast::Program;
+use crate::syntax::ast::Expr;
+use crate::syntax::ast::resolve_item;
+
 use crate::syntax::lexer::Lexer;
 
-use crate::typesys::infer_stmt;
-use crate::typesys::{initial_kind_env, initial_type_env};
+use crate::typesys::infer_item;
+use crate::typesys::initial_type_env;
+// use crate::typesys::initial_kind_env;
 use crate::typesys::{Type, Scheme};
 use crate::typesys::{TypeContext, infer_expr, generalize};
 use crate::interpreter::{initial_env, Value};
@@ -72,37 +73,19 @@ pub fn parse_program(src: &str) -> Result<Program, String> {
 pub fn eval_program(src: &str) -> Result<(Value, Scheme), String> {
     let tops = parse_program(src)?;
 
-    let mut kenv = initial_kind_env();
+    // let mut kenv = initial_kind_env();
     let mut ctx = TypeContext::new();
     let mut tenv = initial_type_env(&mut ctx);
     let mut env = initial_env();
 
     let mut last = None;
-    for top in tops {
-        match top {
-            TopLevel::TypeDecl(raw) => {
-                let tydecl = resolve_raw_type_decl(&mut ctx, raw);
-                register_type_decl(&tydecl, &mut kenv, &mut tenv, &mut env);
-            }
-            TopLevel::Item(item) => {
-                match item {
-                    Item::Stmt(stmt) => {
-                        let ty = infer_stmt(&mut ctx, &mut tenv, &stmt)
-                            .map_err(|e| format!("infer error: {e:?}"))?;
-                        let _sch = generalize(&mut ctx, &tenv, &ty);
-                        let _val = eval_stmt(&stmt, &mut env);
-                        // last = Some((val, sch));
-                    }
-                    Item::Expr(expr) => {
-                        let ty = infer_expr(&mut ctx, &mut tenv, &expr)
-                            .map_err(|e| format!("infer error: {e:?}"))?;
-                        let sch = generalize(&mut ctx, &tenv, &ty);
-                        let val = eval::eval_expr(&expr, &mut env);
-                        last = Some((val, sch));
-                    }
-                }
-            }
-        }
+    for item in tops {
+        resolve_item(&mut ctx, &mut tenv, &mut env, &item);
+        let ty = infer_item(&mut ctx, &mut tenv, &item)
+            .map_err(|e| format!("infer error: {e:?}"))?;
+        let sch = generalize(&mut ctx, &tenv, &ty);
+        let val = eval_item(&item, &mut env);
+        last = Some((val, sch));
     }
     last.ok_or_else(|| "program contained no expression".to_string())
 }

@@ -1,4 +1,3 @@
-use crate::syntax::ast::TopLevel;
 use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType};
 use crate::syntax::ast::{Item, Stmt, Expr, Lit, Pat};
 
@@ -68,40 +67,43 @@ extern {
     }
 }
 
-pub Program: Vec<TopLevel> = {
-    <mut decls:TopLevelDecl*> <expr:TopLevelExpr?> => {
-        match expr {
-            None => decls,
-            Some(e) => {
-                decls.push(TopLevel::Item(Item::Expr(e)));
-                decls
-            }
-        }
-    }
+pub Program: Vec<Item> = {
+    ItemList,
 };
 
-TopLevelExpr: Expr = {
-    <items:ItemList> => Expr::Block(items),
+// ----------------------------------------------
+ItemList: Vec<Item> = {
+    <mut v:(<Item> ";")*> <tail:Expr> => {
+        v.push(Item::Expr(tail));
+        v
+    },
+    <mut v:(<Item> ";")+> => {
+        v.push(Item::Expr(Expr::Lit(Lit::Unit)));
+        v
+    },
 };
 
-TopLevelDecl: TopLevel = {
-    <TypeDecl> => TopLevel::TypeDecl(<>),
+pub Item: Item = {
+    TypeDecl => Item::RawTypeDecl(<>),
+    Stmt => Item::Stmt(<>),
+    Expr => Item::Expr(<>),
 };
 
+// ----------------------------------------------
 TypeDecl: RawTypeDecl = {
-    "type" <name:ConIdent> <params:TypeParams> "=" <variants:VariantList> ";"
+    "type" <name:ConIdent> <params:TypeParams> "=" <variants:VariantList>
         => RawTypeDecl::SumType {
             name: name.clone(),
             params: params,
             variants: variants,
         },
-    "type" <name:ConIdent> <params:TypeParams> "=" <tuple:TypeTuple> ";"
+    "type" <name:ConIdent> <params:TypeParams> "=" <tuple:TypeTuple>
         => RawTypeDecl::SumType {
             name: name.clone(),
             params: params,
             variants: vec![RawVariant::Tuple(name.clone(), vec![tuple])],
         },
-    "type" <name:ConIdent> <params:TypeParams> "=" <record:TypeRecord> ";"
+    "type" <name:ConIdent> <params:TypeParams> "=" <record:TypeRecord>
         => RawTypeDecl::SumType {
             name: name.clone(),
             params: params,
@@ -187,23 +189,6 @@ TypeRecordField: (String, RawType) = {
 lambda: Token = {
     "\\",
     "λ",
-};
-
-// ----------------------------------------------
-ItemList: Vec<Item> = {
-    <mut v:(<Item> ";")*> <tail:Expr> => {
-        v.push(Item::Expr(tail));
-        v
-    },
-    <mut v:(<Item> ";")+> => {
-        v.push(Item::Expr(Expr::Lit(Lit::Unit)));
-        v
-    },
-};
-
-Item: Item = {
-    Stmt => Item::Stmt(<>),
-    Expr => Item::Expr(<>),
 };
 
 // ----------------------------------------------

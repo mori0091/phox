@@ -423,6 +423,18 @@ pub fn generalize(ctx: &mut TypeContext, env: &TypeEnv, ty: &Type) -> Scheme {
 }
 
 // ===== Inference (Algorithm J core) =====
+pub fn infer_item(ctx: &mut TypeContext, tenv: &mut TypeEnv, item: &Item) -> Result<Type, TypeError> {
+    match item {
+        Item::Stmt(stmt) => {
+            infer_stmt(ctx, tenv, stmt)
+        }
+        Item::Expr(expr) => {
+            infer_expr(ctx, tenv, expr)
+        }
+        _ => Ok(Type::con("()"))
+    }
+}
+
 pub fn infer_stmt(ctx: &mut TypeContext, tenv: &mut TypeEnv, stmt: &Stmt) -> Result<Type, TypeError> {
     match stmt {
         Stmt::Let(pat, expr) => {
@@ -483,14 +495,7 @@ pub fn infer_expr(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Res
             let mut tenv2 = tenv.clone(); // 新しいスコープ
             let mut last_ty = Type::con("()");
             for item in items {
-                match item {
-                    Item::Stmt(stmt) => {
-                        infer_stmt(ctx, &mut tenv2, stmt)?;
-                    }
-                    Item::Expr(expr) => {
-                        last_ty = infer_expr(ctx, &mut tenv2, expr)?;
-                    }
-                }
+                last_ty = infer_item(ctx, &mut tenv2, item)?;
             }
             Ok(last_ty)
         }

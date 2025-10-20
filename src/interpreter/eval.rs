@@ -1,5 +1,21 @@
-use crate::syntax::ast::{Expr, Stmt, Item};
+use crate::syntax::ast::{Expr, Item, Stmt};
 use super::{Value, Env, Binding};
+
+pub fn eval_item(item: &Item, env: &mut Env) -> Value {
+    match item {
+        Item::Stmt(stmt) => {
+            eval_stmt(stmt, env);
+            Value::Lit(Lit::Unit)
+        }
+        Item::Expr(expr) => {
+            eval_expr(expr, env)
+        }
+        _ => {
+            // ignore
+            Value::Lit(Lit::Unit)
+        }
+    }
+}
 
 pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
     match stmt {
@@ -112,14 +128,7 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
             let mut env2 = env.duplicate(); // 新しいスコープ
             let mut last_val = Value::Lit(Lit::Unit);
             for item in items {
-                match item {
-                    Item::Stmt(stmt) => {
-                        eval_stmt(stmt, &mut env2);
-                    }
-                    Item::Expr(expr) => {
-                        last_val = eval_expr(expr, &env2);
-                    }
-                }
+                last_val = eval_item(item, &mut env2);
             }
             last_val
         }

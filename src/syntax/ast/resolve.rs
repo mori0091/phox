@@ -2,6 +2,90 @@ use std::collections::HashMap;
 use crate::typesys::{TypeContext, TypeVarId, Type};
 use super::{RawTypeDecl, RawVariant, RawType};
 use super::{TypeDecl, Variant};
+use super::{Item, Stmt, Expr};
+
+pub fn resolve_item(
+    ctx: &mut TypeContext,
+    tenv: &mut TypeEnv,
+    env: &mut Env,
+    item: &Item,
+) {
+    match item {
+        Item::RawTypeDecl(raw) => {
+            let tydecl = resolve_raw_type_decl(ctx, raw.clone());
+            register_type_decl(&tydecl, tenv, env);
+        }
+        Item::Stmt(stmt) => {
+            resolve_stmt(ctx, tenv, env, stmt)
+        }
+        Item::Expr(expr) => {
+            resolve_expr(ctx, tenv, env, expr)
+        }
+    }
+}
+
+pub fn resolve_stmt(
+    ctx: &mut TypeContext,
+    tenv: &mut TypeEnv,
+    env: &mut Env,
+    stmt: &Stmt,
+) {
+    match stmt {
+        Stmt::Let(_p, expr) | Stmt::LetRec(_p, expr) => {
+            resolve_expr(ctx, tenv, env, expr)
+        }
+    }
+}
+
+pub fn resolve_expr(
+    ctx: &mut TypeContext,
+    tenv: &mut TypeEnv,
+    env: &mut Env,
+    expr: &Expr,
+) {
+    match expr {
+        Expr::App(f, x) => {
+            resolve_expr(ctx, tenv, env, f);
+            resolve_expr(ctx, tenv, env, x);
+        }
+        Expr::Abs(_p, e) => {
+            resolve_expr(ctx, tenv, env, e);
+        }
+        Expr::If(cond, e1, e2) => {
+            resolve_expr(ctx, tenv, env, cond);
+            resolve_expr(ctx, tenv, env, e1);
+            resolve_expr(ctx, tenv, env, e2);
+        }
+        Expr::Match(strut, arms) => {
+            resolve_expr(ctx, tenv, env, strut);
+            for (_p, e) in arms {
+                resolve_expr(ctx, tenv, env, e);
+            }
+        }
+        Expr::Tuple(es) => {
+            for e in es {
+                resolve_expr(ctx, tenv, env, e);
+            }
+        }
+        Expr::Record(fields) => {
+            for (_field, e) in fields {
+                resolve_expr(ctx, tenv, env, e);
+            }
+        }
+        Expr::FieldAccess(e, _field) => {
+            resolve_expr(ctx, tenv, env, e);
+        }
+        Expr::TupleAccess(e, _index) => {
+            resolve_expr(ctx, tenv, env, e);
+        }
+        Expr::Block(items) => {
+            for item in items {
+                resolve_item(ctx, tenv, env, item);
+            }
+        }
+        Expr::Lit(_) | Expr::Var(_) => (),
+    }
+}
 
 pub fn resolve_raw_type_decl(
     ctx: &mut TypeContext,
@@ -96,36 +180,64 @@ pub fn resolve_raw_type(
     }
 }
 
-use crate::typesys::{Kind, KindEnv, TypeEnv};
+// use crate::typesys::{Kind, KindEnv, TypeEnv};
+use crate::typesys::TypeEnv;
 use crate::interpreter::Env;
 use crate::interpreter::make_constructor;
 
 pub fn register_type_decl(
     decl: &TypeDecl,
-    kind_env: &mut KindEnv,
+    // kind_env: &mut KindEnv,
     type_env: &mut TypeEnv,
     env: &mut Env,
 ) {
+    // register_type(decl, kind_env, type_env);
+    register_type(decl, type_env);
+    register_variants(decl, env);
+}
+
+// pub fn register_type(decl: &TypeDecl, kenv: &mut KindEnv, tenv: &mut TypeEnv
+// ) {
+//     match decl {
+//         TypeDecl::SumType { name, params, variants } => {
+//             // kind を構築
+//             let mut kind = Kind::Star;
+//             for _ in params.iter().rev() {
+//                 kind = Kind::Arrow(Box::new(Kind::Star), Box::new(kind));
+//             }
+//             kenv.insert(name.clone(), kind);
+//             // 各コンストラクタを登録
+//             for v in variants {
+//                 let (ctor_name, ctor_scheme) = v.as_scheme(name, params);
+//                 tenv.insert(ctor_name.clone(), ctor_scheme.clone());
+//             }
+//         }
+//     }
+// }
+pub fn register_type(decl: &TypeDecl, tenv: &mut TypeEnv) {
     match decl {
         TypeDecl::SumType { name, params, variants } => {
-            // kind を構築
-            let mut kind = Kind::Star;
-            for _ in params.iter().rev() {
-                kind = Kind::Arrow(Box::new(Kind::Star), Box::new(kind));
-            }
-            kind_env.insert(name.clone(), kind);
-
             // 各コンストラクタを登録
             for v in variants {
                 let (ctor_name, ctor_scheme) = v.as_scheme(name, params);
-                type_env.insert(ctor_name.clone(), ctor_scheme.clone());
+                tenv.insert(ctor_name.clone(), ctor_scheme.clone());
+            }
+        }
+    }
+}
+
+pub fn register_variants(decl: &TypeDecl, env: &mut Env) {
+    match decl {
+        TypeDecl::SumType { name:_, params:_, variants } => {
+            // 各コンストラクタを登録
+            for v in variants {
                 let arity = match v {
                     Variant::Unit(_) => 0,
                     Variant::Tuple(_, ts) => ts.len(),
                     // Variant::Record(_, _) => 1,
                 };
-                env.insert(ctor_name.clone(),
-                           make_constructor(&ctor_name, arity));
+                env.insert(v.name(),
+                           make_constructor(&v.name(), arity));
             }
         }
     }
