@@ -6,6 +6,7 @@ use crate::syntax::ast::{Program, TopLevel};
 use crate::syntax::ast::{Item, Expr};
 use crate::syntax::ast::resolve_raw_type_decl;
 use crate::syntax::ast::register_type_decl;
+use crate::syntax::lexer::Lexer;
 
 use crate::typesys::infer_stmt;
 use crate::typesys::{initial_kind_env, initial_type_env};
@@ -16,7 +17,10 @@ use crate::interpreter::eval;
 
 /// Parse an expression.
 pub fn parse_expr(src: &str) -> Result<Expr, String> {
-    ExprParser::new().parse(src).map_err(|e| format!("parse error: {e}"))
+    let mut lexer = Lexer::new(src);
+    ExprParser::new()
+        .parse(&mut lexer)
+        .map_err(|e| format!("parse error: {e:?}"))
 }
 
 /// Infer type scheme of Expr AST.
@@ -58,9 +62,10 @@ pub fn eval_expr(src: &str) -> Result<(Value, Scheme), String> {
 
 /// Parse a program.
 pub fn parse_program(src: &str) -> Result<Program, String> {
+    let mut lexer = Lexer::new(src);
     ProgramParser::new()
-        .parse(src)
-        .map_err(|e| format!("parse error: {e}"))
+        .parse(&mut lexer)
+        .map_err(|e| format!("parse error: {e:?}"))
 }
 
 /// Parse, infer type scheme, and evaluate of a program.

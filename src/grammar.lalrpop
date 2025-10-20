@@ -1,17 +1,71 @@
-use std::str::FromStr;
-
 use crate::syntax::ast::TopLevel;
 use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType};
 use crate::syntax::ast::{Item, Stmt, Expr, Lit, Pat};
 
+use crate::syntax::token::{Token, LexicalError};
+
 grammar;
 
-match {
-    r"\s*" => { }, // The default whitespace skipping is disabled if an `ignore pattern` is specified
-    r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
-    r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
-} else {
-    _
+extern {
+    type Location = usize;
+    type Error = LexicalError;
+
+    enum Token {
+        // --- キーワード ---
+        "type"  => Token::Type,
+        "let"   => Token::Let,
+        "rec"   => Token::Rec,
+        "if"    => Token::If,
+        "else"  => Token::Else,
+        "match" => Token::Match,
+        "true"  => Token::True,
+        "false" => Token::False,
+        "()"    => Token::Unit,
+
+        // --- 演算子・記号 ---
+        "*"  =>  Token::Star,
+        "/"  =>  Token::Slash,
+
+        "+"  =>  Token::Plus,
+        "-"  =>  Token::Minus,
+
+        "==" =>  Token::Eq,
+        "!=" =>  Token::Neq,
+        "<"  =>  Token::Lt,
+        "<=" =>  Token::Le,
+        ">"  =>  Token::Gt,
+        ">=" =>  Token::Ge,
+
+        // --- 記号 ---
+        "="  =>  Token::Assign,
+        "->" =>  Token::Arrow,
+        "=>" =>  Token::FatArrow,
+        "@"  =>  Token::At,
+        "\\" =>  Token::Backslash,
+        "λ"  =>  Token::Lambda,
+        "_"  =>  Token::Underscore,
+        "."  =>  Token::Dot,
+        ";"  =>  Token::Semi,
+        ","  =>  Token::Comma,
+        ":"  =>  Token::Colon,
+        "`"  =>  Token::Backtick,
+        "("  =>  Token::LParen,
+        ")"  =>  Token::RParen,
+        "{"  =>  Token::LBrace,
+        "}"  =>  Token::RBrace,
+        "["  =>  Token::LBracket,
+        "]"  =>  Token::RBracket,
+        "|"  =>  Token::VerticalBar,
+        "!"  =>  Token::ExclamationMark,
+
+        // --- 識別子・リテラル ---
+        "identifier" => Token::Ident(<String>),
+        "Identifier" => Token::ConIdent(<String>),
+        "int"        => Token::Int(<i64>),
+
+        // --- その他の演算子記号列 ---
+        "infixOp" => Token::InfixOp(<String>),
+    }
 }
 
 pub Program: Vec<TopLevel> = {
@@ -74,10 +128,10 @@ Variant: RawVariant = {
 VariantSimple: RawVariant = {
     <name:ConIdent> <ts:TypeAtom*> => {
         if ts.is_empty() {
-            RawVariant::Unit(name.to_string())
+            RawVariant::Unit(name)
         }
         else {
-            RawVariant::Tuple(name.to_string(), ts)
+            RawVariant::Tuple(name, ts)
         }
     }
 };
@@ -105,11 +159,11 @@ TypeAtom: RawType = {
 };
 
 TypeVar: RawType = {
-    Ident => RawType::VarName(<>.to_string()),
+    Ident => RawType::VarName(<>),
 };
 
 TypeCon: RawType = {
-    ConIdent => RawType::ConName(<>.to_string()),
+    ConIdent => RawType::ConName(<>),
 };
 
 TypeParen: RawType = {
@@ -130,9 +184,9 @@ TypeRecordField: (String, RawType) = {
 };
 
 // ----------------------------------------------
-KeywordLamda: String = {
-    "\\" => <>.to_string(),
-    "λ" => <>.to_string(),
+lambda: Token = {
+    "\\",
+    "λ",
 };
 
 // ----------------------------------------------
@@ -183,7 +237,7 @@ Expr1: Expr = {
 };
 
 ExprAbs: Expr = {
-    KeywordLamda <p:Pat> "." <body:Expr1> => Expr::abs(p, body),
+    lambda <p:Pat> "." <body:Expr1> => Expr::abs(p, body),
 };
 
 ExprIf: Expr = {
@@ -233,7 +287,7 @@ ExprInfixApp: Expr = {
 };
 
 ExprInfixOp: Expr = {
-    <l:ExprInfixOp> <op:Symbol> <r:ExprUnary> => {
+    <l:ExprInfixOp> <op:"infixOp"> <r:ExprUnary> => {
         Expr::app(Expr::app(Expr::var(op), l), r)
     },
     ExprUnary,
@@ -361,21 +415,17 @@ LitInt: Lit = {
 };
 
 Int: i64 = {
-    r"[+-]?[0-9]+" => i64::from_str(<>).unwrap(),
+    <a:"int"> => a,
 };
 
 // === identifier ===
 Ident: String = {
-    r"[a-z_][a-zA-Z0-9_]*" => <>.to_string(),
-    "(" <Symbol> ")" => <>.to_string(),
-};
-
-Symbol: String = {
-    r"[*+-/!$%&=^?<>]+" => <>.to_string(),
+    <"identifier">,
+    "(" <"infixOp"> ")",
 };
 
 ConIdent: String = {
-    r"[A-Z][a-zA-Z0-9_]*" => <>.to_string(),
+    <"Identifier">,
 };
 
 // === comma-separated list ===
