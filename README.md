@@ -11,8 +11,18 @@ It aims to be a simple yet expressive tool — your clever companion for explori
 > That means you can’t even write “Hello, World!” yet —  
 > but you can prove that `fact 5 = 120` with full type safety 😉
 
----
+## 📑 Table of Contents
 
+- [✨ Features](#-features)
+- [📘 Language Overview](#-language-overview)
+- [💡 Sample Programs](#-sample-programs)
+- [🚀 Getting Started](#-getting-started)
+- [🛠 Roadmap](#️-roadmap)
+- [📄 License](#-license)
+
+_New to Phox? Start with [🚀 Getting Started](#-getting-started)._
+
+---
 ## ✨ Features
 
 - **Hindley–Milner type inference**  
@@ -172,7 +182,7 @@ let rec (**) = λx.λy. if (y <= 0) 1 else x * x ** (y - 1);
 
 ---
 
-## 📚 Sample Programs
+## 💡 Sample Programs
 
 ### Identity
 ```ml
