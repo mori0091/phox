@@ -39,7 +39,7 @@ pub fn repl() {
                         Ok(ty) => {
                             let sch = generalize(&mut ctx, &tenv, &ty);
                             let val = eval_item(&item, &mut env);
-                            println!("=> {}: {}", val, sch);
+                            println!("=> {}: {}", val, sch.pretty());
                         }
                         Err(e) => {
                             eprintln!("type error: {:?}", e);
