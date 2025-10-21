@@ -159,6 +159,7 @@ let normSq = λx.λy. x * x + y * y;
 
 ### Operators as functions / User-defined operators
 ```ml
+// User-defined operator
 let rec (**) = λx.λy.
     if (y <= 0) 1
     else x * x ** (y - 1);
@@ -167,18 +168,27 @@ let rec (**) = λx.λy.
 // => (8, 81): (Int, Int)
 ```
 
-- Built-in operators like `==` are currently **infix-only**.  
-  (Future plan: allow them to be used as functions, e.g. `(==) 1 2`.)
-- User-defined operators, however, can always be used both infix and prefix.
+- User-defined operators and also Built-in operators like `==`, can always be used both infix and prefix.
 
-``` ml
-// OK: user-defined operator
-let rec (**) = λx.λy. if (y <= 0) 1 else x * x ** (y - 1);
-(**) 2 3   // => 8: Int
-3 ** 4     // => 81: Int
+``` sh
+(==) 1 1  // => true: Bool
+1 == 1    // => true: Bool
+```
 
-// NG: built-in operator
-// let eq = (==);   // error: built-in operators are infix-only
+``` sh
+(-) 3 1   // => 2: Int   (binary minus as a function)
+negate 3  // => -3: Int  (unary minus as a function)
+```
+
+``` sh
+let x = 3;
+-x        // => -3: Int  (unary minus; syntax sugar of `negate x`)
+```
+
+``` sh
+! true    // => false: Bool  (unary not)
+(!) true  // => false: Bool  (unary not; prefix form of `!`)
+not true  // => false: Bool  (unary not)
 ```
 
 ---

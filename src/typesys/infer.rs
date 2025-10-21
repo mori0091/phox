@@ -720,7 +720,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_type_var_id();
     env.insert(
-        "==".into(),
+        "__builtin_==__".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
@@ -729,7 +729,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_type_var_id();
     env.insert(
-        "!=".into(),
+        "__builtin_!=__".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
@@ -738,7 +738,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_type_var_id();
     env.insert(
-        "<".into(),
+        "__builtin_<__".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
@@ -748,7 +748,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_type_var_id();
     env.insert(
-        "<=".into(),
+        "__builtin_<=__".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
@@ -757,7 +757,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_type_var_id();
     env.insert(
-        ">".into(),
+        "__builtin_>__".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
@@ -766,7 +766,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_type_var_id();
     env.insert(
-        ">=".into(),
+        "__builtin_>=__".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
@@ -775,7 +775,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_type_var_id();
     env.insert(
-        "+".into(),
+        "__builtin_+__".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
@@ -784,7 +784,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_type_var_id();
     env.insert(
-        "-".into(),
+        "__builtin_-__".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
@@ -793,7 +793,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_type_var_id();
     env.insert(
-        "*".into(),
+        "__builtin_*__".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
@@ -802,7 +802,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_type_var_id();
     env.insert(
-        "/".into(),
+        "__builtin_/__".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
@@ -811,7 +811,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
 
     let a = ctx.fresh_type_var_id();
     env.insert(
-        "neg".into(),
+        "negate".into(),
         Scheme {
             vars: vec![a],
             ty: Type::fun(Type::var(a), Type::var(a)),

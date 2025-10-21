@@ -292,25 +292,25 @@ pub fn initial_env() -> Env {
     env.insert("Cons".into(), make_constructor("Cons", 2));
 
     // 比較演算子
-    env.insert("==".into(), make_eq());
-    env.insert("!=".into(), make_neq());
-    env.insert("<".into() , make_cmpop(|a, b| a < b));
-    env.insert("<=".into(), make_cmpop(|a, b| a <= b));
-    env.insert(">".into() , make_cmpop(|a, b| a > b));
-    env.insert(">=".into(), make_cmpop(|a, b| a >= b));
+    env.insert("__builtin_==__".into(), make_eq());
+    env.insert("__builtin_!=__".into(), make_neq());
+    env.insert("__builtin_<__".into() , make_cmpop(|a, b| a < b));
+    env.insert("__builtin_<=__".into(), make_cmpop(|a, b| a <= b));
+    env.insert("__builtin_>__".into() , make_cmpop(|a, b| a > b));
+    env.insert("__builtin_>=__".into(), make_cmpop(|a, b| a >= b));
 
     // 演算子
-    env.insert("+".into(), make_binop(|a, b| a + b));
-    env.insert("-".into(), make_binop(|a, b| a - b));
-    env.insert("*".into(), make_binop(|a, b| a * b));
-    env.insert("/".into(), make_binop(|a, b| {
+    env.insert("__builtin_+__".into(), make_binop(|a, b| a + b));
+    env.insert("__builtin_-__".into(), make_binop(|a, b| a - b));
+    env.insert("__builtin_*__".into(), make_binop(|a, b| a * b));
+    env.insert("__builtin_/__".into(), make_binop(|a, b| {
         if b == 0 {
             panic!("division by zero");
         }
         a / b
     }));
 
-    env.insert("neg".into(), make_unary_op_int(|x| -x));
+    env.insert("negate".into(), make_unary_op_int(|x| -x));
     env.insert("not".into(), make_unary_op_bool(|x| !x));
 
     env

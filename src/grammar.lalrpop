@@ -241,26 +241,26 @@ MatchArm: (Pat, Expr) = {
 
 // 比較演算子 (infix)
 ExprCmp: Expr = {
-    <l:ExprAdd> "==" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("=="), l), r),
-    <l:ExprAdd> "!=" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("!="), l), r),
-    <l:ExprAdd> "<"  <r:ExprAdd> => Expr::app(Expr::app(Expr::var("<") , l), r),
-    <l:ExprAdd> "<=" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("<="), l), r),
-    <l:ExprAdd> ">"  <r:ExprAdd> => Expr::app(Expr::app(Expr::var(">") , l), r),
-    <l:ExprAdd> ">=" <r:ExprAdd> => Expr::app(Expr::app(Expr::var(">="), l), r),
+    <l:ExprAdd> "==" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("__builtin_==__"), l), r),
+    <l:ExprAdd> "!=" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("__builtin_!=__"), l), r),
+    <l:ExprAdd> "<"  <r:ExprAdd> => Expr::app(Expr::app(Expr::var("__builtin_<__") , l), r),
+    <l:ExprAdd> "<=" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("__builtin_<=__"), l), r),
+    <l:ExprAdd> ">"  <r:ExprAdd> => Expr::app(Expr::app(Expr::var("__builtin_>__") , l), r),
+    <l:ExprAdd> ">=" <r:ExprAdd> => Expr::app(Expr::app(Expr::var("__builtin_>=__"), l), r),
     ExprAdd,
 };
 
 // 加減算 (infixl)
 ExprAdd: Expr = {
-    <l:ExprAdd> "+" <r:ExprMul> => Expr::app(Expr::app(Expr::var("+"), l), r),
-    <l:ExprAdd> "-" <r:ExprMul> => Expr::app(Expr::app(Expr::var("-"), l), r),
+    <l:ExprAdd> "+" <r:ExprMul> => Expr::app(Expr::app(Expr::var("__builtin_+__"), l), r),
+    <l:ExprAdd> "-" <r:ExprMul> => Expr::app(Expr::app(Expr::var("__builtin_-__"), l), r),
     ExprMul,
 };
 
 // 乗除算 (infixl)
 ExprMul: Expr = {
-    <l:ExprMul> "*" <r:ExprInfixApp> => Expr::app(Expr::app(Expr::var("*"), l), r),
-    <l:ExprMul> "/" <r:ExprInfixApp> => Expr::app(Expr::app(Expr::var("/"), l), r),
+    <l:ExprMul> "*" <r:ExprInfixApp> => Expr::app(Expr::app(Expr::var("__builtin_*__"), l), r),
+    <l:ExprMul> "/" <r:ExprInfixApp> => Expr::app(Expr::app(Expr::var("__builtin_/__"), l), r),
     ExprInfixApp,
 };
 
@@ -281,7 +281,7 @@ ExprInfixOp: Expr = {
 
 // 単項演算子 (prefix)
 ExprUnary: Expr = {
-    "-" <r:ExprUnary> => Expr::app(Expr::var("neg"), r),
+    "-" <r:ExprUnary> => Expr::app(Expr::var("negate"), r),
     "!" <r:ExprUnary> => Expr::app(Expr::var("not"), r),
     ExprApp,
 };
@@ -408,6 +408,17 @@ Int: i64 = {
 Ident: String = {
     <"identifier">,
     "(" <"infixOp"> ")",
+    "(" "==" ")" => "__builtin_==__".to_string(),
+    "(" "!=" ")" => "__builtin_!=__".to_string(),
+    "(" "<" ")"  => "__builtin_<__".to_string(),
+    "(" "<=" ")" => "__builtin_<=__".to_string(),
+    "(" ">" ")"  => "__builtin_>__".to_string(),
+    "(" ">=" ")" => "__builtin_>=__".to_string(),
+    "(" "+" ")"  => "__builtin_+__".to_string(),
+    "(" "-" ")"  => "__builtin_-__".to_string(),
+    "(" "*" ")"  => "__builtin_*__".to_string(),
+    "(" "/" ")"  => "__builtin_/__".to_string(),
+    "(" "!" ")"  => "not".to_string(),
 };
 
 ConIdent: String = {
