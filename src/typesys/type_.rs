@@ -13,6 +13,15 @@ pub enum Type {
 }
 
 impl Type {
+    pub fn unit() -> Self {
+        Type::con("()")
+    }
+    pub fn bool_() -> Self {
+        Type::con("Bool")
+    }
+    pub fn int() -> Self {
+        Type::con("Int")
+    }
     pub fn var(id: TypeVarId) -> Self {
         Type::Var(id)
     }

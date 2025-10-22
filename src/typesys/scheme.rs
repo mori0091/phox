@@ -1,19 +1,60 @@
 use std::fmt;
 use crate::typesys::{Type, TypeVarId};
+use crate::typesys::{TypeError, TypeContext, TypeEnv, instantiate};
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Constraint {
+    pub name: String,           // trait name (ex. Eq, Ord)
+    pub params: Vec<Type>,      // type parameters
+}
+
+impl Constraint {
+    pub fn from_trait_member (
+        ctx: &mut TypeContext,  // global TypeContext
+        type_env: &TypeEnv,     // borrow InferCtx.type_env
+        member_name: &str,      // name of a member of trait
+        member_ty: &Type,       // type of that member
+    ) -> Result<Vec<Constraint>, TypeError> {
+        // 1. trait メンバの型スキームを取得
+        let scheme = type_env.get(member_name)
+            .ok_or_else(|| TypeError::UnknownTraitMember(member_name.to_string()))?;
+        // 2. スキームを展開（ctx に型変数を割り当てる）
+        let (constraints, trait_ty) = instantiate(ctx, scheme);
+        // 3. 式の型と unify（ctx.binding に置換が記録される）
+        ctx.unify(&trait_ty, member_ty)?;
+        // 4. 全制約に置換を適用
+        let resolved_constraints = constraints
+            .into_iter()
+            .map(|mut c| {
+                c.params
+                    = c.params
+                       .into_iter()
+                       .map(|t| ctx.repr(&t))
+                       .collect();
+                c
+            })
+            .collect();
+        Ok(resolved_constraints)
+    }
+}
 
 // ===== Type schemes (∀ vars . ty) =====
 #[derive(Clone, Debug)]
 pub struct Scheme {
     pub vars: Vec<TypeVarId>, // quantified variables
+    pub constraints: Vec<Constraint>,
     pub ty: Type,
 }
 
 impl Scheme {
-    pub fn mono(t: Type) -> Scheme {
-        Scheme { vars: vec![], ty: t, }
+    pub fn new(vars: Vec<TypeVarId>, constraints: Vec<Constraint>, ty: Type) -> Scheme {
+        Scheme { vars, constraints, ty }
     }
-    pub fn poly(vs: Vec<TypeVarId>, t: Type) -> Scheme {
-        Scheme { vars: vs, ty: t, }
+    pub fn mono(ty: Type) -> Scheme {
+        Scheme::new(vec![], vec![], ty)
+    }
+    pub fn poly(vars: Vec<TypeVarId>, ty: Type) -> Scheme {
+        Scheme::new(vars, vec![], ty)
     }
 }
 
@@ -76,12 +117,6 @@ impl Scheme {
                         fields.iter().map(|(f, t)| (f.clone(), rename(t, map))).collect()
                     )
                 }
-                // Type::Struct(name, fields) => {
-                //     Type::Struct(
-                //         name.clone(),
-                //         fields.iter().map(|(f, t)| (f.clone(), rename(t, map))).collect()
-                //     )
-                // }
             }
         }
 

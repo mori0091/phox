@@ -1,4 +1,4 @@
-use crate::syntax::ast::{Expr, Item, Stmt};
+use crate::syntax::ast::{Expr, ExprBody, Item, Stmt};
 use super::{Value, Env, Binding};
 
 pub fn eval_item(item: &Item, env: &mut Env) -> Value {
@@ -44,18 +44,18 @@ pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
 
 /// 評価関数
 pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
-    match expr {
+    match &expr.body {
         // リテラル
-        Expr::Lit(lit) => Value::Lit(lit.clone()),
+        ExprBody::Lit(lit) => Value::Lit(lit.clone()),
 
         // 変数参照
-        Expr::Var(name) => {
-            env.get(name)
+        ExprBody::Var(name) => {
+            env.get(&name)
                .unwrap_or_else(|| panic!("unbound variable: {}", name))
         }
 
         // λ抽象
-        Expr::Abs(pat, body) => {
+        ExprBody::Abs(pat, body) => {
             Value::Closure {
                 pat: pat.clone(),
                 body: body.clone(),
@@ -64,9 +64,9 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
         }
 
         // 関数適用
-        Expr::App(f, arg) => {
-            let f_val = eval_expr(f, env);
-            let arg_val = eval_expr(arg, env);
+        ExprBody::App(f, arg) => {
+            let f_val = eval_expr(&f, env);
+            let arg_val = eval_expr(&arg, env);
             match f_val {
                 // ユーザ定義関数（Closure）
                 Value::Closure { pat, body, env: closure_env } => {
@@ -89,85 +89,50 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
             }
         }
 
-        // Expr::Let(pat, e1, e2) => {
-        //     let v1 = eval(e1, env);
-        //     if let Some(new_bindings) = match_pat(pat, &v1) {
-        //         let env2 = env.duplicate();
-        //         env2.extend(&new_bindings);
-        //         eval(e2, &env2)
-        //     } else {
-        //         panic!("pattern match failed in let");
-        //     }
-        // }
-
-        // Expr::LetRec(pat, e1, e2) => {
-        //     match pat {
-        //         Pat::Var(x) => {
-        //             let env2 = env.clone();
-
-        //             // 仮の未初期化プレースホルダ（呼ばれたら明示的にエラー）
-        //             env2.insert(x.clone(), Value::Builtin(Rc::new(|_| {
-        //                 // panic!("recursive value '{}' used before initialization", x)
-        //                 panic!("recursive value used before initialization")
-        //             })));
-
-        //             // 本体を評価（env2 で自分を参照できる）
-        //             let v1 = eval(e1, &env2);
-
-        //             // 完成した値に置き換え
-        //             env2.insert(x.clone(), v1);
-
-        //             // 続きの式を評価
-        //             eval(e2, &env2)
-        //         }
-        //         _ => panic!("let rec pattern not supported (only variable)"),
-        //     }
-        // }
-
-        Expr::Block(items) => {
+        ExprBody::Block(items) => {
             let mut env2 = env.duplicate(); // 新しいスコープ
             let mut last_val = Value::Lit(Lit::Unit);
             for item in items {
-                last_val = eval_item(item, &mut env2);
+                last_val = eval_item(&item, &mut env2);
             }
             last_val
         }
 
-        Expr::If(e1, e2, e3) => {
-            match eval_expr(e1, env) {
-                Value::Lit(Lit::Bool(true))  => eval_expr(e2, env),
-                Value::Lit(Lit::Bool(false)) => eval_expr(e3, env),
+        ExprBody::If(e1, e2, e3) => {
+            match eval_expr(&e1, env) {
+                Value::Lit(Lit::Bool(true))  => eval_expr(&e2, env),
+                Value::Lit(Lit::Bool(false)) => eval_expr(&e3, env),
                 v => panic!("if condition must be Bool, got {}", v),
             }
         }
 
-        Expr::Match(scrut, arms) => {
-            let v_scrut = eval_expr(scrut, env);
+        ExprBody::Match(scrut, arms) => {
+            let v_scrut = eval_expr(&scrut, env);
             for (pat, body) in arms {
-                if let Some(bindings) = match_pat(pat, &v_scrut) {
+                if let Some(bindings) = match_pat(&pat, &v_scrut) {
                     let env2 = env.duplicate();
                     env2.extend(&bindings);
-                    return eval_expr(body, &env2);
+                    return eval_expr(&body, &env2);
                 }
             }
             panic!("non-exhaustive match: no pattern matched value {}", v_scrut);
         }
 
-        Expr::Tuple(es) => {
+        ExprBody::Tuple(es) => {
             let xs: Vec<Value> = es.iter().map(|x| eval_expr(x, env)).collect();
             Value::Tuple(xs)
         }
 
-        Expr::Record(fields) => {
+        ExprBody::Record(fields) => {
             let mut vals = Vec::new();
             for (fname, fexpr) in fields {
-                let v = eval_expr(fexpr, env);
+                let v = eval_expr(&fexpr, env);
                 vals.push((fname.clone(), v));
             }
             Value::Record(vals)
         }
-        Expr::FieldAccess(base, field) => {
-            let v_base = eval_expr(base, env);
+        ExprBody::FieldAccess(base, field) => {
+            let v_base = eval_expr(&base, env);
             match v_base {
                 Value::Record(fields) => {
                     match fields.iter().find(|(name, _)| name == field) {
@@ -189,8 +154,8 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
                 other => panic!("field access on non-record value: {}", other),
             }
         }
-        Expr::TupleAccess(base, index) => {
-            let v_base = eval_expr(base, env);
+        ExprBody::TupleAccess(base, index) => {
+            let v_base = eval_expr(&base, env);
             match v_base {
                 Value::Tuple(elems) => {
                     if *index < elems.len() {

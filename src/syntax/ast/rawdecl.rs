@@ -1,3 +1,31 @@
+use super::Expr;
+
+#[derive(Debug, Clone)]
+pub struct RawTraitDecl {
+    pub name: String,
+    pub params: Vec<String>,
+    pub members: Vec<RawTraitMemberDecl>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RawTraitMemberDecl{
+    pub name: String,
+    pub ty: Box<RawType>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RawImplDecl {
+    pub name: String,
+    pub params: Vec<RawType>,
+    pub members: Vec<RawImplMemberDecl>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RawImplMemberDecl {
+    pub name: String,
+    pub expr: Box<Expr>,
+}
+
 /// パース直後の型定義（まだ型変数は名前のまま）
 #[derive(Debug, Clone)]
 pub enum RawTypeDecl {

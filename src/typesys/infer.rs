@@ -1,11 +1,21 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::syntax::ast::{Expr, Lit, Pat, Stmt, Item};
-use super::{Kind, Type, TypeVarId, Scheme};
+use crate::syntax::ast::{Expr, ExprBody, Lit, Pat, Stmt, Item};
+use super::{Kind, Type, TypeVarId, Constraint, Scheme};
 
 // ===== Type error =====
 #[derive(Debug)]
 pub enum TypeError {
+    // from `resole_*`
+    UnknownTraitMember(String),
+    MissingTraitConstraint(String),
+
+    // from `apply_trait_impls_*`
+    MissingType,
+    MissingTraitImpl(Constraint),
+    MissingTraitMemberImpl(String),
+
+    // from `infer_*`
     UnboundVariable(String),
     Mismatch(Type, Type),
     RecursiveType,
@@ -32,6 +42,46 @@ pub type KindEnv = HashMap<String, Kind>;
 // ===== Type Environment =====
 // maps name of variable to type scheme
 pub type TypeEnv = HashMap<String, Scheme>;
+
+// ===== Impl Environment =====
+// maps instance of trait to dictionary of its implementations.
+// ex.
+// {
+//   (Eq Int): {
+//     "==": primitive_eq_int,
+//     "!=": primitive_neq_int,
+//   },
+// }
+pub type ImplEnv = HashMap<Constraint, HashMap<String, Expr>>;
+
+// ===== Infer Context =====
+#[derive(Clone)]
+pub struct InferCtx {
+    pub kind_env: KindEnv,            // 型コンストラクタの kind 情報 (ex. List: * -> *)
+    pub type_env: TypeEnv,            // スコープ内の識別子の型スキーム (ex. `==`: ∀ a. a -> a -> Bool)
+    // pub obligations: Vec<Constraint>, // 推論中に発生した未解決の制約(ex. Eq α)
+}
+
+impl InferCtx {
+    pub fn new() -> Self {
+        Self {
+            kind_env: KindEnv::new(),
+            type_env: TypeEnv::new(),
+            // obligations: vec![],
+        }
+    }
+
+    pub fn initial(ctx: &mut TypeContext) -> Self {
+        let kind_env = initial_kind_env();
+        let type_env = initial_type_env(ctx);
+        // let obligations = vec![];
+        InferCtx {
+            kind_env,
+            type_env,
+            // obligations,
+        }
+    }
+}
 
 // ===== Type context: union-find + binding =====
 pub struct TypeContext {
@@ -134,7 +184,7 @@ impl TypeContext {
 }
 
 impl TypeContext {
-    fn unify(&mut self, a: &Type, b: &Type) -> Result<(), TypeError> {
+    pub fn unify(&mut self, a: &Type, b: &Type) -> Result<(), TypeError> {
         let a = self.repr(a);
         let b = self.repr(b);
         match (&a, &b) {
@@ -242,10 +292,10 @@ impl TypeContext {
 impl TypeContext {
     fn match_pattern(
         &mut self,
-        env: &mut TypeEnv,
+        icx: &mut InferCtx,
         pat: &Pat,
         ty: &Type,
-        outer_env: &TypeEnv,
+        outer_icx: &InferCtx,
         generalize_bindings: bool,
     ) -> Result<(), TypeError> {
         match pat {
@@ -266,17 +316,18 @@ impl TypeContext {
 
             Pat::Var(x) => {
                 let sch = if generalize_bindings {
-                    generalize(self, outer_env, ty)   // let の場合
+                    generalize(self, &outer_icx, ty)   // let の場合
                 } else {
                     Scheme::mono(self.repr(ty))       // Abs や match の場合は単相
                 };
-                env.insert(x.clone(), sch);
+                icx.type_env.insert(x.clone(), sch);
                 Ok(())
             }
 
             Pat::Con(name, args) => {
-                let scheme = env.get(name).ok_or(TypeError::UnknownConstructor(name.clone()))?;
-                let con_ty = instantiate(self, scheme);
+                let scheme = icx.type_env.get(name).ok_or(TypeError::UnknownConstructor(name.clone()))?;
+                let (_constraints, con_ty) = instantiate(self, scheme);
+                // icx.obligations.extend(constraints);
 
                 let mut arg_types = Vec::new();
                 let mut ty_fun = con_ty;
@@ -294,7 +345,7 @@ impl TypeContext {
                 self.unify(&ty_fun, ty)?;
 
                 for (p, t) in args.iter().zip(arg_types.iter()) {
-                    self.match_pattern(env, p, t, outer_env, generalize_bindings)?;
+                    self.match_pattern(icx, p, t, outer_icx, generalize_bindings)?;
                 }
 
                 Ok(())
@@ -307,7 +358,7 @@ impl TypeContext {
                             return Err(TypeError::TupleLengthMismatch(ps.len(), ts.len()));
                         }
                         for (p, t) in ps.iter().zip(ts.iter()) {
-                            self.match_pattern(env, p, t, outer_env, generalize_bindings)?;
+                            self.match_pattern(icx, p, t, outer_icx, generalize_bindings)?;
                         }
                         Ok(())
                     }
@@ -323,11 +374,11 @@ impl TypeContext {
                                     .find(|(n, _)| n == fname)
                                     .ok_or_else(|| TypeError::UnknownField(fname.clone(), ty.clone()))?
                                     .1.clone();
-                        self.match_pattern(env, p, &ft, outer_env, generalize_bindings)?;
+                        self.match_pattern(icx, p, &ft, outer_icx, generalize_bindings)?;
                     }
                     Ok(())
                 } else {
-                    Err(TypeError::Mismatch(ty, Type::Record(vec![])))
+                    Err(TypeError::ExpectedRecord(ty.clone()))
                 }
             }
         }
@@ -362,9 +413,9 @@ fn free_ty_vars(ctx: &mut TypeContext, ty: &Type, acc: &mut HashSet<TypeVarId>) 
     }
 }
 
-fn free_env_vars(ctx: &mut TypeContext, env: &TypeEnv) -> HashSet<TypeVarId> {
+fn free_env_vars(ctx: &mut TypeContext, icx: &InferCtx) -> HashSet<TypeVarId> {
     let mut acc = HashSet::new();
-    for scheme in env.values() {
+    for scheme in icx.type_env.values() {
         free_ty_vars(ctx, &scheme.ty, &mut acc);
         for v in &scheme.vars {
             acc.remove(v);
@@ -374,15 +425,28 @@ fn free_env_vars(ctx: &mut TypeContext, env: &TypeEnv) -> HashSet<TypeVarId> {
 }
 
 // ===== Instantiate / Generalize =====
-fn instantiate(ctx: &mut TypeContext, sch: &Scheme) -> Type {
+pub fn instantiate(ctx: &mut TypeContext, sch: &Scheme) -> (Vec<Constraint>, Type) {
     let mut subst: HashMap<TypeVarId, TypeVarId> = HashMap::new();
     for &v in &sch.vars {
         subst.insert(v, ctx.fresh_type_var_id());
     }
-    substitute(ctx, &sch.ty, &subst)
+
+    let ty = substitute(ctx, &sch.ty, &subst);
+
+    let constraints = sch.constraints.iter().map(|c| {
+        Constraint {
+            name: c.name.clone(),
+            params: c.params
+                     .iter()
+                     .map(|t| substitute(ctx, t, &subst))
+                     .collect(),
+        }
+    }).collect();
+
+    (constraints, ty)
 }
 
-fn substitute(ctx: &mut TypeContext, t: &Type, subst: &HashMap<TypeVarId, TypeVarId>) -> Type {
+pub fn substitute(ctx: &mut TypeContext, t: &Type, subst: &HashMap<TypeVarId, TypeVarId>) -> Type {
     match ctx.repr(t) {
         Type::Var(v) => {
             if let Some(nv) = subst.get(&v) {
@@ -413,47 +477,63 @@ fn substitute(ctx: &mut TypeContext, t: &Type, subst: &HashMap<TypeVarId, TypeVa
     }
 }
 
-pub fn generalize(ctx: &mut TypeContext, env: &TypeEnv, ty: &Type) -> Scheme {
+pub fn generalize(ctx: &mut TypeContext, icx: &InferCtx, ty: &Type) -> Scheme {
     let mut fty = HashSet::new();
     free_ty_vars(ctx, ty, &mut fty);
-    let fenv = free_env_vars(ctx, env);
+    let fenv = free_env_vars(ctx, icx);
     let mut vars: Vec<TypeVarId> = fty.difference(&fenv).cloned().collect();
     vars.sort_by_key(|v| v.0);
     Scheme::poly(vars, ctx.repr(ty))
 }
+// pub fn generalize(ctx: &mut TypeContext, icx: &InferCtx, ty: &Type) -> Scheme {
+//     let mut fty = HashSet::new();
+//     free_ty_vars(ctx, ty, &mut fty);
+//
+//     for c in &icx.obligations {
+//         for t in &c.params {
+//             free_ty_vars(ctx, t, &mut fty);
+//         }
+//     }
+//
+//     let fenv = free_env_vars(ctx, icx);
+//     let mut vars: Vec<TypeVarId> = fty.difference(&fenv).cloned().collect();
+//     vars.sort_by_key(|v| v.0);
+//
+//     Scheme::new(vars, icx.obligations.clone(), ctx.repr(ty))
+// }
 
 // ===== Inference (Algorithm J core) =====
-pub fn infer_item(ctx: &mut TypeContext, tenv: &mut TypeEnv, item: &Item) -> Result<Type, TypeError> {
+pub fn infer_item(ctx: &mut TypeContext, icx: &mut InferCtx, item: &mut Item) -> Result<Type, TypeError> {
     match item {
         Item::Stmt(stmt) => {
-            infer_stmt(ctx, tenv, stmt)
+            infer_stmt(ctx, icx, stmt)
         }
         Item::Expr(expr) => {
-            infer_expr(ctx, tenv, expr)
+            infer_expr(ctx, icx, expr)
         }
         _ => Ok(Type::con("()"))
     }
 }
 
-pub fn infer_stmt(ctx: &mut TypeContext, tenv: &mut TypeEnv, stmt: &Stmt) -> Result<Type, TypeError> {
+pub fn infer_stmt(ctx: &mut TypeContext, icx: &mut InferCtx, stmt: &mut Stmt) -> Result<Type, TypeError> {
     match stmt {
         Stmt::Let(pat, expr) => {
-            let t_expr = infer_expr(ctx, tenv, expr)?;
+            let t_expr = infer_expr(ctx, icx, expr)?;
             let t_pat = ctx.fresh_type_for_pattern(pat);
             ctx.unify(&t_expr, &t_pat)?;
-            let ref_tenv = tenv.clone(); // snapshot for reference
-            ctx.match_pattern(tenv, pat, &t_pat, &ref_tenv, true)?;
+            let ref_icx = icx.clone(); // snapshot for reference
+            ctx.match_pattern(icx, pat, &t_pat, &ref_icx, true)?;
             Ok(Type::con("()"))
         }
         Stmt::LetRec(pat, expr) => {
             match pat {
                 Pat::Var(x) => {
                     let tv = Type::Var(ctx.fresh_type_var_id());
-                    tenv.insert(x.clone(), Scheme::mono(tv.clone()));
-                    let t_expr = infer_expr(ctx, tenv, expr)?;
+                    icx.type_env.insert(x.clone(), Scheme::mono(tv.clone()));
+                    let t_expr = infer_expr(ctx, icx, expr)?;
                     ctx.unify(&tv, &t_expr)?;
-                    let sch = generalize(ctx, tenv, &tv);
-                    tenv.insert(x.clone(), sch);
+                    let sch = generalize(ctx, icx, &tv);
+                    icx.type_env.insert(x.clone(), sch);
                     Ok(Type::con("()"))
                 }
                 _ => Err(TypeError::LetRecPatternNotSupported(pat.clone())),
@@ -462,70 +542,72 @@ pub fn infer_stmt(ctx: &mut TypeContext, tenv: &mut TypeEnv, stmt: &Stmt) -> Res
     }
 }
 
-pub fn infer_expr(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Result<Type, TypeError> {
-    match expr {
-        Expr::Var(x) => {
-            let sch = tenv.get(x).ok_or_else(|| TypeError::UnboundVariable(format!("{}",x)))?;
-            Ok(instantiate(ctx, sch))
+pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) -> Result<Type, TypeError> {
+    let ty = match &mut expr.body {
+        ExprBody::Var(x) => {
+            let sch = icx.type_env.get(x).ok_or_else(|| TypeError::UnboundVariable(format!("{}",x)))?;
+            let (_constraints, ty) = instantiate(ctx, sch);
+            // icx.obligations.extend(constraints);
+            ty
         }
-        Expr::Abs(pat, body) => {
+        ExprBody::Abs(pat, body) => {
             // パターンに対応する型を生成
-            let t_pat = ctx.fresh_type_for_pattern(pat);
+            let t_pat = ctx.fresh_type_for_pattern(&pat);
 
             // 環境を拡張
-            let mut env2 = tenv.clone();
+            let mut icx2 = icx.clone();
             // ctx.match_pattern(&mut env2, pat, &t_pat, tenv)?;
-            ctx.match_pattern(&mut env2, pat, &t_pat, tenv, false)?;
+            ctx.match_pattern(&mut icx2, &pat, &t_pat, icx, false)?;
 
             // 本体を推論
-            let t_body = infer_expr(ctx, &mut env2, body)?;
+            let t_body = infer_expr(ctx, &mut icx2, body)?;
 
             // 関数型を返す
-            Ok(Type::fun(t_pat, t_body))
+            Type::fun(t_pat, t_body)
         }
 
-        Expr::App(f, a) => {
-            let tf = infer_expr(ctx, tenv, f)?;
-            let ta = infer_expr(ctx, tenv, a)?;
+        ExprBody::App(f, a) => {
+            let tf = infer_expr(ctx, icx, f)?;
+            let ta = infer_expr(ctx, icx, a)?;
             let tr = Type::Var(ctx.fresh_type_var_id()); // result type variable
             ctx.unify(&tf, &Type::fun(ta, tr.clone()))?;
-            Ok(tr)
+            tr
         }
-        Expr::Block(items) => {
-            let mut tenv2 = tenv.clone(); // 新しいスコープ
-            let mut last_ty = Type::con("()");
-            for item in items {
-                last_ty = infer_item(ctx, &mut tenv2, item)?;
+        ExprBody::Block(items) => {
+            let mut icx2 = icx.clone(); // 新しいスコープ
+            let mut last_ty = Type::unit();
+            for item in items.iter_mut() {
+                last_ty = infer_item(ctx, &mut icx2, item)?;
             }
-            Ok(last_ty)
+            last_ty
         }
-        Expr::If(cond, then_e, else_e) => {
-            let t_cond = infer_expr(ctx, tenv, cond)?;
-            ctx.unify(&t_cond, &Type::Con("Bool".into()))?;
+        ExprBody::If(cond, then_e, else_e) => {
+            let t_cond = infer_expr(ctx, icx, cond)?;
+            ctx.unify(&t_cond, &Type::bool_())?;
 
-            let t_then = infer_expr(ctx, tenv, then_e)?;
-            let t_else = infer_expr(ctx, tenv, else_e)?;
+            let t_then = infer_expr(ctx, icx, then_e)?;
+            let t_else = infer_expr(ctx, icx, else_e)?;
             ctx.unify(&t_then, &t_else)?;
-            Ok(t_then)
+            t_then
         }
 
-        Expr::Match(scrutinee, arms) => {
+        ExprBody::Match(scrutinee, arms) => {
             // 判別対象式の型を推論
-            let t_scrut = infer_expr(ctx, tenv, scrutinee)?;
+            let t_scrut = infer_expr(ctx, icx, scrutinee)?;
 
             // 各アームの式型を集める
             let mut result_types = vec![];
 
-            for (pat, body) in arms {
+            for (pat, body) in arms.iter_mut() {
                 // パターンに対応する型を生成（型変数を含む構造）
-                let t_pat = ctx.fresh_type_for_pattern(pat);
+                let t_pat = ctx.fresh_type_for_pattern(&pat);
 
                 // scrutinee の型とパターン型を unify
                 ctx.unify(&t_scrut, &t_pat)?;
 
                 // 束縛環境を構築
-                let mut env2 = tenv.clone();
-                ctx.match_pattern(&mut env2, pat, &t_pat, tenv, false)?;
+                let mut env2 = icx.clone();
+                ctx.match_pattern(&mut env2, &pat, &t_pat, icx, false)?;
 
                 // アーム本体の型を推論
                 let t_body = infer_expr(ctx, &mut env2, body)?;
@@ -538,86 +620,90 @@ pub fn infer_expr(ctx: &mut TypeContext, tenv: &mut TypeEnv, expr: &Expr) -> Res
                 ctx.unify(&t_result, &ty)?;
             }
 
-            Ok(t_result)
+            t_result
         }
 
-        Expr::Lit(Lit::Unit) => Ok(Type::Con("()".into())),
-        Expr::Lit(Lit::Bool(_)) => Ok(Type::Con("Bool".into())),
-        Expr::Lit(Lit::Int(_)) => Ok(Type::Con("Int".into())),
+        ExprBody::Lit(Lit::Unit) => Type::unit(),
+        ExprBody::Lit(Lit::Bool(_)) => Type::bool_(),
+        ExprBody::Lit(Lit::Int(_)) => Type::int(),
 
-        Expr::Tuple(es) => {
-            let mut tys = Vec::new();
-            for e in es {
-                let ty = infer_expr(ctx, tenv, e)?;
+        ExprBody::Tuple(es) => {
+            let mut tys = Vec::with_capacity(es.len());
+            for e in es.iter_mut() {
+                let ty = infer_expr(ctx, icx, e)?;
                 tys.push(ty);
             }
-            Ok(Type::Tuple(tys))
+            Type::Tuple(tys)
         }
 
-        Expr::Record(fields) => {
+        ExprBody::Record(fields) => {
             // 各フィールドの型を推論
             let mut typed_fields = Vec::with_capacity(fields.len());
-            for (fname, fexpr) in fields {
-                let t_field = infer_expr(ctx, tenv, fexpr)?;
+            for (fname, fexpr) in fields.iter_mut() {
+                let t_field = infer_expr(ctx, icx, fexpr)?;
                 typed_fields.push((fname.clone(), t_field));
             }
-            Ok(Type::Record(typed_fields))
+            Type::Record(typed_fields)
         }
 
-        Expr::FieldAccess(base, field) => {
-            let t_base = infer_expr(ctx, tenv, base)?;
+        ExprBody::FieldAccess(base, field) => {
+            let t_base = infer_expr(ctx, icx, base)?;
             match t_base {
                 Type::Record(fields) => {
                     if let Some((_, ty)) = fields.iter().find(|(fname, _)| fname == field) {
-                        Ok(ty.clone())
+                        ty.clone()
                     } else {
-                        Err(TypeError::UnknownField(field.clone(), Type::Record(fields)))
+                        return Err(TypeError::UnknownField(field.clone(), Type::Record(fields)));
                     }
                 }
                 other => {
                     if let Some(con) = is_tycon(&other) {
                         let pat = Pat::con(con, vec![Pat::var("r")]);
                         let p = base.clone();
-                        let expr = Expr::Block(vec![
+                        let mut expr = Expr::block(vec![
                             Item::Stmt(Stmt::Let(pat, p)),
                             Item::Expr(Expr::field_access(Expr::var("r"), field.clone()))
                         ]);
-                        infer_expr(ctx, tenv, &expr).map_err(|_| TypeError::ExpectedRecord(other))
+                        let ty = infer_expr(ctx, icx, &mut expr).map_err(|_| TypeError::ExpectedRecord(other))?;
+                        ty
                     }
                     else {
-                        Err(TypeError::ExpectedRecord(other))
+                        return Err(TypeError::ExpectedRecord(other));
                     }
                 }
             }
         }
 
-        Expr::TupleAccess(base, index) => {
-            let t_base = infer_expr(ctx, tenv, base)?;
+        ExprBody::TupleAccess(base, index) => {
+            let t_base = infer_expr(ctx, icx, base)?;
             match t_base {
                 Type::Tuple(elems) => {
                     if *index < elems.len() {
-                        Ok(elems[*index].clone())
+                        elems[*index].clone()
                     } else {
-                        Err(TypeError::IndexOutOfBounds(*index, Type::Tuple(elems)))
+                        return Err(TypeError::IndexOutOfBounds(*index, Type::Tuple(elems)));
                     }
                 }
                 other => {
                     if let Some(con) = is_tycon(&other) {
                         let pat = Pat::con(con, vec![Pat::var("t")]);
                         let p = base.clone();
-                        let expr = Expr::Block(vec![
+                        let mut expr = Expr::block(vec![
                             Item::Stmt(Stmt::Let(pat, p)),
                             Item::Expr(Expr::tuple_access(Expr::var("t"), *index))
                         ]);
-                        infer_expr(ctx, tenv, &expr).map_err(|_| TypeError::ExpectedTuple(other))
+                        let ty = infer_expr(ctx, icx, &mut expr).map_err(|_| TypeError::ExpectedTuple(other))?;
+                        ty
                     }
                     else {
-                        Err(TypeError::ExpectedTuple(other))
+                        return Err(TypeError::ExpectedTuple(other));
                     }
                 }
             }
         }
-    }
+    };
+    expr.ty = Some(ty.clone());
+    Ok(ty)
 }
 
 fn is_tycon(mut t: &Type) -> Option<String> {
@@ -651,6 +737,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "None".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::app(
                 Type::con("Option"),
                 Type::var(a),
@@ -664,6 +751,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "Some".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(
                 Type::var(a),
                 Type::app(
@@ -680,6 +768,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "Nil".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::app(Type::con("List"), Type::var(a)),
         },
     );
@@ -690,6 +779,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "Cons".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(
                 Type::var(a),
                 Type::fun(
@@ -708,6 +798,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "map".into(),
         Scheme {
             vars: vec![a, b],
+            constraints: vec![],
             ty: Type::fun(
                 Type::fun(Type::var(a), Type::var(b)), // (a -> b)
                 Type::fun(
@@ -723,6 +814,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "__builtin_==__".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
@@ -732,6 +824,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "__builtin_!=__".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
@@ -741,6 +834,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "__builtin_<__".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
@@ -751,6 +845,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "__builtin_<=__".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
@@ -760,6 +855,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "__builtin_>__".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
@@ -769,6 +865,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "__builtin_>=__".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
@@ -778,6 +875,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "__builtin_+__".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
         },
     );
@@ -787,6 +885,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "__builtin_-__".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
         },
     );
@@ -796,6 +895,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "__builtin_*__".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
         },
     );
@@ -805,6 +905,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "__builtin_/__".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
         },
     );
@@ -814,6 +915,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "negate".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::var(a)),
         },
     );
@@ -823,6 +925,7 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
         "not".into(),
         Scheme {
             vars: vec![a],
+            constraints: vec![],
             ty: Type::fun(Type::var(a), Type::var(a)),
         },
     );

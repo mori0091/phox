@@ -12,11 +12,10 @@ use crate::syntax::ast::resolve_item;
 use crate::syntax::lexer::Lexer;
 use crate::syntax::token::{Token, LexicalError};
 
+use crate::typesys::apply_trait_impls_item;
 use crate::typesys::infer_item;
-use crate::typesys::initial_type_env;
-// use crate::typesys::initial_kind_env;
 use crate::typesys::{Type, Scheme};
-use crate::typesys::{TypeContext, infer_expr, generalize};
+use crate::typesys::{TypeContext, InferCtx, ImplEnv, infer_expr, generalize};
 use crate::interpreter::{initial_env, Value};
 use crate::interpreter::eval;
 
@@ -29,25 +28,25 @@ pub fn parse_expr(src: &str) -> Result<Expr, String> {
 }
 
 /// Infer type scheme of Expr AST.
-pub fn infer_expr_scheme(ast: &Expr) -> Result<Scheme, String> {
+pub fn infer_expr_scheme(ast: &mut Expr) -> Result<Scheme, String> {
     let mut ctx = TypeContext::new();
-    let mut env = initial_type_env(&mut ctx);
-    let ty = infer_expr(&mut ctx, &mut env, &ast)
+    let mut icx = InferCtx::initial(&mut ctx);
+    let ty = infer_expr(&mut ctx, &mut icx, ast)
         .map_err(|e| format!("infer error: {e:?}"))?;
-    let sch = generalize(&mut ctx, &env, &ty);
+    let sch = generalize(&mut ctx, &icx, &ty);
     Ok(sch)
 }
 
 /// Infer type of Expr AST.
-pub fn infer_expr_type(ast: &Expr) -> Result<Type, String> {
-    let sch = infer_expr_scheme(&ast)?;
+pub fn infer_expr_type(ast: &mut Expr) -> Result<Type, String> {
+    let sch = infer_expr_scheme(ast)?;
     Ok(sch.ty)
 }
 
 /// Parse and infer type scheme of an expression.
 pub fn check_expr_scheme(src: &str) -> Result<Scheme, String> {
-    let ast = parse_expr(src)?;
-    infer_expr_scheme(&ast)
+    let mut ast = parse_expr(src)?;
+    infer_expr_scheme(&mut ast)
 }
 
 /// Parse and infer type of an expression.
@@ -58,8 +57,8 @@ pub fn check_expr_type(src: &str) -> Result<Type, String> {
 
 /// Parse, infer type scheme, and evaluate of an expression.
 pub fn eval_expr(src: &str) -> Result<(Value, Scheme), String> {
-    let ast = parse_expr(src)?;
-    let sch = infer_expr_scheme(&ast)?;
+    let mut ast = parse_expr(src)?;
+    let sch = infer_expr_scheme(&mut ast)?;
     let mut env = initial_env();
     let val = eval::eval_expr(&ast, &mut env);
     Ok((val, sch))
@@ -81,17 +80,20 @@ pub fn eval_program(src: &str) -> Result<(Value, Scheme), String> {
     let tops = parse_program(src)
         .map_err(|e| format!("parse error: {e:?}"))?;
 
-    // let mut kenv = initial_kind_env();
     let mut ctx = TypeContext::new();
-    let mut tenv = initial_type_env(&mut ctx);
+    let mut icx = InferCtx::initial(&mut ctx);
+    let mut impl_env = ImplEnv::new();
     let mut env = initial_env();
 
     let mut last = None;
-    for item in tops {
-        resolve_item(&mut ctx, &mut tenv, &mut env, &item);
-        let ty = infer_item(&mut ctx, &mut tenv, &item)
+    for mut item in tops {
+        resolve_item(&mut ctx, &mut icx, &mut impl_env, &mut env, &item)
+            .map_err(|e| format!("resolve error: {e:?}"))?;
+        let ty = infer_item(&mut ctx, &mut icx, &mut item)
             .map_err(|e| format!("infer error: {e:?}"))?;
-        let sch = generalize(&mut ctx, &tenv, &ty);
+        apply_trait_impls_item(&mut item, &mut ctx, &icx, &impl_env)
+            .map_err(|e| format!("apply trait impl error: {e:?}"))?;
+        let sch = generalize(&mut ctx, &icx, &ty);
         let val = eval_item(&item, &mut env);
         last = Some((val, sch));
     }
