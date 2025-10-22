@@ -7,15 +7,17 @@ use crate::interpreter::eval_item;
 use crate::syntax::ast::Program;
 use crate::syntax::ast::Item;
 use crate::syntax::ast::Expr;
-use crate::syntax::ast::resolve_item;
 
 use crate::syntax::lexer::Lexer;
 use crate::syntax::token::{Token, LexicalError};
 
-use crate::typesys::apply_trait_impls_item;
+use crate::resolve::resolve_item;
+
 use crate::typesys::infer_item;
 use crate::typesys::{Type, Scheme};
 use crate::typesys::{TypeContext, InferCtx, ImplEnv, infer_expr, generalize};
+use crate::typesys::apply_trait_impls_item;
+
 use crate::interpreter::{initial_env, Value};
 use crate::interpreter::eval;
 

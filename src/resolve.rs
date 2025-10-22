@@ -3,10 +3,10 @@ use crate::typesys::{TypeContext, InferCtx, ImplEnv};
 use crate::typesys::{TypeVarId, Kind, Type, Constraint, Scheme};
 use crate::typesys::TypeError;
 use crate::typesys::{instantiate, infer_expr};
-use super::{RawTraitDecl, RawImplDecl};
-use super::{RawTypeDecl, RawVariant, RawType};
-use super::{TypeDecl, Variant};
-use super::{Item, Stmt, Expr, ExprBody};
+use crate::syntax::ast::{RawTraitDecl, RawImplDecl};
+use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType};
+use crate::syntax::ast::{TypeDecl, Variant};
+use crate::syntax::ast::{Item, Stmt, Expr, ExprBody};
 
 pub fn resolve_item(
     ctx: &mut TypeContext,

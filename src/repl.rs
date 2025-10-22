@@ -1,10 +1,12 @@
 use crate::api;
 
-use crate::typesys::{apply_trait_impls_item, ImplEnv, InferCtx, TypeContext};
-use crate::interpreter::initial_env;
+use crate::resolve::resolve_item;
 
-use crate::syntax::ast::resolve_item;
+use crate::typesys::{ImplEnv, InferCtx, TypeContext};
 use crate::typesys::{infer_item, generalize};
+use crate::typesys::apply_trait_impls_item;
+
+use crate::interpreter::initial_env;
 use crate::interpreter::eval_item;
 
 use lalrpop_util::ParseError;
