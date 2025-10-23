@@ -1,6 +1,12 @@
 use super::Expr;
 
 #[derive(Debug, Clone)]
+pub struct RawConstraint {
+    pub name: String,           // trait name (ex. Eq)
+    pub params: Vec<RawType>,   // instance type params (ex. [Int])
+}
+
+#[derive(Debug, Clone)]
 pub struct RawTraitDecl {
     pub name: String,
     pub params: Vec<String>,

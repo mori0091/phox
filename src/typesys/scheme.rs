@@ -1,6 +1,6 @@
 use std::fmt;
 use crate::typesys::{Type, TypeVarId};
-use crate::typesys::{TypeError, TypeContext, TypeEnv, instantiate};
+use crate::typesys::{TypeError, TypeContext, TraitMemberEnv, instantiate};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Constraint {
@@ -9,37 +9,44 @@ pub struct Constraint {
 }
 
 impl Constraint {
-    pub fn from_trait_member (
-        ctx: &mut TypeContext,  // global TypeContext
-        type_env: &TypeEnv,     // borrow InferCtx.type_env
-        member_name: &str,      // name of a member of trait
-        member_ty: &Type,       // type of that member
+    pub fn from_trait_member(
+        ctx: &mut TypeContext,
+        member_env: &TraitMemberEnv,
+        member_name: &str,
+        member_ty: &Type,
     ) -> Result<Vec<Constraint>, TypeError> {
-        // 1. trait メンバの型スキームを取得
-        let scheme = type_env.get(member_name)
+        let entries = member_env
+            .get(member_name)
             .ok_or_else(|| TypeError::UnknownTraitMember(member_name.to_string()))?;
-        // 2. スキームを展開（ctx に型変数を割り当てる）
-        let (constraints, trait_ty) = instantiate(ctx, scheme);
-        // 3. 式の型と unify（ctx.binding に置換が記録される）
-        ctx.unify(&trait_ty, member_ty)?;
-        // 4. 全制約に置換を適用
-        let resolved_constraints = constraints
-            .into_iter()
-            .map(|mut c| {
-                c.params
-                    = c.params
-                       .into_iter()
-                       .map(|t| ctx.repr(&t))
-                       .collect();
-                c
-            })
-            .collect();
-        Ok(resolved_constraints)
+
+        let mut out = Vec::new();
+        for scheme in entries {
+            let (constraints, trait_ty) = instantiate(ctx, scheme);
+            if ctx.unify(&trait_ty, member_ty).is_ok() {
+                let resolved = constraints.into_iter().map(|mut c| {
+                    c.params = c.params.into_iter().map(|t| ctx.repr(&t)).collect();
+                    c
+                });
+                out.extend(resolved);
+            }
+        }
+        Ok(out)
     }
 }
 
+impl fmt::Display for Constraint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let tys = self.params
+                    .iter()
+                    .map(|ty| ty.to_string())
+                    .collect::<Vec<_>>()
+            .join(" ");
+        write!(f, "{} {}", self.name, tys)
+     }
+}
+
 // ===== Type schemes (∀ vars . ty) =====
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Scheme {
     pub vars: Vec<TypeVarId>, // quantified variables
     pub constraints: Vec<Constraint>,
@@ -120,7 +127,16 @@ impl Scheme {
             }
         }
 
-        let renamed_ty = rename(&self.ty, &map);
+        let mut renamed_ty = rename(&self.ty, &map).to_string();
+
+        if !self.constraints.is_empty() {
+            let cs = self.constraints
+                          .iter()
+                          .map(|c| c.to_string())
+                          .collect::<Vec<_>>()
+                .join(", ");
+            renamed_ty = format!("({}) => {}", cs, renamed_ty);
+        }
 
         if self.vars.is_empty() {
             format!("{}", renamed_ty)

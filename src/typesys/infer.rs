@@ -8,14 +8,18 @@ use super::{Kind, Type, TypeVarId, Constraint, Scheme};
 pub enum TypeError {
     // from `resole_*`
     UnknownTraitMember(String),
-    MissingTraitConstraint(String),
 
     // from `apply_trait_impls_*`
     MissingType,
     MissingTraitImpl(Constraint),
     MissingTraitMemberImpl(String),
+    // MissingTraitImplForMember: "no trait impl for member: eq with type Bool -> Bool -> Bool; expected: Eq Bool"
+    MissingTraitImplForMember { member: String, ty: Type, expected: Vec<Constraint> },
+    // AmbiguousTraitMember: "ambiguous trait member: f for type Int; candidates: Foo, Bar"
+    AmbiguousTraitMember { member: String, ty: Type, candidates: Vec<String> },
 
     // from `infer_*`
+    AmbiguousVariable { name: String, candidates: Vec<String> },
     UnboundVariable(String),
     Mismatch(Type, Type),
     RecursiveType,
@@ -43,6 +47,11 @@ pub type KindEnv = HashMap<String, Kind>;
 // maps name of variable to type scheme
 pub type TypeEnv = HashMap<String, Scheme>;
 
+// ===== Type Environment for trait member =====
+// maps name of trait member to set of type schemes
+// (ex. "f": { ∀ a. Foo a => a -> a, ∀ a. Bar a => a -> a })
+pub type TraitMemberEnv = HashMap<String, HashSet<Scheme>>;
+
 // ===== Impl Environment =====
 // maps instance of trait to dictionary of its implementations.
 // ex.
@@ -59,6 +68,7 @@ pub type ImplEnv = HashMap<Constraint, HashMap<String, Expr>>;
 pub struct InferCtx {
     pub kind_env: KindEnv,            // 型コンストラクタの kind 情報 (ex. List: * -> *)
     pub type_env: TypeEnv,            // スコープ内の識別子の型スキーム (ex. `==`: ∀ a. a -> a -> Bool)
+    pub member_env: TraitMemberEnv,   // トレイトメンバの型スキーム集合 (ex. "f": { ∀ a. Foo a => a -> a, ∀ a. Bar a => a -> a })
     // pub obligations: Vec<Constraint>, // 推論中に発生した未解決の制約(ex. Eq α)
 }
 
@@ -67,6 +77,7 @@ impl InferCtx {
         Self {
             kind_env: KindEnv::new(),
             type_env: TypeEnv::new(),
+            member_env: TraitMemberEnv::new(),
             // obligations: vec![],
         }
     }
@@ -74,10 +85,12 @@ impl InferCtx {
     pub fn initial(ctx: &mut TypeContext) -> Self {
         let kind_env = initial_kind_env();
         let type_env = initial_type_env(ctx);
+        let member_env = TraitMemberEnv::new();
         // let obligations = vec![];
         InferCtx {
             kind_env,
             type_env,
+            member_env,
             // obligations,
         }
     }
@@ -544,10 +557,25 @@ pub fn infer_stmt(ctx: &mut TypeContext, icx: &mut InferCtx, stmt: &mut Stmt) ->
 
 pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) -> Result<Type, TypeError> {
     let ty = match &mut expr.body {
-        ExprBody::Var(x) => {
-            let sch = icx.type_env.get(x).ok_or_else(|| TypeError::UnboundVariable(format!("{}",x)))?;
-            let (_constraints, ty) = instantiate(ctx, sch);
-            // icx.obligations.extend(constraints);
+        ExprBody::Var(name) => {
+            let (_constraints, ty) = match icx.type_env.get(name) {
+                Some(sch) => instantiate(ctx, sch),
+                None => {
+                    match icx.member_env.get(name) {
+                        None => return Err(TypeError::UnboundVariable(name.clone())),
+                        Some(cands) if cands.len() == 1 => {
+                            let sch = cands.iter().next().unwrap();
+                            instantiate(ctx, sch)
+                        }
+                        Some(cands) => {
+                            return Err(TypeError::AmbiguousVariable {
+                                name: name.clone(),
+                                candidates: cands.iter().map(|x| x.pretty()).collect(),
+                            });
+                        }
+                    }
+                }
+            };
             ty
         }
         ExprBody::Abs(pat, body) => {
@@ -700,6 +728,10 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
                     }
                 }
             }
+        }
+
+        ExprBody::RawTraitRecord(_) => {
+            unreachable!()
         }
     };
     expr.ty = Some(ty.clone());

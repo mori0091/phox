@@ -51,7 +51,15 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
         // 変数参照
         ExprBody::Var(name) => {
             env.get(&name)
-               .unwrap_or_else(|| panic!("unbound variable: {}", name))
+               .unwrap_or_else(|| {
+                   if let Some(ty) = &expr.ty {
+                       use crate::typesys::Scheme;
+                       let sch = Scheme::mono(ty.clone());
+                       panic!("unbound variable: {}: {}", name, sch.pretty())
+                   } else {
+                       panic!("unbound variable: {}", name)
+                   }
+               })
         }
 
         // λ抽象
@@ -178,6 +186,9 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
                 }
                 other => panic!("index access on non-tuple value: {}", other),
             }
+        }
+        ExprBody::RawTraitRecord(_) => {
+            unreachable!()
         }
     }
 }

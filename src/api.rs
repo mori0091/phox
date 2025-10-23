@@ -89,7 +89,7 @@ pub fn eval_program(src: &str) -> Result<(Value, Scheme), String> {
 
     let mut last = None;
     for mut item in tops {
-        resolve_item(&mut ctx, &mut icx, &mut impl_env, &mut env, &item)
+        resolve_item(&mut ctx, &mut icx, &mut impl_env, &mut env, &mut item)
             .map_err(|e| format!("resolve error: {e:?}"))?;
         let ty = infer_item(&mut ctx, &mut icx, &mut item)
             .map_err(|e| format!("infer error: {e:?}"))?;

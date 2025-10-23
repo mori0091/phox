@@ -5,6 +5,7 @@ use crate::typesys::TypeError;
 use crate::typesys::{instantiate, infer_expr};
 use crate::syntax::ast::{RawTraitDecl, RawImplDecl};
 use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType};
+use crate::syntax::ast::RawConstraint;
 use crate::syntax::ast::{TypeDecl, Variant};
 use crate::syntax::ast::{Item, Stmt, Expr, ExprBody};
 
@@ -13,7 +14,7 @@ pub fn resolve_item(
     icx: &mut InferCtx,
     impl_env: &mut ImplEnv,
     env: &mut Env,
-    item: &Item,
+    item: &mut Item,
 ) -> Result<(), TypeError> {
     match item {
         Item::RawTraitDecl(raw) => {
@@ -51,10 +52,10 @@ pub fn register_trait(
         var_ids.push(id);
     }
 
-    // 2. 各メンバを Scheme に変換して type_env に登録
+    // 2. 各メンバを Scheme に変換して登録
     for member in &raw.members {
         let raw_ty = &member.ty;
-        let ty = resolve_raw_type(ctx, raw_ty, &var_map); // RawType → Type に変換
+        let ty = resolve_raw_type(ctx, raw_ty, &var_map);
 
         let constraint = Constraint {
             name: raw.name.clone(),
@@ -62,7 +63,16 @@ pub fn register_trait(
         };
 
         let scheme = Scheme::new(var_ids.clone(), vec![constraint], ty);
-        icx.type_env.insert(member.name.clone(), scheme);
+
+        // trait メンバは member_env に登録する。type_env には登録しない。
+        // - 曖昧さ早期発見のため; infer_expr で必要
+        //   -> infer_expr で曖昧さが残る場合は即エラー
+        // - 曖昧さ解消のため; apply_trait_impls_expr で必要(だった)
+        //   -> 現在の仕様では apply_trait_impls_expr の時点では曖昧さは残ってないはず
+        icx.member_env
+           .entry(member.name.clone())
+           .or_default()
+           .insert(scheme);
     }
 }
 
@@ -86,21 +96,29 @@ pub fn register_impl(
     // 3. メンバ辞書を構築しながら型検査
     let mut member_map = HashMap::new();
     for member in &raw.members {
-        // 3a. trait 宣言からメンバの型スキームを取得
-        let scheme = icx.type_env.get(&member.name)
+        // 3a. member_env から候補を探す
+        let schemes = icx
+            .member_env
+            .get(&member.name)
             .ok_or_else(|| TypeError::UnknownTraitMember(member.name.clone()))?;
 
-        // 3b. スキームを展開（型変数置換＋制約取得）
+        // 3b. impl が属する trait 名に一致するスキームを選ぶ
+        let scheme = schemes
+            .iter()
+            .find(|sch| sch.constraints.iter().any(|c| c.name == raw.name))
+            .ok_or_else(|| TypeError::UnknownTraitMember(member.name.clone()))?;
+
+        // 3c. スキームを展開（型変数置換＋制約取得）
         let (_constraints, expected_ty) = instantiate(ctx, scheme);
 
-        // 3c. impl の式を推論
+        // 3d. impl の式を推論
         let mut expr = member.expr.clone();
         let actual_ty = infer_expr(ctx, icx, &mut expr)?;
 
-        // 3d. unify で型一致を確認
+        // 3e. unify で型一致を確認
         ctx.unify(&expected_ty, &actual_ty)?;
 
-        // 3e. 登録
+        // 3f. 登録
         member_map.insert(member.name.clone(), *expr);
     }
 
@@ -115,7 +133,7 @@ pub fn resolve_stmt(
     icx: &mut InferCtx,
     impl_env: &mut ImplEnv,
     env: &mut Env,
-    stmt: &Stmt,
+    stmt: &mut Stmt,
 ) -> Result<(), TypeError> {
     match stmt {
         Stmt::Let(_p, expr) | Stmt::LetRec(_p, expr) => {
@@ -129,50 +147,63 @@ pub fn resolve_expr(
     icx: &mut InferCtx,
     impl_env: &mut ImplEnv,
     env: &mut Env,
-    expr: &Expr,
+    expr: &mut Expr,
 ) -> Result<(), TypeError> {
-    match &expr.body {
+    match &mut expr.body {
         ExprBody::App(f, x) => {
-            resolve_expr(ctx, icx, impl_env, env, &f)?;
-            resolve_expr(ctx, icx, impl_env, env, &x)
+            resolve_expr(ctx, icx, impl_env, env, f)?;
+            resolve_expr(ctx, icx, impl_env, env, x)
         }
         ExprBody::Abs(_p, e) => {
-            resolve_expr(ctx, icx, impl_env, env, &e)
+            resolve_expr(ctx, icx, impl_env, env, e)
         }
         ExprBody::If(cond, e1, e2) => {
-            resolve_expr(ctx, icx, impl_env, env, &cond)?;
-            resolve_expr(ctx, icx, impl_env, env, &e1)?;
-            resolve_expr(ctx, icx, impl_env, env, &e2)
+            resolve_expr(ctx, icx, impl_env, env, cond)?;
+            resolve_expr(ctx, icx, impl_env, env, e1)?;
+            resolve_expr(ctx, icx, impl_env, env, e2)
         }
         ExprBody::Match(strut, arms) => {
-            resolve_expr(ctx, icx, impl_env, env, &strut)?;
+            resolve_expr(ctx, icx, impl_env, env, strut)?;
             for (_p, e) in arms {
-                resolve_expr(ctx, icx, impl_env, env, &e)?;
+                resolve_expr(ctx, icx, impl_env, env, e)?;
             }
             Ok(())
         }
         ExprBody::Tuple(es) => {
             for e in es {
-                resolve_expr(ctx, icx, impl_env, env, &e)?;
+                resolve_expr(ctx, icx, impl_env, env, e)?;
             }
             Ok(())
         }
         ExprBody::Record(fields) => {
             for (_field, e) in fields {
-                resolve_expr(ctx, icx, impl_env, env, &e)?;
+                resolve_expr(ctx, icx, impl_env, env, e)?;
             }
             Ok(())
         }
         ExprBody::FieldAccess(e, _field) => {
-            resolve_expr(ctx, icx, impl_env, env, &e)
+            resolve_expr(ctx, icx, impl_env, env, e)
         }
         ExprBody::TupleAccess(e, _index) => {
-            resolve_expr(ctx, icx, impl_env, env, &e)
+            resolve_expr(ctx, icx, impl_env, env, e)
         }
         ExprBody::Block(items) => {
             for item in items {
-                resolve_item(ctx, icx, impl_env, env, &item)?;
+                resolve_item(ctx, icx, impl_env, env, item)?;
             }
+            Ok(())
+        }
+        ExprBody::RawTraitRecord(raw) => {
+            let constraint = resolve_raw_constraint(ctx, &raw);
+            let impls = impl_env
+                .get(&constraint)
+                .ok_or(TypeError::MissingTraitImpl(constraint.clone()))?;
+
+            // impls: HashMap<String, Expr>
+            let fields: Vec<(String, Expr)> = impls
+                .iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            expr.body = ExprBody::Record(fields);
+
             Ok(())
         }
         ExprBody::Lit(_) | ExprBody::Var(_) => Ok(()),
@@ -316,5 +347,21 @@ pub fn register_variants(decl: &TypeDecl, env: &mut Env) {
                            make_constructor(&v.name(), arity));
             }
         }
+    }
+}
+
+pub fn resolve_raw_constraint(
+    ctx: &mut TypeContext,
+    raw: &RawConstraint,
+) -> Constraint {
+    let params = raw
+        .params
+        .iter()
+        .map(|p| resolve_raw_type(ctx, p, &HashMap::new()))
+        .collect();
+
+    Constraint {
+        name: raw.name.clone(),
+        params,
     }
 }

@@ -34,7 +34,7 @@ pub fn repl() {
         match api::parse_items(&buffer) {
             Ok(items) => {
                 for mut item in items {
-                    if let Err(e) = resolve_item(&mut ctx, &mut icx, &mut impl_env, &mut env, &item) {
+                    if let Err(e) = resolve_item(&mut ctx, &mut icx, &mut impl_env, &mut env, &mut item) {
                         eprintln!("resolve error: {:?}", e);
                     }
                     else {

@@ -1,4 +1,4 @@
-use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType};
+use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType, RawConstraint};
 use crate::syntax::ast::{RawTraitDecl, RawTraitMemberDecl};
 use crate::syntax::ast::{RawImplDecl, RawImplMemberDecl};
 use crate::syntax::ast::{Item, Stmt, Expr, Lit, Pat};
@@ -294,8 +294,8 @@ ExprMul: Expr = {
 
 // 中置構文
 ExprInfixApp: Expr = {
-    <l:ExprInfixApp> "`" <f:Ident> "`" <r:ExprInfixOp> => {
-        Expr::app(Expr::app(Expr::var(f), l), r)
+    <l:ExprInfixApp> "`" <f:Atom> "`" <r:ExprInfixOp> => {
+        Expr::app(Expr::app(f, l), r)
     },
     ExprInfixOp,
 };
@@ -328,6 +328,7 @@ Atom: Expr = {
     ExprParen,
     ExprTuple,
     ExprRecord,
+    ExprTraitRecord,
     ExprBlock,
     ExprFieldAccess,
     ExprTupleAccess,
@@ -344,6 +345,18 @@ ExprTuple: Expr = {
 ExprRecord: Expr = {
     "@" "{" <fields:SepByComma0<ExprRecordField>> "}"
         => Expr::record(fields)
+};
+
+ExprTraitRecord: Expr = {
+    "@" "{" <raw_constraint:Constraint> "}" => {
+        Expr::raw_trait_record(raw_constraint)
+    },
+};
+
+Constraint: RawConstraint = {
+    <name:ConIdent> <params:TypeAtom+> => {
+        RawConstraint { name, params }
+    },
 };
 
 ExprRecordField: (String, Expr) = {

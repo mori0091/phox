@@ -1,5 +1,5 @@
 use std::fmt;
-use super::{Item, Lit, Pat};
+use super::{Item, Lit, Pat, RawConstraint};
 use crate::typesys::Type;
 
 #[derive(Clone, Debug)]
@@ -20,6 +20,7 @@ pub enum ExprBody {
 
     Tuple(Vec<Expr>),               // ex. `(1,)`, `(1, true, ())`
     Record(Vec<(String, Expr)>),    // ex. `@{ x:a, y:b }`
+    RawTraitRecord(RawConstraint),  // ex. `@{ Eq Int }`
     FieldAccess(Box<Expr>, String), // ex. `p.x`
     TupleAccess(Box<Expr>, usize),  // ex. `p.0`
     Block(Vec<Item>),               // ex. `{stmt; stmt; expr; expr}`
@@ -57,13 +58,19 @@ impl Expr {
     pub fn record(fields: Vec<(String, Expr)>) -> Self {
         Expr { body: ExprBody::Record(fields), ty: None }
     }
-    pub fn field_access<S: Into<String>>(e: Expr, s: S) -> Self {
-        Expr { body: ExprBody::FieldAccess(Box::new(e), s.into()), ty: None }
-    }
 
     pub fn tuple(elems: Vec<Expr>) -> Self {
         Expr { body: ExprBody::Tuple(elems), ty: None }
     }
+
+    pub fn raw_trait_record(raw_constraint: RawConstraint) -> Self {
+        Expr { body: ExprBody::RawTraitRecord(raw_constraint), ty: None }
+    }
+
+    pub fn field_access<S: Into<String>>(e: Expr, s: S) -> Self {
+        Expr { body: ExprBody::FieldAccess(Box::new(e), s.into()), ty: None }
+    }
+
     pub fn tuple_access(e: Expr, index: usize) -> Self {
         Expr { body: ExprBody::TupleAccess(Box::new(e), index), ty: None }
     }
@@ -116,6 +123,9 @@ impl fmt::Display for Expr {
                                 .collect();
                     write!(f, "@{{ {} }}", s.join(", "))
                 }
+            }
+            ExprBody::RawTraitRecord(raw_constraint) => {
+                write!(f, "@{{ {:?} }}", raw_constraint)
             }
             ExprBody::FieldAccess(base, field) => {
                 match base.body {

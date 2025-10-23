@@ -76,21 +76,44 @@ pub fn apply_trait_impls_expr(
             // 型情報が必要なので、型が推論済みであることを確認
             let ty = expr.ty.as_ref().ok_or(TypeError::MissingType)?;
 
-            // trait メンバとして登録されているか確認
-            if icx.type_env.contains_key(name) {
-                // このメンバに必要な制約を構築
-                let constraints = Constraint::from_trait_member(ctx, &icx.type_env, name, ty)?;
+            // if icx.type_env.contains_key(name) {
+            if icx.member_env.contains_key(name) {
+                // このメンバに必要な制約を構築（型から導出）
+                let constraints = Constraint::from_trait_member(ctx, &icx.member_env, name, ty)?;
 
-                // 各制約に対して ImplEnv を照合し、実装を焼き込む
-                for constraint in constraints {
-                    if let Some(impls) = impl_env.get(&constraint) {
+                // 該当する実装候補を全部集める
+                let mut matches: Vec<(&Constraint, &Expr)> = Vec::new();
+                for constraint in constraints.iter() {
+                    if let Some(impls) = impl_env.get(constraint) {
                         if let Some(impl_expr) = impls.get(name) {
-                            expr.body = impl_expr.body.clone();
-                            break;
+                            matches.push((constraint, impl_expr));
                         }
                     }
                 }
+                match matches.len() {
+                    0 => {
+                        // 実装が見つからない → 何もしない
+                        // 通常の変数参照なら infer_expr 側で処理される
+                    }
+                    1 => {
+                        let (_, impl_expr) = matches.pop().unwrap();
+                        expr.body = impl_expr.body.clone();
+                        // expr.ty は既に推論済みなのでそのままでOK
+                    }
+                    _ => {
+                        let cand_traits: Vec<String> =
+                            matches.iter().map(|(c, _)| c.to_string()).collect();
+                        return Err(TypeError::AmbiguousTraitMember {
+                            member: name.clone(),
+                            ty: ty.clone(),
+                            candidates: cand_traits,
+                        });
+                    }
+                }
             }
+        }
+        ExprBody::RawTraitRecord(_) => {
+            unreachable!()
         }
         ExprBody::Lit(_) => {}
     }
