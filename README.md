@@ -149,6 +149,15 @@ p.0 + p.1
 ```
 
 ### Functions as operators
+Function `f(x) = x + x` can be defined like this:
+
+``` ml
+let f = λx. x + x;
+// let f = \x. x + x;    // same as the above.
+f 3
+// => 6: Int
+```
+
 ``` ml
 let normSq = λx.λy. x * x + y * y;
 (normSq 2 3, 3 `normSq` 4)
@@ -190,6 +199,61 @@ let x = 3;
 (!) true  // => false: Bool  (unary not; prefix form of `!`)
 not true  // => false: Bool  (unary not)
 ```
+
+### Traits and Implementations
+Phox supports **traits** (`trait`; similar to type classes) to define shared behavior across types.
+
+```ml
+trait Eq a {
+  eq  : a -> a -> Bool;
+  neq : a -> a -> Bool;
+}
+```
+
+An **implementation** (`impl`) provides concrete definitions for a trait and a type:
+
+```ml
+impl Eq Int {
+  eq  = λx.λy. x == y;
+  neq = λx.λy. x != y;
+};
+
+impl Eq Bool {
+  eq  = λx.λy. x == y;
+  neq = λx.λy. x != y;
+};
+```
+
+Now you can use `eq` and `neq` with `Int` or `Bool` values:
+
+```ml
+eq 2 2        // => true
+eq 2 3        // => false
+neq 2 3       // => true
+
+eq true true  // => true
+eq true false // => false
+neq true true // => false
+
+2 `eq` 2      // => true (infix notation)
+2 `eq` 3      // => false
+```
+
+### Trait Records
+A **trait record** is a first-class value representing a trait implementation.  
+You can explicitly pass or select an implementation:
+
+```ml
+let eqInt = @{Eq Int};   // trait record for `Eq Int`
+
+eqInt.eq 2 3   // => false
+```
+
+Trait records make resolution explicit and predictable.  
+If multiple candidates exist, ambiguity is reported as an error, and you can disambiguate by using a trait record.
+
+
+👉 For more examples (with Japanese explanations), see [トレイト利用例 (チートシート)](docs/cheatsheet_traits_ja.md).
 
 ---
 

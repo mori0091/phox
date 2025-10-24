@@ -1,4 +1,6 @@
-use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType};
+use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType, RawConstraint};
+use crate::syntax::ast::{RawTraitDecl, RawTraitMemberDecl};
+use crate::syntax::ast::{RawImplDecl, RawImplMemberDecl};
 use crate::syntax::ast::{Item, Stmt, Expr, Lit, Pat};
 
 use crate::syntax::token::{Token, LexicalError};
@@ -12,6 +14,8 @@ extern {
     enum Token {
         // --- キーワード ---
         "type"  => Token::Type,
+        "trait" => Token::Trait,
+        "impl"  => Token::Impl,
         "let"   => Token::Let,
         "rec"   => Token::Rec,
         "if"    => Token::If,
@@ -78,15 +82,39 @@ pub ItemList: Vec<Item> = {
         v
     },
     <mut v:(<Item> ";")+> => {
-        v.push(Item::Expr(Expr::Lit(Lit::Unit)));
+        v.push(Item::Expr(Expr::unit()));
         v
     },
 };
 
 pub Item: Item = {
+    TraitDecl => Item::RawTraitDecl(<>),
+    ImplDecl => Item::RawImplDecl(<>),
     TypeDecl => Item::RawTypeDecl(<>),
     Stmt => Item::Stmt(<>),
     Expr => Item::Expr(<>),
+};
+
+// ----------------------------------------------
+TraitDecl: RawTraitDecl = {
+    "trait" <name:ConIdent> <params:TypeParams> "{" <members:TraitMemberDecl+> "}"
+        => RawTraitDecl { name: name, params: params, members: members, },
+};
+
+TraitMemberDecl: RawTraitMemberDecl = {
+    <name:Ident> ":" <ty:Type> ";"
+        => RawTraitMemberDecl { name: name, ty: Box::new(ty), },
+};
+
+// ----------------------------------------------
+ImplDecl: RawImplDecl = {
+    "impl" <name:ConIdent> <params:TypeAtom+> "{" <members:ImplMemberDecl+> "}"
+        => RawImplDecl { name: name, params: params, members: members, },
+};
+
+ImplMemberDecl: RawImplMemberDecl = {
+    <name:Ident> "=" <expr:Expr> ";"
+        => RawImplMemberDecl { name: name, expr: Box::new(expr) },
 };
 
 // ----------------------------------------------
@@ -266,8 +294,8 @@ ExprMul: Expr = {
 
 // 中置構文
 ExprInfixApp: Expr = {
-    <l:ExprInfixApp> "`" <f:Ident> "`" <r:ExprInfixOp> => {
-        Expr::app(Expr::app(Expr::var(f), l), r)
+    <l:ExprInfixApp> "`" <f:Atom> "`" <r:ExprInfixOp> => {
+        Expr::app(Expr::app(f, l), r)
     },
     ExprInfixOp,
 };
@@ -294,12 +322,13 @@ ExprApp: Expr = {
 
 // 原子的な式
 Atom: Expr = {
-    Lit => Expr::Lit(<>),
+    Lit => Expr::lit(<>),
     Ident => Expr::var(<>),
     ConIdent => Expr::var(<>),
     ExprParen,
     ExprTuple,
     ExprRecord,
+    ExprTraitRecord,
     ExprBlock,
     ExprFieldAccess,
     ExprTupleAccess,
@@ -310,12 +339,24 @@ ExprParen: Expr = {
 };
 
 ExprTuple: Expr = {
-    "(" <es:SepByComma<Expr>> ")" => Expr::Tuple(es),
+    "(" <es:SepByComma<Expr>> ")" => Expr::tuple(es),
 };
 
 ExprRecord: Expr = {
     "@" "{" <fields:SepByComma0<ExprRecordField>> "}"
-        => Expr::Record(fields)
+        => Expr::record(fields)
+};
+
+ExprTraitRecord: Expr = {
+    "@" "{" <raw_constraint:Constraint> "}" => {
+        Expr::raw_trait_record(raw_constraint)
+    },
+};
+
+Constraint: RawConstraint = {
+    <name:ConIdent> <params:TypeAtom+> => {
+        RawConstraint { name, params }
+    },
 };
 
 ExprRecordField: (String, Expr) = {
@@ -332,10 +373,10 @@ ExprTupleAccess: Expr = {
 
 ExprBlock: Expr = {
     "{" "}" => {
-        Expr::Block(vec![Item::Expr(Expr::Lit(Lit::Unit))])
+        Expr::block(vec![Item::Expr(Expr::unit())])
     },
     "{" <items:ItemList> "}" => {
-        Expr::Block(items)
+        Expr::block(items)
     },
 };
 

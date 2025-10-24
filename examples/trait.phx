@@ -1,0 +1,14 @@
+trait Eq a {
+    eq : a -> a -> Bool;
+    neq: a -> a -> Bool;
+};
+
+impl Eq Int {
+    eq  = \a.\b. a == b;
+    neq = \a.\b. a != b;
+};
+
+let x = eq 1 1 ; // => true        (discarded)
+let y = eq 1   ; // => \a. 1 == a  (discarded)
+(x, y)           // => (true, <closure>): (Bool, Int -> Bool)
+// eq            // unbound variable: eq  // error

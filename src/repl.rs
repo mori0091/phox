@@ -1,20 +1,20 @@
 use crate::api;
 
-use crate::typesys::TypeContext;
-// use crate::typesys::initial_kind_env;
-use crate::typesys::initial_type_env;
-use crate::interpreter::initial_env;
+use crate::resolve::resolve_item;
 
-use crate::syntax::ast::resolve_item;
+use crate::typesys::{ImplEnv, InferCtx, TypeContext};
 use crate::typesys::{infer_item, generalize};
+use crate::typesys::apply_trait_impls_item;
+
+use crate::interpreter::initial_env;
 use crate::interpreter::eval_item;
 
 use lalrpop_util::ParseError;
 
 pub fn repl() {
     let mut ctx = TypeContext::new();
-    // let mut kenv = initial_kind_env(&mut ctx);
-    let mut tenv = initial_type_env(&mut ctx);
+    let mut icx = InferCtx::initial(&mut ctx);
+    let mut impl_env = ImplEnv::new();
     let mut env = initial_env();
 
     let mut buffer = String::new();
@@ -33,16 +33,27 @@ pub fn repl() {
 
         match api::parse_items(&buffer) {
             Ok(items) => {
-                for item in items {
-                    resolve_item(&mut ctx, &mut tenv, &mut env, &item);
-                    match infer_item(&mut ctx, &mut tenv, &item) {
-                        Ok(ty) => {
-                            let sch = generalize(&mut ctx, &tenv, &ty);
-                            let val = eval_item(&item, &mut env);
-                            println!("=> {}: {}", val, sch.pretty());
-                        }
-                        Err(e) => {
-                            eprintln!("type error: {:?}", e);
+                for mut item in items {
+                    if let Err(e) = resolve_item(&mut ctx, &mut icx, &mut impl_env, &mut env, &mut item) {
+                        eprintln!("resolve error: {}", e);
+                    }
+                    else {
+                        match infer_item(&mut ctx, &mut icx, &mut item) {
+                            Err(e) => {
+                                eprintln!("infer error: {}", e);
+                            }
+                            Ok(ty) => {
+                                if let Err(e) = apply_trait_impls_item(&mut item, &mut ctx, &icx, &impl_env) {
+                                    eprintln!("infer error: {}", e);
+                                }
+                                else {
+                                    // eprintln!("** ImplEnv **\n {:?}\n**", impl_env);
+                                    // eprintln!("** obligations **\n {:?}\n**", icx.obligations);
+                                    let sch = generalize(&mut ctx, &icx, &ty);
+                                    let val = eval_item(&item, &mut env);
+                                    println!("=> {}: {}", val, sch.pretty());
+                                }
+                            }
                         }
                     }
                 }
