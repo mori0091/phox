@@ -373,7 +373,7 @@ Example programs are available in the `examples/` directory.
 - [X] REPL with type inference output
 - [ ] Standard library (currently `Option`/`List` are built-in types as a temporary measure; will be moved out as a library)
 - [ ] Module system
-- [ ] Constraint-based type classes (future; Haskell-style type classes)
+- [X] Constraint-based type classes (future; Haskell-style type classes)
 
 ---
 
