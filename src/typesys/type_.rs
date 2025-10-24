@@ -1,4 +1,5 @@
 use std::fmt;
+use super::Scheme;
 
 // ===== Types =====
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -10,6 +11,8 @@ pub enum Type {
 
     Tuple(Vec<Type>),
     Record(Vec<(String, Type)>),
+
+    Overloaded(String, Vec<Scheme>),
 }
 
 impl Type {
@@ -33,6 +36,34 @@ impl Type {
     }
     pub fn fun(a: Type, b: Type) -> Self {
         Type::Fun(Box::new(a), Box::new(b))
+    }
+}
+
+use std::collections::HashMap;
+
+impl Type {
+    pub fn apply(&self, subst: &HashMap<TypeVarId, Type>) -> Type {
+        match self {
+            Type::Var(id) => subst.get(id).cloned().unwrap_or(Type::Var(*id)),
+            Type::Con(name) => Type::Con(name.clone()),
+            Type::Fun(t1, t2) => {
+                Type::fun(t1.apply(subst), t2.apply(subst))
+            }
+            Type::App(t1, t2) => {
+                Type::app(t1.apply(subst), t2.apply(subst))
+            }
+            Type::Tuple(ts) => {
+                let ts2 = ts.iter().map(|t| t.apply(subst)).collect();
+                Type::Tuple(ts2)
+            }
+            Type::Record(fields) => {
+                let fields2 = fields.iter().map(|(name, t)| (name.clone(), t.apply(subst))).collect();
+                Type::Record(fields2)
+            }
+            Type::Overloaded(_, _) => {
+                todo!()
+            }
+        }
     }
 }
 
@@ -75,6 +106,9 @@ impl fmt::Display for Type {
                                 .collect();
                     write!(f, "@{{ {} }}", s.join(", "))
                 }
+            }
+            Type::Overloaded(_name, _) => {
+                write!(f, "<overloaded>")
             }
         }
     }

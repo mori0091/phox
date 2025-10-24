@@ -34,6 +34,17 @@ impl Constraint {
     }
 }
 
+use std::collections::HashMap;
+
+impl Constraint {
+    pub fn apply(&self, subst: &HashMap<TypeVarId, Type>) -> Constraint {
+        Constraint {
+            name: self.name.clone(),
+            params: self.params.iter().map(|t| t.apply(subst)).collect(),
+        }
+    }
+}
+
 impl fmt::Display for Constraint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let tys = self.params
@@ -57,11 +68,35 @@ impl Scheme {
     pub fn new(vars: Vec<TypeVarId>, constraints: Vec<Constraint>, ty: Type) -> Scheme {
         Scheme { vars, constraints, ty }
     }
+    // pub fn new(mut vars: Vec<TypeVarId>, constraints: Vec<Constraint>, ty: Type) -> Scheme {
+    //     vars.sort();
+    //     vars.dedup();
+    //     Scheme { vars, constraints, ty }
+    // }
     pub fn mono(ty: Type) -> Scheme {
         Scheme::new(vec![], vec![], ty)
     }
     pub fn poly(vars: Vec<TypeVarId>, ty: Type) -> Scheme {
         Scheme::new(vars, vec![], ty)
+    }
+}
+
+impl Scheme {
+    pub fn apply(&self, subst: &HashMap<TypeVarId, Type>) -> Scheme {
+        let vars: Vec<_> = self
+            .vars
+            .iter()
+            .filter(|v| !subst.contains_key(*v))
+            .cloned()
+            .collect();
+        let constraints = self
+            .constraints
+            .iter()
+            .map(|c| c.apply(subst))
+            .collect();
+        let ty = self
+            .ty.apply(subst);
+        Scheme::new(vars, constraints, ty)
     }
 }
 
@@ -124,6 +159,19 @@ impl Scheme {
                         fields.iter().map(|(f, t)| (f.clone(), rename(t, map))).collect()
                     )
                 }
+                Type::Overloaded(name, cands) => {
+                    let mut new_cands = vec![];
+                    for sch in cands.iter() {
+                        let vars = sch.vars.clone();
+                        let constraints = sch.constraints.iter().map(|c| {
+                            let params = c.params.iter().map(|t| rename(t, map)).collect();
+                            Constraint { name: c.name.clone(), params }
+                        }).collect();
+                        let ty = rename(&sch.ty, map);
+                        new_cands.push(Scheme::new(vars, constraints, ty));
+                    }
+                    Type::Overloaded(name.clone(), new_cands)
+                }
             }
         }
 
@@ -135,7 +183,7 @@ impl Scheme {
                           .map(|c| c.to_string())
                           .collect::<Vec<_>>()
                 .join(", ");
-            renamed_ty = format!("({}) => {}", cs, renamed_ty);
+            renamed_ty = format!("{} => {}", cs, renamed_ty);
         }
 
         if self.vars.is_empty() {

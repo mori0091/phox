@@ -35,13 +35,16 @@ pub fn repl() {
             Ok(items) => {
                 for mut item in items {
                     if let Err(e) = resolve_item(&mut ctx, &mut icx, &mut impl_env, &mut env, &mut item) {
-                        eprintln!("resolve error: {:?}", e);
+                        eprintln!("resolve error: {}", e);
                     }
                     else {
                         match infer_item(&mut ctx, &mut icx, &mut item) {
+                            Err(e) => {
+                                eprintln!("infer error: {}", e);
+                            }
                             Ok(ty) => {
                                 if let Err(e) = apply_trait_impls_item(&mut item, &mut ctx, &icx, &impl_env) {
-                                    eprintln!("apply trait impl error: {:?}", e);
+                                    eprintln!("infer error: {}", e);
                                 }
                                 else {
                                     // eprintln!("** ImplEnv **\n {:?}\n**", impl_env);
@@ -50,9 +53,6 @@ pub fn repl() {
                                     let val = eval_item(&item, &mut env);
                                     println!("=> {}: {}", val, sch.pretty());
                                 }
-                            }
-                            Err(e) => {
-                                eprintln!("type error: {:?}", e);
                             }
                         }
                     }

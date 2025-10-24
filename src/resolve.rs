@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use crate::typesys::{TypeContext, InferCtx, ImplEnv};
 use crate::typesys::{TypeVarId, Kind, Type, Constraint, Scheme};
 use crate::typesys::TypeError;
-use crate::typesys::{instantiate, infer_expr};
+use crate::typesys::infer_expr;
 use crate::syntax::ast::{RawTraitDecl, RawImplDecl};
 use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType};
 use crate::syntax::ast::RawConstraint;
@@ -69,7 +69,7 @@ pub fn register_trait(
         //   -> infer_expr で曖昧さが残る場合は即エラー
         // - 曖昧さ解消のため; apply_trait_impls_expr で必要(だった)
         //   -> 現在の仕様では apply_trait_impls_expr の時点では曖昧さは残ってないはず
-        icx.member_env
+        icx.trait_member_env
            .entry(member.name.clone())
            .or_default()
            .insert(scheme);
@@ -88,37 +88,55 @@ pub fn register_impl(
         .collect();
 
     // 2. 制約キーを構築
-    let constraint = Constraint {
-        name: raw.name.clone(),
-        params: params.clone(),
-    };
+    let constraint = Constraint { name: raw.name.clone(), params: params.clone() };
 
     // 3. メンバ辞書を構築しながら型検査
     let mut member_map = HashMap::new();
     for member in &raw.members {
-        // 3a. member_env から候補を探す
-        let schemes = icx
-            .member_env
-            .get(&member.name)
-            .ok_or_else(|| TypeError::UnknownTraitMember(member.name.clone()))?;
+        // 3a. trait_member_env から該当 trait のメンバスキームを取得（clone で借用を切る）
+        let scheme = {
+            let schemes = icx.trait_member_env
+                .get(&member.name)
+                .ok_or_else(|| TypeError::UnknownTraitMember(member.name.clone()))?;
 
-        // 3b. impl が属する trait 名に一致するスキームを選ぶ
-        let scheme = schemes
-            .iter()
-            .find(|sch| sch.constraints.iter().any(|c| c.name == raw.name))
-            .ok_or_else(|| TypeError::UnknownTraitMember(member.name.clone()))?;
+            schemes.iter()
+                .find(|sch| sch.constraints.iter().any(|c| c.name == raw.name))
+                .cloned()
+                .ok_or_else(|| TypeError::UnknownTraitMember(member.name.clone()))?
+        };
 
-        // 3c. スキームを展開（型変数置換＋制約取得）
-        let (_constraints, expected_ty) = instantiate(ctx, scheme);
+        // 3b. trait の量化変数と impl の具体型を対応付ける置換を作る
+        // 例: vars = [a], params = [Int] → { a ↦ Int }
+        if scheme.vars.len() != params.len() {
+            return Err(TypeError::ArityMismatch {
+                trait_name: raw.name.clone(),
+                member: member.name.clone(),
+                expected: scheme.vars.len(),
+                actual: params.len(),
+            });
+        }
+        let subst: HashMap<TypeVarId, Type> =
+            scheme.vars.iter().cloned().zip(params.clone()).collect();
+
+        // 3c. スキームを具象化（instantiate は使わず、元スキームへ apply）
+        let concrete_sch = scheme.apply(&subst);
+        let expected_ty = concrete_sch.ty.clone();
+        let _expected_constraints = concrete_sch.constraints.clone();
 
         // 3d. impl の式を推論
         let mut expr = member.expr.clone();
         let actual_ty = infer_expr(ctx, icx, &mut expr)?;
 
-        // 3e. unify で型一致を確認
+        // 3e. unify で型一致を確認（必要なら制約処理もここで）
         ctx.unify(&expected_ty, &actual_ty)?;
 
-        // 3f. 登録
+        // 3f. impl_member_env に具象化済みスキームを登録
+        icx.impl_member_env
+            .entry(member.name.clone())
+            .or_default()
+            .insert(concrete_sch);
+
+        // 3g. ImplEnv にも式の本体を登録
         member_map.insert(member.name.clone(), *expr);
     }
 
@@ -321,7 +339,7 @@ pub fn register_type(decl: &TypeDecl, icx: &mut InferCtx) {
             // kind を構築
             let mut kind = Kind::Star;
             for _ in params.iter().rev() {
-                kind = Kind::Arrow(Box::new(Kind::Star), Box::new(kind));
+                kind = Kind::Fun(Box::new(Kind::Star), Box::new(kind));
             }
             icx.kind_env.insert(name.clone(), kind);
             // 各コンストラクタを登録

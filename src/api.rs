@@ -90,11 +90,11 @@ pub fn eval_program(src: &str) -> Result<(Value, Scheme), String> {
     let mut last = None;
     for mut item in tops {
         resolve_item(&mut ctx, &mut icx, &mut impl_env, &mut env, &mut item)
-            .map_err(|e| format!("resolve error: {e:?}"))?;
+            .map_err(|e| format!("resolve error: {e}"))?;
         let ty = infer_item(&mut ctx, &mut icx, &mut item)
-            .map_err(|e| format!("infer error: {e:?}"))?;
+            .map_err(|e| format!("infer error: {e}"))?;
         apply_trait_impls_item(&mut item, &mut ctx, &icx, &impl_env)
-            .map_err(|e| format!("apply trait impl error: {e:?}"))?;
+            .map_err(|e| format!("infer error: {e}"))?;
         let sch = generalize(&mut ctx, &icx, &ty);
         let val = eval_item(&item, &mut env);
         last = Some((val, sch));

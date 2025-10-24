@@ -8,8 +8,7 @@ mod scheme;
 pub use scheme::{Constraint, Scheme};
 
 mod infer;
-pub use infer::{KindEnv, TypeEnv, TraitMemberEnv, InferCtx, ImplEnv};
-pub use infer::{TypeContext, TypeError};
+pub use infer::{TypeContext, KindEnv, TypeEnv, TraitMemberEnv, InferCtx, ImplEnv};
 pub use infer::{initial_kind_env, initial_type_env};
 pub use infer::{infer_item, infer_stmt, infer_expr};
 pub use infer::{instantiate, generalize};
@@ -20,3 +19,6 @@ pub use apply_trait_impls::{
     apply_trait_impls_stmt,
     apply_trait_impls_expr,
 };
+
+mod error;
+pub use error::TypeError;

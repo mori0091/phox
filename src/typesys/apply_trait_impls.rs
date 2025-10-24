@@ -1,5 +1,5 @@
 use crate::syntax::ast::{Item, Stmt, Expr, ExprBody};
-use super::{ImplEnv, InferCtx, TypeContext, TypeError, Constraint};
+use super::{ImplEnv, InferCtx, TypeContext, TypeError, Constraint, Type};
 
 pub fn apply_trait_impls_item(
     item: &mut Item,
@@ -76,10 +76,18 @@ pub fn apply_trait_impls_expr(
             // 型情報が必要なので、型が推論済みであることを確認
             let ty = expr.ty.as_ref().ok_or(TypeError::MissingType)?;
 
+            // 推論器で解決しきれなかったエラーをここで拾う
+            if let Type::Overloaded(name, cands) = ty {
+                return Err(TypeError::AmbiguousVariable {
+                    name: name.clone(), // 元の変数名
+                    candidates: cands.clone(),
+                });
+            }
+
             // if icx.type_env.contains_key(name) {
-            if icx.member_env.contains_key(name) {
+            if icx.trait_member_env.contains_key(name) {
                 // このメンバに必要な制約を構築（型から導出）
-                let constraints = Constraint::from_trait_member(ctx, &icx.member_env, name, ty)?;
+                let constraints = Constraint::from_trait_member(ctx, &icx.trait_member_env, name, ty)?;
 
                 // 該当する実装候補を全部集める
                 let mut matches: Vec<(&Constraint, &Expr)> = Vec::new();

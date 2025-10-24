@@ -76,19 +76,39 @@ fn test_trait_record_first_class() {
     assert_eq!(format!("{}", sch.pretty()), "Bool");
 }
 
+#[test]
+fn test_trait_polymorphism() {
+    let src = r#"
+        trait Eq a {
+          eq  : a -> a -> Bool;
+          neq : a -> a -> Bool;
+        };
+        impl Eq Int {
+          eq  = \a.\b. a == b;
+          neq = \a.\b. a != b;
+        };
+        impl Eq Bool {
+          eq  = \a.\b. a == b;
+          neq = \a.\b. a != b;
+        };
+        eq 1 2
+    "#;
+    let (val, sch) = eval_program(src).unwrap();
+    assert_eq!(format!("{}", val), "false");
+    assert_eq!(format!("{}", sch.pretty()), "Bool");
+}
+
 // ------------------------
 
 #[test]
-#[should_panic(expected = "unbound variable: eq:")]
 fn test_unimplemented_trait_error() {
     // Bool に対して Eq が未実装
     let src = r#"
         trait Eq a { eq : a -> a -> Bool; };
         eq true false
     "#;
-    eval_program(src).unwrap();
-    // let err = eval_program(src).unwrap_err();
-    // assert!(format!("{}", err).contains("no implementation for Eq Bool"));
+    let err = eval_program(src).unwrap_err();
+    assert!(format!("{}", err).contains("infer error: UnboundVariable"));
 }
 
 #[test]
@@ -99,8 +119,7 @@ fn test_unbound_trait_record_error() {
         @{Eq Bool}
     "#;
     let err = eval_program(src).unwrap_err();
-    // assert!(format!("{}", err).contains("no implementation for Eq Bool"));
-    assert!(format!("{}", err).contains("MissingTraitImpl"));
+    assert!(format!("{}", err).contains("resolve error: no implementation for Eq Bool"));
 }
 
 #[test]
@@ -113,7 +132,7 @@ fn test_field_access_on_var_error() {
         f @{Eq Int} 1 2
     "#;
     let err = eval_program(src).unwrap_err();
-    assert!(format!("{}", err).contains("ExpectedRecord"));
+    assert!(format!("{}", err).contains("infer error: ExpectedRecord"));
 }
 
 #[test]
@@ -139,7 +158,10 @@ fn test_trait_member_conflict_error() {
         f 100
     "#;
     let err = eval_program(src).unwrap_err();
-    assert!(format!("{}", err).contains("AmbiguousVariable"));
+    eprintln!("{err}");
+    assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
+    assert!(format!("{}", err).contains("candidates: Bar Int => Int -> Int, Foo Int => Int -> Int"));
+    assert!(format!("{}", err).contains("hint: use @{Bar Int}.f or @{Foo Int}.f"));
 }
 
 #[test]
@@ -153,7 +175,10 @@ fn test_trait_member_non_conflict_1() {
         f 100
     "#;
     let err = eval_program(src).unwrap_err();
-    assert!(format!("{}", err).contains("AmbiguousVariable"));
+    eprintln!("{err}");
+    assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
+    assert!(format!("{}", err).contains("candidates: Bar Int => Int -> Int, Foo Int => Int -> Bool"));
+    assert!(format!("{}", err).contains("hint: use @{Bar Int}.f or @{Foo Int}.f"));
 }
 
 #[test]
@@ -196,8 +221,9 @@ fn test_trait_member_non_conflict_4() {
         impl Bar Int { f = \x. x; };
         f true
     "#;
-    let err = eval_program(src).unwrap_err();
-    assert!(format!("{}", err).contains("AmbiguousVariable"));
+    let (val, sch) = eval_program(src).unwrap();
+    assert_eq!(format!("{}", val), "1");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
 }
 
 #[test]
@@ -210,6 +236,23 @@ fn test_trait_member_non_conflict_5() {
         impl Bar Int { f = \x. x; };
         f 100
     "#;
+    let (val, sch) = eval_program(src).unwrap();
+    assert_eq!(format!("{}", val), "100");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_ambiguous_trait_type() {
+    let src = r#"
+        trait Foo a { f : a -> a; };
+        impl Foo Bool { f = \x. x; };
+        impl Foo Int { f = \x. x; };
+        f
+    "#;
     let err = eval_program(src).unwrap_err();
-    assert!(format!("{}", err).contains("AmbiguousVariable"));
+    // assert!(format!("{}", err).contains("infer error: AmbiguousVariable"));
+    eprintln!("{err}");
+    assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
+    assert!(format!("{}", err).contains("candidates: Foo Bool => Bool -> Bool, Foo Int => Int -> Int"));
+    assert!(format!("{}", err).contains("hint: use @{Foo Bool}.f or @{Foo Int}.f"));
 }
