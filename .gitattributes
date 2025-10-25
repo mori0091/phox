@@ -1,0 +1,11 @@
+# -*- coding: utf-8-unix -*-
+
+# `*.phx` files are code written in Phox language.
+#
+# Though GitHub does not know Phox, syntax of Phox is similar to Rust, ML, or
+# Haskell.
+#
+# The below reclassifies `.phx` files as Rust code for syntax highlighting but
+# not for language statistics on GitHub.
+
+*.phx linguist-language=Rust -linguist-detectable
