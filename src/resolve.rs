@@ -22,7 +22,7 @@ pub fn resolve_item(
             Ok(())
         }
         Item::RawImplDecl(raw) => {
-            register_impl(ctx, icx, impl_env, raw)
+            register_impl(ctx, icx, impl_env, env, raw)
         }
         Item::RawTypeDecl(raw) => {
             let tydecl = resolve_raw_type_decl(ctx, raw.clone());
@@ -80,6 +80,7 @@ pub fn register_impl(
     ctx: &mut TypeContext,
     icx: &mut InferCtx,
     impl_env: &mut ImplEnv,
+    env: &mut Env,
     raw: &RawImplDecl,
 ) -> Result<(), TypeError> {
     // 1. 型引数を RawType → Type に変換
@@ -125,6 +126,7 @@ pub fn register_impl(
 
         // 3d. impl の式を推論
         let mut expr = member.expr.clone();
+        resolve_expr(ctx, icx, impl_env, env, &mut expr)?;
         let actual_ty = infer_expr(ctx, icx, &mut expr)?;
 
         // 3e. unify で型一致を確認（必要なら制約処理もここで）
