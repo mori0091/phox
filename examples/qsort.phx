@@ -1,0 +1,37 @@
+type List a = Nil | Cons a (List a);
+
+let rec append = \xs.\ys. match (xs) {
+    Nil        => ys,
+    Cons x xs1 => Cons x (append xs1 ys),
+};
+
+let filter = \pred.\xs. {
+    let rec f = \xs.\ls.\rs. match (xs) {
+        Nil       => (ls, rs),
+        Cons y ys => match (pred y) {
+            true  => f ys ls (Cons y rs),
+            false => f ys (Cons y ls) rs,
+        },
+    };
+    f xs Nil Nil
+};
+
+let qsort = \cmp. {
+    let rec sort = \xs. match (xs) {
+        Nil       => Nil,
+        Cons y ys => match (filter (cmp y) ys) {
+            (ls, rs) => append (sort ls) (Cons y (sort rs)),
+        },
+    };
+    sort
+};
+
+// ---- test ----
+let list = (Cons 10 (Cons 2 (Cons 4 (Cons 9 (Cons 1 (Cons (-5) Nil))))));
+let accend = qsort (<=) list;
+let decend = qsort (>=) list;
+@{
+    list:   list,
+    accend: accend,
+    decend: decend,
+}
