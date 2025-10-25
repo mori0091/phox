@@ -31,20 +31,30 @@ pub fn repl() {
         }
         buffer.push_str(&line);
 
+        if buffer.starts_with(':') {
+            let res = handle_command(&buffer);
+            buffer.clear();
+            if let Some(src) = res {
+                buffer.push_str(&src);
+            }
+            else {
+                continue;
+            }
+        }
         match api::parse_items(&buffer) {
             Ok(items) => {
                 for mut item in items {
                     if let Err(e) = resolve_item(&mut ctx, &mut icx, &mut impl_env, &mut env, &mut item) {
-                        eprintln!("resolve error: {}", e);
+                        println!("resolve error: {}", e);
                     }
                     else {
                         match infer_item(&mut ctx, &mut icx, &mut item) {
                             Err(e) => {
-                                eprintln!("infer error: {}", e);
+                                println!("infer error: {}", e);
                             }
                             Ok(ty) => {
                                 if let Err(e) = apply_trait_impls_item(&mut item, &mut ctx, &icx, &impl_env) {
-                                    eprintln!("infer error: {}", e);
+                                    println!("infer error: {}", e);
                                 }
                                 else {
                                     // eprintln!("** ImplEnv **\n {:?}\n**", impl_env);
@@ -57,6 +67,7 @@ pub fn repl() {
                         }
                     }
                 }
+                println!();
                 buffer.clear();
                 prompt = "> ";
             }
@@ -65,10 +76,74 @@ pub fn repl() {
                 prompt = "| ";
             }
             Err(e) => {
-                eprintln!("parse error: {:?}", e);
+                println!();
+                println!("parse error: {:?}", e);
                 buffer.clear();
                 prompt = "> ";
             }
         }
     }
+}
+
+fn handle_command(input: &str) -> Option<String> {
+    let tokens: Vec<&str> = input.trim_start_matches(':').split_whitespace().collect();
+    match tokens.as_slice() {
+        ["quit"] | ["q"]  => {
+            exit();
+            None
+        }
+        ["help"] | ["h"] | ["?"] => {
+            help();
+            None
+        }
+        ["load", path] | ["l", path] => {
+            load_file(path)
+        }
+        ["load"] | ["l"] => {
+            println!("Required an argument: {}", input);
+            None
+        }
+        _ => {
+            println!("Unknown command: {}", input);
+            None
+        }
+    }
+}
+
+fn exit() {
+    println!();
+    std::process::exit(0)
+}
+
+fn help() {
+    println!(r#"
+:quit, :q
+    exit REPL.
+
+:help, :h, or :?
+    print this help messages.
+
+:load <path>, :l <path>
+    load and evaluate Phox source file specified by <path>.
+
+"#
+    );
+}
+
+fn load_file(path: &str) -> Option<String> {
+    match std::fs::read_to_string(path) {
+        Err(e) => {
+            println!("failed to read {}: {}", path, e);
+            println!("");
+            None
+        }
+        Ok(src) => {
+            Some(src)
+        }
+    }
+}
+
+fn _repl_todo() {
+    println!("Command not implemented yet.");
+    println!()
 }

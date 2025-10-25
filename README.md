@@ -331,6 +331,24 @@ cargo run
 => 120: Int
 ```
 
+In REPL, an input starts with `:` is recognized as a REPL command.  
+For example, `:?` shows the list of available commands:
+
+``` sh
+cargo run
+> :?
+
+:quit, :q
+    exit REPL.
+
+:help, :h, or :?
+    print this help messages.
+
+:load <path>, :l <path>
+    load and evaluate Phox source file specified by <path>.
+
+```
+
 ### Run a program file
 
 Pass a `.phx` file to execute it:
