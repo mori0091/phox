@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::syntax::ast::{Expr, ExprBody, Lit, Pat, Stmt, Item};
-use super::{Kind, Type, TypeVarId, Constraint, Scheme};
+use super::{ApplySubst, FreeTypeVars, Repr, Constraint, Kind, Scheme, TraitScheme, Type, TypeScheme, TypeVarId};
 use super::TypeError;
 
 // ===== Kind Environment =====
@@ -14,7 +14,7 @@ pub type KindEnv = HashMap<String, Kind>;
 // {
 //   "id": ∀ a. a -> a,
 // }
-pub type TypeEnv = HashMap<String, Scheme>;
+pub type TypeEnv = HashMap<String, TypeScheme>;
 
 // ===== Type Environment for trait member =====
 // maps name of trait member to set of type schemes.
@@ -25,7 +25,7 @@ pub type TypeEnv = HashMap<String, Scheme>;
 //     ∀ a. Bar a => a -> a,
 //   },
 // }
-pub type TraitMemberEnv = HashMap<String, HashSet<Scheme>>;
+pub type TraitMemberEnv = HashMap<String, HashSet<TypeScheme>>;
 
 // ===== Impl Environment =====
 // maps instance of trait to dictionary of its implementations.
@@ -36,7 +36,7 @@ pub type TraitMemberEnv = HashMap<String, HashSet<Scheme>>;
 //     "!=": primitive_neq_int,
 //   },
 // }
-pub type ImplEnv = HashMap<Constraint, HashMap<String, Expr>>;
+pub type ImplEnv = HashMap<TraitScheme, HashMap<String, Expr>>;
 
 // ===== Infer Context =====
 #[derive(Clone)]
@@ -79,7 +79,7 @@ impl InferCtx {
 #[derive(Clone)]
 pub struct TypeContext {
     parent: Vec<TypeVarId>,    // union-find parent pointers
-    binding: Vec<Option<Type>>, // representative binding (Some if bound to a type)
+    pub binding: Vec<Option<Type>>, // representative binding (Some if bound to a type)
 }
 
 impl TypeContext {
@@ -97,7 +97,7 @@ impl TypeContext {
 
 impl TypeContext {
     // find with path compression
-    fn find(&mut self, id: TypeVarId) -> TypeVarId {
+    pub fn find(&mut self, id: TypeVarId) -> TypeVarId {
         let p = self.parent[id.0];
         if p != id {
             let root = self.find(p);
@@ -144,79 +144,10 @@ impl TypeContext {
 }
 
 impl TypeContext {
-    // Normalize a type by chasing bindings and compressing vars
-    pub fn repr(&mut self, ty: &Type) -> Type {
-        match ty {
-            Type::Var(v) => {
-                let r = self.find(*v);
-                // ここでも Option<Type> をクローンして借用を解放
-                let bound_opt = self.binding[r.0].clone();
-                if let Some(bound) = bound_opt {
-                    self.repr(&bound)
-                } else {
-                    Type::Var(r)
-                }
-            }
-            Type::Fun(a, b) => Type::fun(self.repr(a), self.repr(b)),
-            Type::App(f, x) => Type::app(self.repr(f), self.repr(x)),
-            Type::Con(c) => Type::con(c.clone()),
-
-            Type::Tuple(ts) => {
-                Type::Tuple(
-                    ts.iter()
-                      .map(|t| self.repr(t)).collect()
-                )
-            }
-
-            Type::Record(fields) => {
-                Type::Record(
-                    fields.iter()
-                          .map(|(field, t)| (field.clone(), self.repr(t)))
-                          .collect()
-                )
-            }
-            Type::Overloaded(name, cands) => {
-                let mut new_cands = vec![];
-                for sch in cands.iter() {
-                    let vars = sch.vars.iter().map(|v| self.find(*v)).collect();
-                    let constraints = sch.constraints.iter().map(|c| {
-                        let params = c.params.iter().map(|t| self.repr(t)).collect();
-                        Constraint { name: c.name.clone(), params }
-                    }).collect();
-                    let ty = self.repr(&sch.ty);
-                    new_cands.push(Scheme::new(vars, constraints, ty));
-                }
-                Type::Overloaded(name.clone(), new_cands)
-            }
-        }
-    }
-}
-
-impl TypeContext {
     pub fn unify(&mut self, a: &Type, b: &Type) -> Result<(), TypeError> {
-        let a = self.repr(a);
-        let b = self.repr(b);
-        match (&a, &b) {
-            (Type::Var(v1), Type::Var(v2)) => {
-                let r1 = self.find(*v1);
-                let r2 = self.find(*v2);
-                if r1 != r2 {
-                    // union by attaching r1 under r2
-                    self.parent[r1.0] = r2;
-                }
-                Ok(())
-            }
-
+        match (a, b) {
             (Type::Var(v), t) | (t, Type::Var(v)) => {
-                let r = self.find(*v);
-                // t might reduce further; use repr to avoid deep chains
-                let t = self.repr(t);
-                if self.occurs_in(r, &t) {
-                    Err(TypeError::RecursiveType)
-                } else {
-                    self.binding[r.0] = Some(t);
-                    Ok(())
-                }
+                self.unify_var(*v, t)
             }
 
             (Type::Fun(a1, b1), Type::Fun(a2, b2)) => {
@@ -271,8 +202,46 @@ impl TypeContext {
                 todo!()
             }
 
-            _ => Err(TypeError::Mismatch(a, b)),
+            _ => Err(TypeError::Mismatch(a.clone(), b.clone())),
         }
+    }
+
+    fn unify_var(&mut self, v: TypeVarId, t: &Type) -> Result<(), TypeError> {
+        // 代表を取る
+        let r = self.find(v);
+
+        // 自分自身とのユニ化は無視
+        if let Type::Var(w) = t {
+            let rw = self.find(*w);
+            if r == rw {
+                return Ok(());
+            }
+        }
+
+        // 代表に束縛があるなら、その束縛と t を統合
+        if let Some(bound) = self.binding[r.0].clone() {
+            return self.unify(&bound, t);
+        }
+
+        // t 側が Var で束縛があるなら連結（Var vs Var の統合）
+        if let Type::Var(w) = t {
+            let rw = self.find(*w);
+            if let Some(bound_w) = self.binding[rw.0].clone() {
+                return self.unify(&Type::Var(r), &bound_w);
+            }
+            // どちらも未束縛 → 代表を連結
+            self.parent[r.0] = rw;
+            return Ok(());
+        }
+
+        // occurs check を生の t に対して実施
+        if self.occurs_in(r, t) {
+            return Err(TypeError::RecursiveType);
+        }
+
+        // ★ ここで repr はかけず、そのまま束縛。必要なら clone。
+        self.binding[r.0] = Some(t.clone());
+        Ok(())
     }
 }
 
@@ -320,18 +289,15 @@ impl TypeContext {
                     Lit::Bool(_) => Type::Con("Bool".to_string()),
                     Lit::Int(_) => Type::Con("Int".to_string()),
                 };
-                if &expected == ty {
-                    Ok(())
-                } else {
-                    Err(TypeError::Mismatch(expected, ty.clone()))
-                }
+                self.unify(&expected, ty)
             }
 
             Pat::Var(x) => {
                 let sch = if generalize_bindings {
                     generalize(self, &outer_icx, ty)   // let の場合
                 } else {
-                    Scheme::mono(self.repr(ty))       // Abs や match の場合は単相
+                    // TypeScheme::mono(ty.repr(self))       // Abs や match の場合は単相
+                    TypeScheme::mono(ty.clone()) // Abs や match の場合は単相
                 };
                 icx.type_env.insert(x.clone(), sch);
                 Ok(())
@@ -346,7 +312,7 @@ impl TypeContext {
                 let mut ty_fun = con_ty;
 
                 for _ in args {
-                    match self.repr(&ty_fun) {
+                    match ty_fun.repr(self) {
                         Type::Fun(a, b) => {
                             arg_types.push(*a);
                             ty_fun = *b;
@@ -380,7 +346,7 @@ impl TypeContext {
             }
 
             Pat::Record(fields) => {
-                let ty = self.repr(ty);
+                let ty = ty.repr(self);
                 if let Type::Record(ref tys) = ty {
                     for (fname, p) in fields {
                         let ft = tys.iter()
@@ -399,40 +365,14 @@ impl TypeContext {
 }
 
 // ===== Free type variables =====
-fn free_ty_vars(ctx: &mut TypeContext, ty: &Type, acc: &mut HashSet<TypeVarId>) {
-    match ctx.repr(ty) {
-        Type::Var(v) => {
-            acc.insert(v);
-        }
-        Type::Fun(ref a, ref b) => {
-            free_ty_vars(ctx, a, acc);
-            free_ty_vars(ctx, b, acc);
-        }
-        Type::Con(_) => {}
-        Type::App(ref a, ref b) => {
-            free_ty_vars(ctx, a, acc);
-            free_ty_vars(ctx, b, acc);
-        }
-        Type::Tuple(ts) => {
-            for ty in ts {
-                free_ty_vars(ctx, &ty, acc);
-            }
-        }
-        Type::Record(ref fields) => {
-            for (_, field_ty) in fields {
-                free_ty_vars(ctx, field_ty, acc);
-            }
-        }
-        Type::Overloaded(_, _) => {
-            // todo!()
-        }
-    }
-}
+// fn free_ty_vars(ctx: &mut TypeContext, ty: &Type, acc: &mut HashSet<TypeVarId>) {
+//     ty.free_type_vars(ctx, acc);
+// }
 
 fn free_env_vars(ctx: &mut TypeContext, icx: &InferCtx) -> HashSet<TypeVarId> {
     let mut acc = HashSet::new();
     for scheme in icx.type_env.values() {
-        free_ty_vars(ctx, &scheme.ty, &mut acc);
+        scheme.target.free_type_vars(ctx, &mut acc);
         for v in &scheme.vars {
             acc.remove(v);
         }
@@ -441,85 +381,27 @@ fn free_env_vars(ctx: &mut TypeContext, icx: &InferCtx) -> HashSet<TypeVarId> {
 }
 
 // ===== Instantiate / Generalize =====
-pub fn instantiate(ctx: &mut TypeContext, sch: &Scheme) -> (Vec<Constraint>, Type) {
-    let mut subst: HashMap<TypeVarId, TypeVarId> = HashMap::new();
+pub fn instantiate<T: ApplySubst>(ctx: &mut TypeContext, sch: &Scheme<T>) -> (Vec<Constraint>, T) {
+    let mut subst: HashMap<TypeVarId, Type> = HashMap::new();
     for &v in &sch.vars {
-        subst.insert(v, ctx.fresh_type_var_id());
+        subst.insert(v, Type::var(ctx.fresh_type_var_id()));
     }
 
-    let ty = substitute(ctx, &sch.ty, &subst);
+    let target = sch.target.apply_subst(&subst);
 
-    let constraints = sch.constraints.iter().map(|c| {
-        Constraint {
-            name: c.name.clone(),
-            params: c.params
-                     .iter()
-                     .map(|t| substitute(ctx, t, &subst))
-                     .collect(),
-        }
-    }).collect();
+    let constraints = sch.constraints.iter().map(|c| c.apply_subst(&subst)).collect();
 
-    (constraints, ty)
+    (constraints, target)
 }
 
-pub fn substitute(ctx: &mut TypeContext, t: &Type, subst: &HashMap<TypeVarId, TypeVarId>) -> Type {
-    match ctx.repr(t) {
-        Type::Var(v) => {
-            if let Some(nv) = subst.get(&v) {
-                Type::Var(*nv)
-            } else {
-                Type::Var(v)
-            }
-        }
-        Type::Fun(ref a, ref b) => {
-            Type::fun(substitute(ctx, a, subst), substitute(ctx, b, subst))
-        }
-        Type::Con(c) => {
-            Type::con(c)
-        }
-        Type::App(ref a, ref b) => {
-            Type::app(substitute(ctx, a, subst), substitute(ctx, b, subst))
-        }
-        Type::Tuple(ts) => {
-            Type::Tuple(ts.iter().map(|t| substitute(ctx, t, subst)).collect())
-        }
-        Type::Record(fields) => {
-            Type::Record(
-                fields.iter()
-                      .map(|(f, t)| (f.clone(), substitute(ctx, t, subst)))
-                      .collect()
-            )
-        }
-        Type::Overloaded(_, _) => {
-            todo!()
-        }
-    }
-}
-
-pub fn generalize(ctx: &mut TypeContext, icx: &InferCtx, ty: &Type) -> Scheme {
+pub fn generalize<T: FreeTypeVars + Repr>(ctx: &mut TypeContext, icx: &InferCtx, target: &T) -> Scheme<T> {
     let mut fty = HashSet::new();
-    free_ty_vars(ctx, ty, &mut fty);
+    target.free_type_vars(ctx, &mut fty);
     let fenv = free_env_vars(ctx, icx);
     let mut vars: Vec<TypeVarId> = fty.difference(&fenv).cloned().collect();
     vars.sort_by_key(|v| v.0);
-    Scheme::poly(vars, ctx.repr(ty))
+    Scheme::poly(vars, target.repr(ctx))
 }
-// pub fn generalize(ctx: &mut TypeContext, icx: &InferCtx, ty: &Type) -> Scheme {
-//     let mut fty = HashSet::new();
-//     free_ty_vars(ctx, ty, &mut fty);
-//
-//     for c in &icx.obligations {
-//         for t in &c.params {
-//             free_ty_vars(ctx, t, &mut fty);
-//         }
-//     }
-//
-//     let fenv = free_env_vars(ctx, icx);
-//     let mut vars: Vec<TypeVarId> = fty.difference(&fenv).cloned().collect();
-//     vars.sort_by_key(|v| v.0);
-//
-//     Scheme::new(vars, icx.obligations.clone(), ctx.repr(ty))
-// }
 
 // ===== Inference (Algorithm J core) =====
 pub fn infer_item(ctx: &mut TypeContext, icx: &mut InferCtx, item: &mut Item) -> Result<Type, TypeError> {
@@ -548,7 +430,7 @@ pub fn infer_stmt(ctx: &mut TypeContext, icx: &mut InferCtx, stmt: &mut Stmt) ->
             match pat {
                 Pat::Var(x) => {
                     let tv = Type::Var(ctx.fresh_type_var_id());
-                    icx.type_env.insert(x.clone(), Scheme::mono(tv.clone()));
+                    icx.type_env.insert(x.clone(), TypeScheme::mono(tv.clone()));
                     let t_expr = infer_expr(ctx, icx, expr)?;
                     ctx.unify(&tv, &t_expr)?;
                     let sch = generalize(ctx, icx, &tv);
@@ -578,60 +460,50 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
                         Some(cands) => {
                             (vec![], Type::Overloaded(name.clone(), cands.iter().cloned().collect()))
                         }
-                        // Some(cands) => {
-                        //     return Err(TypeError::AmbiguousVariable {
-                        //         name: name.clone(),
-                        //         candidates: cands.iter().cloned().collect(),
-                        //     });
-                        // }
                     }
                 }
             };
             ty
         }
 
-        // ExprBody::App(f, a) => {
-        //     let tf = infer_expr(ctx, icx, f)?;
-        //     let ta = infer_expr(ctx, icx, a)?;
-        //     let tr = Type::Var(ctx.fresh_type_var_id()); // result type variable
-        //     ctx.unify(&tf, &Type::fun(ta, tr.clone()))?;
-        //     tr
-        // }
         ExprBody::App(f, a) => {
             let tf = infer_expr(ctx, icx, f)?;
             let ta = infer_expr(ctx, icx, a)?;
             let tr = Type::Var(ctx.fresh_type_var_id());
 
             match tf {
-                Type::Overloaded(name, cands) => {
+                Type::Overloaded(_name, cands) => {
                     let mut filtered = Vec::new();
                     for sch in cands {
                         let (_, ty_inst) = instantiate(ctx, &sch);
                         if let Type::Fun(param, ret) = ty_inst {
                             let mut try_ctx = ctx.clone();
-                            if try_ctx.unify(&param, &ta).is_ok() {
-                                filtered.push((param, *ret, sch));
+                            if try_ctx.unify(&ta, &param).is_ok() {
+                                filtered.push((param.clone(), ret.clone(), sch, Type::Fun(param.clone(), ret.clone())));
                             }
                         }
                     }
+                    filtered.iter().min_by_key(|(_,_,sch,_)| sch.target.score());
                     match filtered.len() {
                         0 => return Err(TypeError::NoMatchingOverload),
-                        1 => {
-                            let (param_ty, ret_ty, sch) = filtered.pop().unwrap();
-                            ctx.unify(&param_ty, &ta)?;
-                            ctx.unify(&ret_ty, &tr)?;
+                        _ => {
+                            // let (param_ty, ret_ty, _sch, fun_inst) = filtered.pop().unwrap();
+                            let (param_ty, ret_ty, _sch, fun_inst) = filtered.iter().min_by_key(|(_,_,sch,_)| sch.target.score()).unwrap();
+                            ctx.unify(&ta, &param_ty)?;
+                            ctx.unify(&tr, &ret_ty)?;
 
                             // 曖昧だった `f` の型を確定する
-                            let (_, f_ty) = instantiate(ctx, &sch);
-                            f.ty = Some(f_ty);
+                            f.ty = Some(fun_inst.clone());
 
                             // App(f, a) の型
                             tr
                         }
-                        _ => return Err(TypeError::AmbiguousVariable {
-                            name: name.clone(), // 元の変数名を保持しておく
-                            candidates: filtered.into_iter().map(|(_,_,sch)| sch).collect(),
-                        }),
+                        // _ => {
+                        //     return Err(TypeError::AmbiguousVariable {
+                        //         name: name.clone(), // 元の変数名を保持しておく
+                        //         candidates: filtered.into_iter().map(|(_,_,sch,_)| sch).collect(),
+                        //     })
+                        // }
                     }
                 }
                 other => {
@@ -824,10 +696,10 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "None".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::app(
+            target: Type::app(
                 Type::con("Option"),
                 Type::var(a),
             ),
@@ -838,10 +710,10 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "Some".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(
+            target: Type::fun(
                 Type::var(a),
                 Type::app(
                     Type::con("Option"),
@@ -855,10 +727,10 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "Nil".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::app(Type::con("List"), Type::var(a)),
+            target: Type::app(Type::con("List"), Type::var(a)),
         },
     );
 
@@ -866,10 +738,10 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "Cons".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(
+            target: Type::fun(
                 Type::var(a),
                 Type::fun(
                     Type::app(Type::con("List"), Type::var(a)),
@@ -901,30 +773,30 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "__builtin_==__".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
 
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "__builtin_!=__".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
 
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "__builtin_<__".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
 
@@ -932,90 +804,90 @@ pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "__builtin_<=__".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
 
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "__builtin_>__".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
 
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "__builtin_>=__".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
         },
     );
 
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "__builtin_+__".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
+            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
         },
     );
 
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "__builtin_-__".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
+            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
         },
     );
 
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "__builtin_*__".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
+            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
         },
     );
 
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "__builtin_/__".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
+            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
         },
     );
 
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "negate".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::var(a)),
+            target: Type::fun(Type::var(a), Type::var(a)),
         },
     );
 
     let a = ctx.fresh_type_var_id();
     type_env.insert(
         "not".into(),
-        Scheme {
+        TypeScheme {
             vars: vec![a],
             constraints: vec![],
-            ty: Type::fun(Type::var(a), Type::var(a)),
+            target: Type::fun(Type::var(a), Type::var(a)),
         },
     );
 

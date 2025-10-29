@@ -1,5 +1,5 @@
 use crate::syntax::ast::{Item, Stmt, Expr, ExprBody};
-use super::{ImplEnv, InferCtx, TypeContext, TypeError, Constraint, Type};
+use super::{Constraint, ImplEnv, InferCtx, Type, TypeContext, TypeError, instantiate};
 
 pub fn apply_trait_impls_item(
     item: &mut Item,
@@ -89,12 +89,20 @@ pub fn apply_trait_impls_expr(
                 // このメンバに必要な制約を構築（型から導出）
                 let constraints = Constraint::from_trait_member(ctx, &icx.trait_member_env, name, ty)?;
 
-                // 該当する実装候補を全部集める
-                let mut matches: Vec<(&Constraint, &Expr)> = Vec::new();
-                for constraint in constraints.iter() {
-                    if let Some(impls) = impl_env.get(constraint) {
-                        if let Some(impl_expr) = impls.get(name) {
-                            matches.push((constraint, impl_expr));
+                let mut matches = Vec::new();
+                for (impl_head, member_map) in impl_env.iter() {
+                    // impl_sch: TraitScheme
+                    let (_impl_constraints, impl_head) = instantiate(ctx, impl_head);
+
+                    for constraint in constraints.iter() {
+                        // impl_head と required constraint を unify
+                        if impl_head.name == constraint.name {
+                            let mut try_ctx = ctx.clone();
+                            if constraint.unify(&mut try_ctx, &impl_head).is_ok() {
+                                if let Some(impl_expr) = member_map.get(name) {
+                                    matches.push((constraint.clone(), impl_expr.clone()));
+                                }
+                            }
                         }
                     }
                 }
@@ -103,20 +111,21 @@ pub fn apply_trait_impls_expr(
                         // 実装が見つからない → 何もしない
                         // 通常の変数参照なら infer_expr 側で処理される
                     }
-                    1 => {
-                        let (_, impl_expr) = matches.pop().unwrap();
+                    _ => {
+                        // let (_, impl_expr) = matches.pop().unwrap();
+                        let (_, impl_expr) = matches.iter().min_by_key(|(c, _)| c.score()).unwrap();
                         expr.body = impl_expr.body.clone();
                         // expr.ty は既に推論済みなのでそのままでOK
                     }
-                    _ => {
-                        let cand_traits: Vec<String> =
-                            matches.iter().map(|(c, _)| c.to_string()).collect();
-                        return Err(TypeError::AmbiguousTraitMember {
-                            member: name.clone(),
-                            ty: ty.clone(),
-                            candidates: cand_traits,
-                        });
-                    }
+                    // _ => {
+                    //     let cand_traits: Vec<String> =
+                    //         matches.iter().map(|(c, _)| c.to_string()).collect();
+                    //     return Err(TypeError::AmbiguousTraitMember {
+                    //         member: name.clone(),
+                    //         ty: ty.clone(),
+                    //         candidates: cand_traits,
+                    //     });
+                    // }
                 }
             }
         }

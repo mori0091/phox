@@ -14,7 +14,7 @@ use crate::syntax::token::{Token, LexicalError};
 use crate::resolve::resolve_item;
 
 use crate::typesys::infer_item;
-use crate::typesys::{Type, Scheme};
+use crate::typesys::{Type, TypeScheme};
 use crate::typesys::{TypeContext, InferCtx, ImplEnv, infer_expr, generalize};
 use crate::typesys::apply_trait_impls_item;
 
@@ -30,7 +30,7 @@ pub fn parse_expr(src: &str) -> Result<Expr, String> {
 }
 
 /// Infer type scheme of Expr AST.
-pub fn infer_expr_scheme(ast: &mut Expr) -> Result<Scheme, String> {
+pub fn infer_expr_scheme(ast: &mut Expr) -> Result<TypeScheme, String> {
     let mut ctx = TypeContext::new();
     let mut icx = InferCtx::initial(&mut ctx);
     let ty = infer_expr(&mut ctx, &mut icx, ast)
@@ -42,11 +42,11 @@ pub fn infer_expr_scheme(ast: &mut Expr) -> Result<Scheme, String> {
 /// Infer type of Expr AST.
 pub fn infer_expr_type(ast: &mut Expr) -> Result<Type, String> {
     let sch = infer_expr_scheme(ast)?;
-    Ok(sch.ty)
+    Ok(sch.target)
 }
 
 /// Parse and infer type scheme of an expression.
-pub fn check_expr_scheme(src: &str) -> Result<Scheme, String> {
+pub fn check_expr_scheme(src: &str) -> Result<TypeScheme, String> {
     let mut ast = parse_expr(src)?;
     infer_expr_scheme(&mut ast)
 }
@@ -54,11 +54,11 @@ pub fn check_expr_scheme(src: &str) -> Result<Scheme, String> {
 /// Parse and infer type of an expression.
 pub fn check_expr_type(src: &str) -> Result<Type, String> {
     let sch = check_expr_scheme(src)?;
-    Ok(sch.ty)
+    Ok(sch.target)
 }
 
 /// Parse, infer type scheme, and evaluate of an expression.
-pub fn eval_expr(src: &str) -> Result<(Value, Scheme), String> {
+pub fn eval_expr(src: &str) -> Result<(Value, TypeScheme), String> {
     let mut ast = parse_expr(src)?;
     let sch = infer_expr_scheme(&mut ast)?;
     let mut env = initial_env();
@@ -78,7 +78,7 @@ pub fn parse_program(src: &str) -> Result<Program, ParseError<usize, Token, Lexi
 }
 
 /// Parse, infer type scheme, and evaluate of a program.
-pub fn eval_program(src: &str) -> Result<(Value, Scheme), String> {
+pub fn eval_program(src: &str) -> Result<(Value, TypeScheme), String> {
     let tops = parse_program(src)
         .map_err(|e| format!("parse error: {e:?}"))?;
 

@@ -1,5 +1,5 @@
 use std::fmt;
-use crate::typesys::{Type, TypeVarId, Scheme};
+use crate::typesys::{Type, TypeVarId, TypeScheme};
 
 #[derive(Clone, Debug)]
 pub enum TypeDecl {
@@ -63,7 +63,7 @@ impl Variant {
 }
 
 impl Variant {
-    pub fn as_scheme(&self, type_name: &str, params: &[TypeVarId]) -> (String, Scheme) {
+    pub fn as_scheme(&self, type_name: &str, params: &[TypeVarId]) -> (String, TypeScheme) {
         // 型コンストラクタ適用: Option a, Result a b, ...
         let mut applied = Type::Con(type_name.to_string());
         for &p in params {
@@ -83,7 +83,7 @@ impl Variant {
         };
 
         // Scheme 化
-        let scheme = Scheme::poly(params.to_vec(), ctor_type);
+        let scheme = TypeScheme::poly(params.to_vec(), ctor_type);
 
         // コンストラクタ名と Scheme を返す
         (self.name().to_string(), scheme)

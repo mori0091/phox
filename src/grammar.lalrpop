@@ -236,10 +236,6 @@ StmtLetRec: Stmt = {
 
 // ----------------------------------------------
 pub Expr: Expr = {
-    Expr0,
-};
-
-Expr0: Expr = {
     Expr1,
 };
 
