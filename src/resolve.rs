@@ -52,23 +52,22 @@ pub fn register_trait(
         var_ids.push(id);
     }
 
+    let constraint = Constraint {
+        name: raw.name.clone(),
+        params: var_ids.iter().map(|v| Type::Var(*v)).collect(),
+    };
+
     // 2. 各メンバを TypeScheme に変換して登録
     for member in &raw.members {
         let raw_ty = &member.ty;
         let ty = resolve_raw_type(ctx, raw_ty, &var_map);
 
-        let constraint = Constraint {
-            name: raw.name.clone(),
-            params: var_ids.iter().map(|v| Type::Var(*v)).collect(),
-        };
+        let scheme = TypeScheme::new(var_ids.clone(), vec![constraint.clone()], ty);
 
-        let scheme = TypeScheme::new(var_ids.clone(), vec![constraint], ty);
-
-        // trait メンバは member_env に登録する。type_env には登録しない。
-        // - 曖昧さ早期発見のため; infer_expr で必要
-        //   -> infer_expr で曖昧さが残る場合は即エラー
-        // - 曖昧さ解消のため; apply_trait_impls_expr で必要(だった)
-        //   -> 現在の仕様では apply_trait_impls_expr の時点では曖昧さは残ってないはず
+        // trait メンバのスキームを `trait_member_env` に登録する。
+        // - `type_env` には登録しない。
+        // - `register_impl` で型の検査／検証の為にだけ使用する。
+        // - `infer_*` 以降のフェーズでは使わない。
         icx.trait_member_env
            .entry(member.name.clone())
            .or_default()
@@ -125,15 +124,17 @@ pub fn register_impl(
         // 3c. スキームを具象化（instantiate は使わず、元スキームへ apply）
         let concrete_sch = scheme.apply_subst(&subst);
         let expected_ty = concrete_sch.target.clone();
-        let _expected_constraints = concrete_sch.constraints.clone();
+        let expected_constraints = concrete_sch.constraints.clone();
 
+        // ------------------------------------------------------------------------
         // 3d. impl の式を推論
         let mut expr = member.expr.clone();
         resolve_expr(ctx, icx, impl_env, env, &mut expr)?;
-        let actual_ty = infer_expr(ctx, icx, &mut expr)?;
+        // ------------------------------------------------------------------------
 
         // 3e. unify で型一致を確認（必要なら制約処理もここで）
         // eprintln!("member: {}, expected: {} , actual: {}", member.name, expected_ty.repr(ctx), actual_ty.repr(ctx));
+        let actual_ty = infer_expr(ctx, icx, &mut expr)?;
         ctx.unify(&expected_ty, &actual_ty)?;
 
         // 3f. impl_member_env に具象化済みスキームを登録
@@ -142,7 +143,7 @@ pub fn register_impl(
         // target 側
         expected_ty.free_type_vars(ctx, &mut free);
         // constraints 側のパラメータに現れる自由変数も加える
-        for c in &_expected_constraints {
+        for c in &expected_constraints {
             for p in &c.params {
                 p.free_type_vars(ctx, &mut free);
             }
@@ -153,7 +154,7 @@ pub fn register_impl(
         vars.sort_by_key(|v| v.0);
 
         // 完全量化した新スキームを作る（repr は不要。推論中は生の型でOK）
-        let generalized_concrete = TypeScheme::new(vars, _expected_constraints.clone(), expected_ty.clone());
+        let generalized_concrete = TypeScheme::new(vars, expected_constraints.clone(), expected_ty.clone());
 
         // 登録
         icx.impl_member_env
@@ -161,13 +162,17 @@ pub fn register_impl(
            .or_default()
            .insert(generalized_concrete);
 
+        // ------------------------------------------------------------------------
         // 3g. ImplEnv にも式の本体を登録
         member_map.insert(member.name.clone(), *expr);
+        // ------------------------------------------------------------------------
     }
 
+    // ------------------------------------------------------------------------
     // 4. ImplEnv に登録
     let trait_sch = generalize(ctx, icx, &constraint);
     impl_env.insert(trait_sch, member_map);
+    // ------------------------------------------------------------------------
 
     Ok(())
 }
@@ -258,32 +263,22 @@ pub fn resolve_expr(
                     // 実装が見つからない
                     Err(TypeError::MissingTraitImpl(constraint.clone()))
                 }
-                _ => {
-                    // (特殊化度, 汎用度) のスコアでソート
-                    let mut sorted = matches;
-                    sorted.sort_by_key(|(sch, _)| sch.target.score());
-
-                    // 先頭が最も具体的
-                    let best = &sorted[0];
-                    let best_count = best.0.vars.len();
-
-                    // 同じスコアの候補が複数あれば曖昧
-                    if sorted.iter().take_while(|(sch,_)| sch.vars.len() == best_count).count() > 1 {
-                        let cand_traits: Vec<String> =
-                            sorted.into_iter().map(|(trait_sch, _)| trait_sch.target.to_string()).collect();
-                        return Err(TypeError::AmbiguousTrait {
-                            constraint: constraint.to_string(),
-                            candidates: cand_traits,
-                        });
-                    }
-
-                    let (impl_sch, impls) = best;
+                1 => {
+                    let (impl_sch, impls) = matches[0];
                     let (_impl_constraints, impl_head) = impl_sch.instantiate(ctx);
                     constraint.unify(ctx, &impl_head)?;
                     let fields: Vec<(String, Expr)> = impls
                         .iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                     expr.body = ExprBody::Record(fields);
                     Ok(())
+                }
+                _ => {
+                    let cand_traits: Vec<String> =
+                        matches.into_iter().map(|(trait_sch, _)| trait_sch.target.to_string()).collect();
+                    Err(TypeError::AmbiguousTrait {
+                        constraint: constraint.to_string(),
+                        candidates: cand_traits,
+                    })
                 }
             }
         }

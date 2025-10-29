@@ -108,7 +108,7 @@ impl InferCtx {
 #[derive(Clone)]
 pub struct TypeContext {
     parent: Vec<TypeVarId>,    // union-find parent pointers
-    pub binding: Vec<Option<Type>>, // representative binding (Some if bound to a type)
+    binding: Vec<Option<Type>>, // representative binding (Some if bound to a type)
 }
 
 impl TypeContext {
@@ -133,6 +133,11 @@ impl TypeContext {
             self.parent[id.0] = root;
         }
         self.parent[id.0]
+    }
+
+    pub fn get_bound(&mut self, v: &TypeVarId) -> Option<Type> {
+        let r = self.find(*v);
+        self.binding[r.0].clone()
     }
 }
 
@@ -471,14 +476,18 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
         ExprBody::Var(name) => {
             // println!("lookup {}: type_env={:?}, trait_member_env={:?}, impl_member_env={:?}",
             //          name, icx.type_env.get(name), icx.trait_member_env.get(name), icx.impl_member_env);
-            let (_constraints, ty) = match icx.type_env.get(name) {
-                Some(sch) => sch.instantiate(ctx),
+            match icx.type_env.get(name) {
+                Some(sch) => {
+                    let (_constraints, ty) = sch.instantiate(ctx);
+                    ty
+                }
                 None => {
-                    match icx.impl_member_env.get(name) {
+                    match icx.impl_member_env.get(name).clone() {
                         None => return Err(TypeError::UnboundVariable(name.clone())),
                         Some(cands) if cands.len() == 1 => {
-                            let sch = cands.iter().next().unwrap();
-                            sch.instantiate(ctx)
+                            let cand = cands.iter().next().unwrap();
+                            let (_constraints, ty) = cand.instantiate(ctx);
+                            ty
                         }
                         Some(cands) => {
                             let name = name.clone();
@@ -487,12 +496,11 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
                             // for c in cands.iter() {
                             //     eprintln!("  {}", c.pretty());
                             // }
-                            (vec![], Type::Overloaded(name, cands))
+                            Type::Overloaded(name, cands)
                         }
                     }
                 }
-            };
-            ty
+            }
         }
 
         ExprBody::App(f, a) => {
@@ -503,19 +511,18 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
             match tf {
                 Type::Overloaded(name, cands) => {
                     let mut filtered = Vec::new();
-                    for sch in cands {
-                        // 1) ta の移植は try_ctx へ
+                    for cand in cands {
+                        // 1) ctx を複製して試行用の try_ctx を作る
                         let mut try_ctx = ctx.clone();
-                        let try_ta = ta.repr(&mut try_ctx);
 
                         // 2) 候補は try_ctx で fresh 化
-                        let (_, ty_inst) = &sch.instantiate(&mut try_ctx);
+                        let (_, ty_inst) = &cand.instantiate(&mut try_ctx); // 制約の型引数のみ instantiate
 
                         // 3) フィルタ判定は「引数のみ」
                         if let Type::Fun(param, _) = &ty_inst {
-                            if try_ctx.unify(&try_ta, param).is_ok() {
+                            if try_ctx.unify(&ta, param).is_ok() {
                                 // eprintln!("try_ta vs param: {} vs {}", try_ta.repr(&mut try_ctx), param.repr(&mut try_ctx));
-                                filtered.push(sch);
+                                filtered.push(cand);
                             }
                         }
                     }

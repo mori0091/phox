@@ -117,13 +117,10 @@ impl Repr for Type {
     fn repr(&self, ctx: &mut TypeContext) -> Self {
         match self {
             Type::Var(v) => {
-                let r = ctx.find(*v);
-                // ここでも Option<Type> をクローンして借用を解放
-                let bound_opt = ctx.binding[r.0].clone();
-                if let Some(bound) = bound_opt {
+                if let Some(bound) = ctx.get_bound(v) {
                     bound.repr(ctx)
                 } else {
-                    Type::Var(r)
+                    Type::Var(ctx.find(*v))
                 }
             }
             Type::Fun(a, b) => Type::fun(a.repr(ctx), b.repr(ctx)),
