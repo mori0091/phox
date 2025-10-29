@@ -2,7 +2,7 @@ use std::fmt;
 use std::collections::{HashMap, HashSet};
 use crate::typesys::ApplySubst;
 use crate::typesys::{Type, TypeVarId};
-use crate::typesys::{TypeError, TypeContext, TraitMemberEnv, instantiate};
+use crate::typesys::{TypeError, TypeContext, TraitMemberEnv};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Constraint {
@@ -23,7 +23,7 @@ impl Constraint {
 
         let mut out = Vec::new();
         for scheme in entries {
-            let (constraints, trait_ty) = instantiate(ctx, scheme);
+            let (constraints, trait_ty) = scheme.instantiate(ctx);
             if ctx.unify(&trait_ty, member_ty).is_ok() {
                 let resolved = constraints.into_iter().map(|mut c| {
                     c.params = c.params.into_iter().map(|t| t.repr(ctx)).collect();

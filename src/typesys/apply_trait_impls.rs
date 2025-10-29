@@ -1,5 +1,5 @@
 use crate::syntax::ast::{Item, Stmt, Expr, ExprBody};
-use super::{Constraint, ImplEnv, InferCtx, Type, TypeContext, TypeError, instantiate};
+use super::{Constraint, ImplEnv, InferCtx, Type, TypeContext, TypeError};
 
 pub fn apply_trait_impls_item(
     item: &mut Item,
@@ -92,7 +92,7 @@ pub fn apply_trait_impls_expr(
                 let mut matches = Vec::new();
                 for (impl_head, member_map) in impl_env.iter() {
                     // impl_sch: TraitScheme
-                    let (_impl_constraints, impl_head) = instantiate(ctx, impl_head);
+                    let (_impl_constraints, impl_head) = impl_head.instantiate(ctx);
 
                     for constraint in constraints.iter() {
                         // impl_head と required constraint を unify

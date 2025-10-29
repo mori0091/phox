@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::typesys::{generalize, instantiate, ImplEnv, InferCtx, TypeContext};
+use crate::typesys::{generalize, ImplEnv, InferCtx, TypeContext};
 use crate::typesys::{TypeVarId, Kind, Type, Constraint, TypeScheme, ApplySubst};
 use crate::typesys::TypeError;
 use crate::typesys::infer_expr;
@@ -243,7 +243,7 @@ pub fn resolve_expr(
             let mut matches = Vec::new();
             for (impl_sch, member_map) in impl_env.iter() {
                 // impl_sch: TraitScheme
-                let (_impl_constraints, impl_head) = instantiate(ctx, impl_sch);
+                let (_impl_constraints, impl_head) = impl_sch.instantiate(ctx);
 
                 // impl_head と required constraint を unify
                 if impl_head.name == constraint.name && impl_head.score() == base_score {
@@ -278,7 +278,7 @@ pub fn resolve_expr(
                     }
 
                     let (impl_sch, impls) = best;
-                    let (_impl_constraints, impl_head) = instantiate(ctx, impl_sch);
+                    let (_impl_constraints, impl_head) = impl_sch.instantiate(ctx);
                     constraint.unify(ctx, &impl_head)?;
                     let fields: Vec<(String, Expr)> = impls
                         .iter().map(|(k, v)| (k.clone(), v.clone())).collect();

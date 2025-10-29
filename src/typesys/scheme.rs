@@ -43,6 +43,23 @@ impl <T: ApplySubst> ApplySubst for Scheme<T> {
     }
 }
 
+use super::TypeContext;
+
+impl <T: ApplySubst> Scheme<T> {
+    pub fn instantiate(&self, ctx: &mut TypeContext) -> (Vec<Constraint>, T) {
+        let mut subst: HashMap<TypeVarId, Type> = HashMap::new();
+        for &v in self.vars.iter() {
+            subst.insert(v, Type::var(ctx.fresh_type_var_id()));
+        }
+
+        let target = self.target.apply_subst(&subst);
+
+        let constraints = self.constraints.iter().map(|c| c.apply_subst(&subst)).collect();
+
+        (constraints, target)
+    }
+}
+
 impl <T: fmt::Display> fmt::Display for Scheme<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.vars.is_empty() {

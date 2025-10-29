@@ -29,7 +29,7 @@ mod infer;
 pub use infer::{TypeContext, KindEnv, TypeEnv, TraitMemberEnv, InferCtx, ImplEnv};
 pub use infer::{initial_kind_env, initial_type_env};
 pub use infer::{infer_item, infer_stmt, infer_expr};
-pub use infer::{instantiate, generalize};
+pub use infer::generalize;
 
 mod apply_trait_impls;
 pub use apply_trait_impls::{

@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::syntax::ast::{Expr, ExprBody, Lit, Pat, Stmt, Item};
-use super::{ApplySubst, FreeTypeVars, Repr, Constraint, Kind, Scheme, TraitScheme, Type, TypeScheme, TypeVarId};
+use super::{FreeTypeVars, Repr, Kind, Scheme, TraitScheme, Type, TypeScheme, TypeVarId};
 use super::TypeError;
 
 // ===== Kind Environment =====
@@ -18,22 +18,51 @@ pub type TypeEnv = HashMap<String, TypeScheme>;
 
 // ===== Type Environment for trait member =====
 // maps name of trait member to set of type schemes.
+//
 // ex.
-// {
-//   "f": {
-//     ∀ a. Foo a => a -> a,
-//     ∀ a. Bar a => a -> a,
+//
+// trait_member_env: TraitMemberEnv = {
+//   "bind": {
+//     ∀ m. Monad m => (∀ a b. m a -> (a -> m b) -> m b),
 //   },
 // }
+//
+// impl_member_env: TraitMemberEnv = {
+//   "bind": {
+//          Monad Option      => (∀ a b. Option a -> (a -> Option b) -> Option b),
+//          Monad (Result ()) => (∀ a b. Result () a -> (a -> Result () b) -> Result () b),
+//     ∀ e. Monad (Result e)  => (∀ a b. Result e a -> (a -> Result e b) -> Result e b),
+//   },
+// }
+//
 pub type TraitMemberEnv = HashMap<String, HashSet<TypeScheme>>;
 
 // ===== Impl Environment =====
 // maps instance of trait to dictionary of its implementations.
 // ex.
-// {
-//   (Eq Int): {
-//     "==": primitive_eq_int,
-//     "!=": primitive_neq_int,
+// impl_env: ImplEnv = {
+//   (Monad Option): {
+//     "pure": \a. Some a,
+//     "bind": \a.\f. match (a) {
+//       None => None,
+//       Some x => f x,
+//     },
+//   },
+//
+//   (Monad (Result ())): {
+//     "pure": \a. Ok a,
+//     "bind": \a.\f. match (a) {
+//       Err () => Err (),
+//       Ok ok  => f ok,
+//     },
+//   },
+//
+//   (∀ e. Monad (Result e)): {
+//     "pure": \a. Ok a,
+//     "bind": \a.\f. match (a) {
+//       Err err => Err err,
+//       Ok ok  => f ok,
+//     },
 //   },
 // }
 pub type ImplEnv = HashMap<TraitScheme, HashMap<String, Expr>>;
@@ -202,7 +231,10 @@ impl TypeContext {
                 todo!()
             }
 
-            _ => Err(TypeError::Mismatch(a.clone(), b.clone())),
+            _ => {
+                // eprintln!("unify failed: {a:?} vs {b:?}");
+                Err(TypeError::Mismatch(a.clone(), b.clone()))
+            }
         }
     }
 
@@ -305,7 +337,7 @@ impl TypeContext {
 
             Pat::Con(name, args) => {
                 let scheme = icx.type_env.get(name).ok_or(TypeError::UnknownConstructor(name.clone()))?;
-                let (_constraints, con_ty) = instantiate(self, scheme);
+                let (_constraints, con_ty) = scheme.instantiate(self);
                 // icx.obligations.extend(constraints);
 
                 let mut arg_types = Vec::new();
@@ -381,18 +413,9 @@ fn free_env_vars(ctx: &mut TypeContext, icx: &InferCtx) -> HashSet<TypeVarId> {
 }
 
 // ===== Instantiate / Generalize =====
-pub fn instantiate<T: ApplySubst>(ctx: &mut TypeContext, sch: &Scheme<T>) -> (Vec<Constraint>, T) {
-    let mut subst: HashMap<TypeVarId, Type> = HashMap::new();
-    for &v in &sch.vars {
-        subst.insert(v, Type::var(ctx.fresh_type_var_id()));
-    }
-
-    let target = sch.target.apply_subst(&subst);
-
-    let constraints = sch.constraints.iter().map(|c| c.apply_subst(&subst)).collect();
-
-    (constraints, target)
-}
+// pub fn instantiate<T: ApplySubst>(ctx: &mut TypeContext, sch: &Scheme<T>) -> (Vec<Constraint>, T) {
+//     sch.instantiate(ctx)
+// }
 
 pub fn generalize<T: FreeTypeVars + Repr>(ctx: &mut TypeContext, icx: &InferCtx, target: &T) -> Scheme<T> {
     let mut fty = HashSet::new();
@@ -449,16 +472,22 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
             // println!("lookup {}: type_env={:?}, trait_member_env={:?}, impl_member_env={:?}",
             //          name, icx.type_env.get(name), icx.trait_member_env.get(name), icx.impl_member_env);
             let (_constraints, ty) = match icx.type_env.get(name) {
-                Some(sch) => instantiate(ctx, sch),
+                Some(sch) => sch.instantiate(ctx),
                 None => {
                     match icx.impl_member_env.get(name) {
                         None => return Err(TypeError::UnboundVariable(name.clone())),
                         Some(cands) if cands.len() == 1 => {
                             let sch = cands.iter().next().unwrap();
-                            instantiate(ctx, sch)
+                            sch.instantiate(ctx)
                         }
                         Some(cands) => {
-                            (vec![], Type::Overloaded(name.clone(), cands.iter().cloned().collect()))
+                            let name = name.clone();
+                            let cands: Vec<_> = cands.iter().cloned().collect();
+                            // eprintln!("candidates (before filtered) for \"{name}\"");
+                            // for c in cands.iter() {
+                            //     eprintln!("  {}", c.pretty());
+                            // }
+                            (vec![], Type::Overloaded(name, cands))
                         }
                     }
                 }
@@ -467,45 +496,55 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
         }
 
         ExprBody::App(f, a) => {
-            let tf = infer_expr(ctx, icx, f)?;
             let ta = infer_expr(ctx, icx, a)?;
+            let tf = infer_expr(ctx, icx, f)?;
             let tr = Type::Var(ctx.fresh_type_var_id());
 
             match tf {
-                Type::Overloaded(_name, cands) => {
+                Type::Overloaded(name, cands) => {
                     let mut filtered = Vec::new();
                     for sch in cands {
-                        let (_, ty_inst) = instantiate(ctx, &sch);
-                        if let Type::Fun(param, ret) = ty_inst {
-                            let mut try_ctx = ctx.clone();
-                            if try_ctx.unify(&ta, &param).is_ok() {
-                                filtered.push((param.clone(), ret.clone(), sch, Type::Fun(param.clone(), ret.clone())));
+                        // 1) ta の移植は try_ctx へ
+                        let mut try_ctx = ctx.clone();
+                        let try_ta = ta.repr(&mut try_ctx);
+
+                        // 2) 候補は try_ctx で fresh 化
+                        let (_, ty_inst) = &sch.instantiate(&mut try_ctx);
+
+                        // 3) フィルタ判定は「引数のみ」
+                        if let Type::Fun(param, _) = &ty_inst {
+                            if try_ctx.unify(&try_ta, param).is_ok() {
+                                // eprintln!("try_ta vs param: {} vs {}", try_ta.repr(&mut try_ctx), param.repr(&mut try_ctx));
+                                filtered.push(sch);
                             }
                         }
                     }
-                    filtered.iter().min_by_key(|(_,_,sch,_)| sch.target.score());
-                    match filtered.len() {
-                        0 => return Err(TypeError::NoMatchingOverload),
-                        _ => {
-                            // let (param_ty, ret_ty, _sch, fun_inst) = filtered.pop().unwrap();
-                            let (param_ty, ret_ty, _sch, fun_inst) = filtered.iter().min_by_key(|(_,_,sch,_)| sch.target.score()).unwrap();
-                            ctx.unify(&ta, &param_ty)?;
-                            ctx.unify(&tr, &ret_ty)?;
 
-                            // 曖昧だった `f` の型を確定する
-                            f.ty = Some(fun_inst.clone());
-
-                            // App(f, a) の型
-                            tr
-                        }
-                        // _ => {
-                        //     return Err(TypeError::AmbiguousVariable {
-                        //         name: name.clone(), // 元の変数名を保持しておく
-                        //         candidates: filtered.into_iter().map(|(_,_,sch,_)| sch).collect(),
-                        //     })
-                        // }
+                    if filtered.is_empty() {
+                        return Err(TypeError::NoMatchingOverload);
                     }
+
+                    let winner = filtered.iter().min_by_key(|sch| sch.target.score()).unwrap();
+                    {
+                        let score = winner.target.score();
+                        let candidates: Vec<_> = filtered.iter().filter(|sch| score == sch.target.score()).cloned().collect();
+                        if candidates.len() > 1 {
+                            return Err(TypeError::AmbiguousVariable { name, candidates })
+                        }
+                    }
+
+                    let (_, ty_inst) = winner.instantiate(ctx);
+                    if let Type::Fun(param, ret) = ty_inst.clone() {
+                        // eprintln!("ta vs param: {} vs {}", ta.repr(ctx), param.repr(ctx));
+                        let ta = ta.repr(ctx);
+                        ctx.unify(&ta, &param)?;
+                        ctx.unify(&tr, &ret)?;
+                    }
+                    f.ty = Some(ty_inst.repr(ctx));
+                    // App(f, a) の型
+                    tr
                 }
+
                 other => {
                     ctx.unify(&other, &Type::fun(ta, tr.clone()))?;
                     tr
