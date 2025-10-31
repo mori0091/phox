@@ -1,4 +1,6 @@
-use super::{Scheme, Constraint, Type, TypeVarId};
+use crate::resolve::{resolve_raw_constraint, resolve_raw_type};
+
+use super::{RawTypeScheme, Scheme, Type, TypeVarId};
 
 pub type TypeScheme = Scheme<Type>;
 
@@ -37,18 +39,21 @@ impl TypeScheme {
                         fields.iter().map(|(f, t)| (f.clone(), rename_type_var(t, map))).collect()
                     )
                 }
-                Type::Overloaded(name, cands) => {
-                    let mut new_cands = vec![];
-                    for sch in cands.iter() {
-                        let vars = sch.vars.clone();
-                        let constraints = sch.constraints.iter().map(|c| {
-                            let params = c.params.iter().map(|t| rename_type_var(t, map)).collect();
-                            Constraint { name: c.name.clone(), params }
-                        }).collect();
-                        let target = rename_type_var(&sch.target, map);
-                        new_cands.push(TypeScheme::new(vars, constraints, target));
-                    }
-                    Type::Overloaded(name.clone(), new_cands)
+                // Type::Overloaded(name, cands) => {
+                //     let mut new_cands = vec![];
+                //     for sch in cands.iter() {
+                //         let vars = sch.vars.clone();
+                //         let constraints = sch.constraints.iter().map(|c| {
+                //             let params = c.params.iter().map(|t| rename_type_var(t, map)).collect();
+                //             Constraint { name: c.name.clone(), params }
+                //         }).collect();
+                //         let target = rename_type_var(&sch.target, map);
+                //         new_cands.push(TypeScheme::new(vars, constraints, target));
+                //     }
+                //     Type::Overloaded(name.clone(), new_cands)
+                // }
+                Type::Overloaded(_name, _cands) => {
+                    todo!()
                 }
             }
         }
@@ -72,5 +77,30 @@ impl TypeScheme {
                 .collect();
             format!("∀ {}. {}", vars.join(" "), renamed)
         }
+    }
+}
+
+use super::TypeContext;
+use std::collections::HashMap;
+
+impl TypeScheme {
+    pub fn from(raw: &RawTypeScheme, ctx: &mut TypeContext) -> Self {
+        let mut var_map = HashMap::new();
+        let mut vars = Vec::new();
+        for v in raw.vars.iter() {
+            let id = ctx.fresh_type_var_id();
+            var_map.insert(v.clone(), id.clone());
+            vars.push(id);
+        }
+
+        let constraints = raw
+            .constraints
+            .iter()
+            .map(|c| resolve_raw_constraint(ctx, c, &var_map))
+            .collect();
+
+        let target = resolve_raw_type(ctx, &raw.target, &var_map);
+
+        TypeScheme::new(vars, constraints, target)
     }
 }

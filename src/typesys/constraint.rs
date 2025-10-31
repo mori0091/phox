@@ -22,7 +22,8 @@ impl Constraint {
             .ok_or_else(|| TypeError::UnknownTraitMember(member_name.to_string()))?;
 
         let mut out = Vec::new();
-        for scheme in entries {
+        for raw_scheme in entries {
+            let scheme = TypeScheme::from(raw_scheme, ctx);
             let (constraints, trait_ty) = scheme.instantiate(ctx);
             if ctx.unify(&trait_ty, member_ty).is_ok() {
                 let resolved = constraints.into_iter().map(|mut c| {
@@ -36,7 +37,7 @@ impl Constraint {
     }
 }
 
-use super::FreeTypeVars;
+use super::{FreeTypeVars, TypeScheme};
 
 impl FreeTypeVars for Constraint {
     fn free_type_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<TypeVarId>) {

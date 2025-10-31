@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::syntax::ast::{Expr, ExprBody, Lit, Pat, Stmt, Item};
-use super::{FreeTypeVars, Repr, Kind, Scheme, TraitScheme, Type, TypeScheme, TypeVarId};
+use crate::syntax::ast::{Expr, ExprBody, Item, Lit, Pat, Stmt};
+use super::{FreeTypeVars, Repr};
+use super::{Kind, TypeVarId, Type, Scheme};
+use super::{TraitScheme, TypeScheme, RawTypeScheme};
 use super::TypeError;
 
 // ===== Kind Environment =====
@@ -27,6 +29,11 @@ pub type TypeEnv = HashMap<String, TypeScheme>;
 //   },
 // }
 //
+// ===== Type Environment for impl member =====
+// maps name of impl member to set of **raw** type schemes.
+//
+// ex.
+//
 // impl_member_env: TraitMemberEnv = {
 //   "bind": {
 //          Monad Option      => (∀ a b. Option a -> (a -> Option b) -> Option b),
@@ -35,7 +42,7 @@ pub type TypeEnv = HashMap<String, TypeScheme>;
 //   },
 // }
 //
-pub type TraitMemberEnv = HashMap<String, HashSet<TypeScheme>>;
+pub type TraitMemberEnv = HashMap<String, HashSet<RawTypeScheme>>;
 
 // ===== Impl Environment =====
 // maps instance of trait to dictionary of its implementations.
@@ -485,7 +492,8 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
                     match icx.impl_member_env.get(name).clone() {
                         None => return Err(TypeError::UnboundVariable(name.clone())),
                         Some(cands) if cands.len() == 1 => {
-                            let cand = cands.iter().next().unwrap();
+                            let raw_cand = cands.iter().next().unwrap();
+                            let cand = TypeScheme::from(raw_cand, ctx);
                             let (_constraints, ty) = cand.instantiate(ctx);
                             ty
                         }
@@ -511,18 +519,19 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
             match tf {
                 Type::Overloaded(name, cands) => {
                     let mut filtered = Vec::new();
-                    for cand in cands {
+                    for raw_cand in cands {
                         // 1) ctx を複製して試行用の try_ctx を作る
                         let mut try_ctx = ctx.clone();
 
                         // 2) 候補は try_ctx で fresh 化
+                        let cand = TypeScheme::from(&raw_cand, &mut try_ctx);
                         let (_, ty_inst) = &cand.instantiate(&mut try_ctx); // 制約の型引数のみ instantiate
 
                         // 3) フィルタ判定は「引数のみ」
                         if let Type::Fun(param, _) = &ty_inst {
                             if try_ctx.unify(&ta, param).is_ok() {
                                 // eprintln!("try_ta vs param: {} vs {}", try_ta.repr(&mut try_ctx), param.repr(&mut try_ctx));
-                                filtered.push(cand);
+                                filtered.push((cand.target.score(), raw_cand));
                             }
                         }
                     }
@@ -531,15 +540,16 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
                         return Err(TypeError::NoMatchingOverload);
                     }
 
-                    let winner = filtered.iter().min_by_key(|sch| sch.target.score()).unwrap();
+                    let (best_score, raw_winner) = filtered.iter().min_by_key(|(score, _)| score).unwrap();
                     {
-                        let score = winner.target.score();
-                        let candidates: Vec<_> = filtered.iter().filter(|sch| score == sch.target.score()).cloned().collect();
+                        let candidates: Vec<_> = filtered.iter().filter(|(score, _)| score == best_score).cloned().collect();
                         if candidates.len() > 1 {
+                            let candidates: Vec<_> = candidates.into_iter().map(|(_, raw)| raw).collect();
                             return Err(TypeError::AmbiguousVariable { name, candidates })
                         }
                     }
 
+                    let winner = TypeScheme::from(raw_winner, ctx);
                     let (_, ty_inst) = winner.instantiate(ctx);
                     if let Type::Fun(param, ret) = ty_inst.clone() {
                         // eprintln!("ta vs param: {} vs {}", ta.repr(ctx), param.repr(ctx));

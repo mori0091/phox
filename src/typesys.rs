@@ -25,6 +25,9 @@ pub use type_scheme::TypeScheme;
 mod trait_scheme;
 pub use trait_scheme::TraitScheme;
 
+mod raw_type_scheme;
+pub use raw_type_scheme::RawTypeScheme;
+
 mod infer;
 pub use infer::{TypeContext, KindEnv, TypeEnv, TraitMemberEnv, InferCtx, ImplEnv};
 pub use infer::{initial_kind_env, initial_type_env};

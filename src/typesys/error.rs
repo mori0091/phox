@@ -1,11 +1,12 @@
 use crate::syntax::ast::Pat;
-use super::{Constraint, Type, TypeScheme};
+use super::{Constraint, Type, RawTypeScheme};
 
 // ===== Type error =====
 #[derive(Debug)]
 pub enum TypeError {
     // ---- from `resole_*`
 
+    UnknownTrait(String),
     UnknownTraitMember(String),
     ArityMismatch { trait_name: String, member: String, expected: usize, actual: usize },
     UnificationFail { expected: Constraint, actual: Constraint },
@@ -27,7 +28,7 @@ pub enum TypeError {
     NoMatchingOverload,
     RecursiveType,
     UnboundVariable(String),
-    AmbiguousVariable { name: String, candidates: Vec<TypeScheme> },
+    AmbiguousVariable { name: String, candidates: Vec<RawTypeScheme> },
 
     UnknownConstructor(String),
     ConstructorArityMismatch(String, usize, Type),

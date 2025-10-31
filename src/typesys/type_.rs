@@ -1,5 +1,6 @@
 use std::fmt;
-use super::{TypeScheme, ApplySubst, Constraint};
+use super::RawTypeScheme;
+use super::ApplySubst;
 
 // ===== Types =====
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -12,7 +13,7 @@ pub enum Type {
     Tuple(Vec<Type>),
     Record(Vec<(String, Type)>),
 
-    Overloaded(String, Vec<TypeScheme>),
+    Overloaded(String, Vec<RawTypeScheme>),
 }
 
 impl Type {
@@ -96,16 +97,19 @@ impl FreeTypeVars for Type {
                     field_ty.free_type_vars(ctx, acc);
                 }
             }
-            Type::Overloaded(_, cands) => {
-                for sch in cands {
-                    // sch.vars は束縛変数なので無視
-                    for c in &sch.constraints {
-                        for t in &c.params {
-                            t.free_type_vars(ctx, acc);
-                        }
-                    }
-                    sch.target.free_type_vars(ctx, acc);
-                }
+            // Type::Overloaded(_, cands) => {
+            //     for sch in cands {
+            //         // sch.vars は束縛変数なので無視
+            //         for c in &sch.constraints {
+            //             for t in &c.params {
+            //                 t.free_type_vars(ctx, acc);
+            //             }
+            //         }
+            //         sch.target.free_type_vars(ctx, acc);
+            //     }
+            // }
+            Type::Overloaded(_, _cands) => {
+                todo!()
             }
         }
     }
@@ -141,19 +145,22 @@ impl Repr for Type {
                           .collect()
                 )
             }
-            Type::Overloaded(name, cands) => {
-                let mut new_cands = vec![];
-                for sch in cands.iter() {
-                    // let vars = sch.vars.iter().map(|v| ctx.find(*v)).collect();
-                    let vars = sch.vars.clone();
-                    let constraints = sch.constraints.iter().map(|c| {
-                        let params = c.params.iter().map(|t| t.repr(ctx)).collect();
-                        Constraint { name: c.name.clone(), params }
-                    }).collect();
-                    let ty = &sch.target.repr(ctx);
-                    new_cands.push(TypeScheme::new(vars, constraints, ty.clone()));
-                }
-                Type::Overloaded(name.clone(), new_cands)
+            // Type::Overloaded(name, cands) => {
+            //     let mut new_cands = vec![];
+            //     for sch in cands.iter() {
+            //         // let vars = sch.vars.iter().map(|v| ctx.find(*v)).collect();
+            //         let vars = sch.vars.clone();
+            //         let constraints = sch.constraints.iter().map(|c| {
+            //             let params = c.params.iter().map(|t| t.repr(ctx)).collect();
+            //             Constraint { name: c.name.clone(), params }
+            //         }).collect();
+            //         let ty = &sch.target.repr(ctx);
+            //         new_cands.push(TypeScheme::new(vars, constraints, ty.clone()));
+            //     }
+            //     Type::Overloaded(name.clone(), new_cands)
+            // }
+            Type::Overloaded(_name, _cands) => {
+                todo!()
             }
         }
     }

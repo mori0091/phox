@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use crate::typesys::{generalize, ImplEnv, InferCtx, TypeContext};
-use crate::typesys::{TypeVarId, Kind, Type, Constraint, TypeScheme, ApplySubst};
+use crate::typesys::{generalize, ImplEnv, InferCtx, RawTypeScheme, TypeContext};
+use crate::typesys::{TypeVarId, Kind, Type, Constraint};
 use crate::typesys::TypeError;
-use crate::typesys::infer_expr;
 use crate::syntax::ast::{RawTraitDecl, RawImplDecl};
 use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType};
 use crate::syntax::ast::RawConstraint;
@@ -39,44 +38,30 @@ pub fn resolve_item(
 }
 
 pub fn register_trait(
-    ctx: &mut TypeContext,
+    _ctx: &mut TypeContext,
     icx: &mut InferCtx,
     raw: &RawTraitDecl,
 ) {
-    // 1. 型変数名を TypeVarId に変換
-    let mut var_ids = Vec::new();
-    let mut var_map = HashMap::new();
-    for name in &raw.params {
-        let id = ctx.fresh_type_var_id();
-        var_map.insert(name.clone(), id);
-        var_ids.push(id);
-    }
-
-    let constraint = Constraint {
+    let head = RawConstraint {
         name: raw.name.clone(),
-        params: var_ids.iter().map(|v| Type::Var(*v)).collect(),
+        params: raw
+            .params
+            .iter()
+            .map(|name| RawType::VarName(name.clone()))
+            .collect(),
     };
-
-    // 2. 各メンバを TypeScheme に変換して登録
-    for member in &raw.members {
-        let raw_ty = &member.ty;
-        let ty = resolve_raw_type(ctx, raw_ty, &var_map);
-
-        let scheme = TypeScheme::new(var_ids.clone(), vec![constraint.clone()], ty);
-
-        // trait メンバのスキームを `trait_member_env` に登録する。
-        // - `type_env` には登録しない。
-        // - `register_impl` で型の検査／検証の為にだけ使用する。
-        // - `infer_*` 以降のフェーズでは使わない。
+    for member in raw.members.iter() {
+        let sch = RawTypeScheme {
+            vars: raw.params.clone(),
+            constraints: vec![head.clone()],
+            target: *member.ty.clone(),
+        };
         icx.trait_member_env
-           .entry(member.name.clone())
-           .or_default()
-           .insert(scheme);
+            .entry(member.name.clone())
+            .or_default()
+            .insert(sch);
     }
 }
-
-use std::collections::HashSet;
-use crate::typesys::FreeTypeVars;
 
 pub fn register_impl(
     ctx: &mut TypeContext,
@@ -85,94 +70,93 @@ pub fn register_impl(
     env: &mut Env,
     raw: &RawImplDecl,
 ) -> Result<(), TypeError> {
-    // 1. 型引数を RawType → Type に変換
-    let params: Vec<Type> = raw.params.iter()
-        .map(|raw_ty| resolve_raw_type(ctx, raw_ty, &HashMap::new()))
-        .collect();
+    let impl_head = RawConstraint {
+        name: raw.name.clone(),
+        params: raw.params.clone(),
+    };
 
-    // 2. 制約キーを構築
-    let constraint = Constraint { name: raw.name.clone(), params: params.clone() };
+    for member in raw.members.iter() {
+        let trait_schemes = icx
+            .trait_member_env
+            .get(&member.name)
+            .ok_or(TypeError::UnknownTraitMember(member.name.clone()))?;
+        if trait_schemes.is_empty() {
+            return Err(TypeError::UnknownTraitMember(member.name.clone()));
+        }
 
-    // 3. メンバ辞書を構築しながら型検査
-    let mut member_map = HashMap::new();
-    for member in &raw.members {
-        // 3a. trait_member_env から該当 trait のメンバスキームを取得（clone で借用を切る）
-        let scheme = {
-            let schemes = icx.trait_member_env
-                .get(&member.name)
-                .ok_or_else(|| TypeError::UnknownTraitMember(member.name.clone()))?;
+        let trait_scheme = trait_schemes
+            .iter()
+            .find(|sch| sch.constraints[0].name == raw.name)
+            .ok_or(TypeError::UnknownTrait(raw.name.clone()))?;
 
-            schemes.iter()
-                .find(|sch| sch.constraints.iter().any(|c| c.name == raw.name))
-                .cloned()
-                .ok_or_else(|| TypeError::UnknownTraitMember(member.name.clone()))?
-        };
-
-        // 3b. trait の量化変数と impl の具体型を対応付ける置換を作る
-        // 例: vars = [a], params = [Int] → { a ↦ Int }
-        if scheme.vars.len() != params.len() {
+        let trait_head = &trait_scheme.constraints[0];
+        if impl_head.params.len() != trait_head.params.len() {
             return Err(TypeError::ArityMismatch {
-                trait_name: raw.name.clone(),
+                trait_name: trait_head.name.clone(),
                 member: member.name.clone(),
-                expected: scheme.vars.len(),
-                actual: params.len(),
+                expected: trait_head.params.len(),
+                actual: impl_head.params.len()
             });
         }
-        let subst: HashMap<TypeVarId, Type> =
-            scheme.vars.iter().cloned().zip(params.clone()).collect();
 
-        // 3c. スキームを具象化（instantiate は使わず、元スキームへ apply）
-        let concrete_sch = scheme.apply_subst(&subst);
-        let expected_ty = concrete_sch.target.clone();
-        let expected_constraints = concrete_sch.constraints.clone();
+        let impl_scheme = {
+            let mut subst = HashMap::new();
+            for (t1, t2) in trait_head.params.iter().zip(impl_head.params.iter()) {
+                match t1 {
+                    RawType::VarName(a) => {
+                        subst.insert(a.clone(), t2.clone());
+                    }
+                    other => {
+                        if other != t2 {
+                            let empty_map = HashMap::new();
+                            let expected = resolve_raw_type(ctx, other, &empty_map);
+                            let actual   = resolve_raw_type(ctx, t2, &empty_map);
+                            return Err(TypeError::Mismatch(expected, actual));
+                        }
+                    }
+                }
+            }
+            // eprintln!("subst: {:?}", subst);
+            trait_scheme.apply_subst(&subst).generalize()
+        };
 
-        // ------------------------------------------------------------------------
-        // 3d. impl の式を推論
+        // eprintln!("trait: @{{{}}}.{}: {}", trait_head, member.name, trait_scheme.pretty());
+        // eprintln!("impl : @{{{}}}.{}: {}", impl_head, member.name, impl_scheme.pretty());
+
+        icx.impl_member_env
+            .entry(member.name.clone())
+            .or_default()
+            .insert(impl_scheme);
+    };
+
+    let trait_sch = {
+        let constraint = {
+            let name = raw.name.clone();
+            let params: Vec<Type> = raw
+                .params
+                .iter()
+                .map(|raw_ty| resolve_raw_type(ctx, raw_ty, &HashMap::new()))
+                .collect();
+            Constraint { name, params }
+        };
+        generalize(ctx, icx, &constraint)
+    };
+
+    let mut member_map = HashMap::new();
+    for member in raw.members.iter() {
         let mut expr = member.expr.clone();
         resolve_expr(ctx, icx, impl_env, env, &mut expr)?;
-        // ------------------------------------------------------------------------
-
-        // 3e. unify で型一致を確認（必要なら制約処理もここで）
-        // eprintln!("member: {}, expected: {} , actual: {}", member.name, expected_ty.repr(ctx), actual_ty.repr(ctx));
-        let actual_ty = infer_expr(ctx, icx, &mut expr)?;
-        ctx.unify(&expected_ty, &actual_ty)?;
-
-        // 3f. impl_member_env に具象化済みスキームを登録
-        // ★ そのまま入れず、置換後のスキームを完全量化してから登録する
-        let mut free = HashSet::new();
-        // target 側
-        expected_ty.free_type_vars(ctx, &mut free);
-        // constraints 側のパラメータに現れる自由変数も加える
-        for c in &expected_constraints {
-            for p in &c.params {
-                p.free_type_vars(ctx, &mut free);
-            }
-        }
-
-        // 量化変数一覧を整列
-        let mut vars: Vec<TypeVarId> = free.into_iter().collect();
-        vars.sort_by_key(|v| v.0);
-
-        // 完全量化した新スキームを作る（repr は不要。推論中は生の型でOK）
-        let generalized_concrete = TypeScheme::new(vars, expected_constraints.clone(), expected_ty.clone());
-
-        // 登録
-        icx.impl_member_env
-           .entry(member.name.clone())
-           .or_default()
-           .insert(generalized_concrete);
-
-        // ------------------------------------------------------------------------
-        // 3g. ImplEnv にも式の本体を登録
         member_map.insert(member.name.clone(), *expr);
-        // ------------------------------------------------------------------------
     }
 
-    // ------------------------------------------------------------------------
-    // 4. ImplEnv に登録
-    let trait_sch = generalize(ctx, icx, &constraint);
+    // {
+    //     eprintln!("impl {} {{", trait_sch);
+    //     for (name, expr) in member_map.iter() {
+    //         eprintln!("  {} = {}", name, expr);
+    //     }
+    //     eprintln!("}}");
+    // }
     impl_env.insert(trait_sch, member_map);
-    // ------------------------------------------------------------------------
 
     Ok(())
 }
@@ -243,7 +227,7 @@ pub fn resolve_expr(
             Ok(())
         }
         ExprBody::RawTraitRecord(raw) => {
-            let constraint = resolve_raw_constraint(ctx, &raw);
+            let constraint = resolve_raw_constraint(ctx, &raw, &HashMap::new());
             let base_score = constraint.score();
             let mut matches = Vec::new();
             for (impl_sch, member_map) in impl_env.iter() {
@@ -343,8 +327,6 @@ pub fn resolve_raw_type(
             if let Some(&id) = param_map.get(name) {
                 Type::Var(id)
             } else {
-                // // 未定義の型変数はエラー
-                // panic!("Unbound type variable in data constructor: {}", name);
                 // GADT等、多相的なデータ構築子を許すなら、未知の型変数名は
                 // fresh で新規に割り当てる
                 let id = ctx.fresh_type_var_id();
@@ -429,11 +411,12 @@ pub fn register_variants(decl: &TypeDecl, env: &mut Env) {
 pub fn resolve_raw_constraint(
     ctx: &mut TypeContext,
     raw: &RawConstraint,
+    param_map: &HashMap<String, TypeVarId>,
 ) -> Constraint {
     let params = raw
         .params
         .iter()
-        .map(|p| resolve_raw_type(ctx, p, &HashMap::new()))
+        .map(|p| resolve_raw_type(ctx, p, param_map))
         .collect();
 
     Constraint {
