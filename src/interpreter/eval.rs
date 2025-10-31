@@ -53,8 +53,8 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
             env.get(&name)
                .unwrap_or_else(|| {
                    if let Some(ty) = &expr.ty {
-                       use crate::typesys::Scheme;
-                       let sch = Scheme::mono(ty.clone());
+                       use crate::typesys::TypeScheme;
+                       let sch = TypeScheme::mono(ty.clone());
                        panic!("unbound variable: {}: {}", name, sch.pretty())
                    } else {
                        panic!("unbound variable: {}", name)

@@ -1,6 +1,6 @@
 use super::Expr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RawConstraint {
     pub name: String,           // trait name (ex. Eq)
     pub params: Vec<RawType>,   // instance type params (ex. [Int])
@@ -54,7 +54,7 @@ pub enum RawVariant {
 }
 
 /// 型式（まだ名前ベース）
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RawType {
     /// 型変数 (例: "a")
     VarName(String),

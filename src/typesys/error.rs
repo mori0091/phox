@@ -1,13 +1,15 @@
 use crate::syntax::ast::Pat;
-use super::{Type, Constraint, Scheme};
+use super::{Constraint, Type, RawTypeScheme};
 
 // ===== Type error =====
 #[derive(Debug)]
 pub enum TypeError {
     // ---- from `resole_*`
 
+    UnknownTrait(String),
     UnknownTraitMember(String),
     ArityMismatch { trait_name: String, member: String, expected: usize, actual: usize },
+    UnificationFail { expected: Constraint, actual: Constraint },
 
     // ----from `apply_trait_impls_*`
 
@@ -18,6 +20,7 @@ pub enum TypeError {
     MissingTraitImplForMember { member: String, ty: Type, expected: Vec<Constraint> },
     // AmbiguousTraitMember: "ambiguous trait member: f for type Int; candidates: Foo, Bar"
     AmbiguousTraitMember { member: String, ty: Type, candidates: Vec<String> },
+    AmbiguousTrait { constraint: String, candidates: Vec<String> },
 
     // ---- from `infer_*`
 
@@ -25,7 +28,7 @@ pub enum TypeError {
     NoMatchingOverload,
     RecursiveType,
     UnboundVariable(String),
-    AmbiguousVariable { name: String, candidates: Vec<Scheme> },
+    AmbiguousVariable { name: String, candidates: Vec<RawTypeScheme> },
 
     UnknownConstructor(String),
     ConstructorArityMismatch(String, usize, Type),
