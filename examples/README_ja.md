@@ -186,3 +186,4 @@ cargo run examples/block_expr.phx
 ## 11. 応用例
 
 - quick sort [examples/qsort.phx](qsort.phx)
+- Monad [examples/monad.phx](monad.phx)

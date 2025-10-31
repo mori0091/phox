@@ -1,0 +1,67 @@
+type Option a = None | Some a;
+type Result e a = Err e | Ok a;
+
+trait Monad m {
+    pure: a -> m a;
+    bind: m a -> (a -> m b) -> m b;
+};
+
+impl Monad Option {
+    pure = \a. Some a;
+    bind = \a.\f. match (a) {
+        None => None,
+        Some x => f x,
+    };
+};
+
+impl Monad (Result e) {
+    pure = \a. Ok a;
+    bind = \a.\f. match (a) {
+        Err err => Err err,
+        Ok ok  => f ok,
+    };
+};
+
+impl Monad (Result ()) {
+    pure = \a. Ok a;
+    bind = \a.\f. match (a) {
+        Err () => Err (),
+        Ok ok  => f ok,
+    };
+};
+
+let res1 =
+Some 1 `bind` (\x.
+Some 2 `bind` (\y.
+Some (x + y)
+));
+
+let m = @{Monad (Result ())};
+let res2 =
+Ok 3 `m.bind` (\x.
+Ok 4 `m.bind` (\y.
+Ok (x + y)
+));
+
+let res3 =
+Err 5 `bind` (\x.
+Ok  6 `bind` (\y.
+Ok (x + y)
+));
+
+let m = @{Monad (Result e)};
+let res4 =
+Ok 7 `m.bind` (\x.
+Ok 8 `m.bind` (\y.
+Ok (x + y)
+));
+
+let m = @{Monad (Result e)};
+let res5 =
+Err 9 `m.bind` (\x.
+Ok 10 `m.bind` (\y.
+Ok (x + y)
+));
+
+(res1, res2, res3, res4, res5)
+// => (Some 3, Ok 7, Err 5, Ok 15, Err 9): ∀ a. (Option Int, Result () Int, Result Int Int, Result a Int, Result Int Int)
