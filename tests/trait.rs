@@ -3,13 +3,13 @@ use phox::api::eval_program;
 #[test]
 fn test_trait_eq_int() {
     let src = r#"
-        trait Eq a {
+        trait Eq2 a {
             eq  : a -> a -> Bool;
             neq : a -> a -> Bool;
         };
-        impl Eq Int {
-            eq  = \a.\b. a == b;
-            neq = \a.\b. a != b;
+        impl Eq2 Int {
+            eq  = \a.\b. @{Eq Int}.(==) a b;
+            neq = \a.\b. @{Eq Int}.(!=) a b;
         };
         eq 1 1
     "#;
@@ -21,15 +21,15 @@ fn test_trait_eq_int() {
 #[test]
 fn test_trait_record_access() {
     let src = r#"
-        trait Eq a {
+        trait Eq2 a {
             eq  : a -> a -> Bool;
             neq : a -> a -> Bool;
         };
-        impl Eq Int {
-            eq  = \a.\b. a == b;
-            neq = \a.\b. a != b;
+        impl Eq2 Int {
+            eq  = \a.\b. @{Eq Int}.(==) a b;
+            neq = \a.\b. @{Eq Int}.(!=) a b;
         };
-        let d = @{Eq Int};
+        let d = @{Eq2 Int};
         d.eq 1 2
     "#;
     let (val, sch) = eval_program(src).unwrap();
@@ -40,15 +40,15 @@ fn test_trait_record_access() {
 #[test]
 fn test_trait_record_infix() {
     let src = r#"
-        trait Eq a {
+        trait Eq2 a {
             eq  : a -> a -> Bool;
             neq : a -> a -> Bool;
         };
-        impl Eq Int {
-            eq  = \a.\b. a == b;
-            neq = \a.\b. a != b;
+        impl Eq2 Int {
+            eq  = \a.\b. @{Eq Int}.(==) a b;
+            neq = \a.\b. @{Eq Int}.(!=) a b;
         };
-        let d = @{Eq Int};
+        let d = @{Eq2 Int};
         1 `d.eq` 1
     "#;
     let (val, sch) = eval_program(src).unwrap();
@@ -59,17 +59,17 @@ fn test_trait_record_infix() {
 #[test]
 fn test_trait_record_first_class() {
     let src = r#"
-        trait Eq a {
+        trait Eq2 a {
             eq  : a -> a -> Bool;
             neq : a -> a -> Bool;
         };
-        impl Eq Int {
-            eq  = \a.\b. a == b;
-            neq = \a.\b. a != b;
+        impl Eq2 Int {
+            eq  = \a.\b. @{Eq Int}.(==) a b;
+            neq = \a.\b. @{Eq Int}.(!=) a b;
         };
         // let f = \@{eq:e, neq:_}.\x.\y. e x y;
         let f = \@{eq, neq}.\x.\y. eq x y;  // same as the above
-        f @{Eq Int} 3 4
+        f @{Eq2 Int} 3 4
     "#;
     let (val, sch) = eval_program(src).unwrap();
     assert_eq!(format!("{}", val), "false");
@@ -79,17 +79,17 @@ fn test_trait_record_first_class() {
 #[test]
 fn test_trait_polymorphism() {
     let src = r#"
-        trait Eq a {
-          eq  : a -> a -> Bool;
-          neq : a -> a -> Bool;
+        trait Eq2 a {
+            eq  : a -> a -> Bool;
+            neq : a -> a -> Bool;
         };
-        impl Eq Int {
-          eq  = \a.\b. a == b;
-          neq = \a.\b. a != b;
+        impl Eq2 Int {
+            eq  = \a.\b. @{Eq Int}.(==) a b;
+            neq = \a.\b. @{Eq Int}.(!=) a b;
         };
-        impl Eq Bool {
-          eq  = \a.\b. a == b;
-          neq = \a.\b. a != b;
+        impl Eq2 Bool {
+            eq  = \a.\b. @{Eq Bool}.(==) a b;
+            neq = \a.\b. @{Eq Bool}.(!=) a b;
         };
         eq 1 2
     "#;
@@ -104,7 +104,7 @@ fn test_trait_polymorphism() {
 fn test_unimplemented_trait_error() {
     // Bool に対して Eq が未実装
     let src = r#"
-        trait Eq a { eq : a -> a -> Bool; };
+        trait Eq2 a { eq : a -> a -> Bool; };
         eq true false
     "#;
     let err = eval_program(src).unwrap_err();
@@ -115,21 +115,27 @@ fn test_unimplemented_trait_error() {
 fn test_unbound_trait_record_error() {
     // @{Eq Bool} を作ろうとするが未実装
     let src = r#"
-        trait Eq a { eq : a -> a -> Bool; };
-        @{Eq Bool}
+        trait Eq2 a { eq : a -> a -> Bool; };
+        @{Eq2 Bool}
     "#;
     let err = eval_program(src).unwrap_err();
-    assert!(format!("{}", err).contains("resolve error: no implementation for Eq Bool"));
+    assert!(format!("{}", err).contains("resolve error: no implementation for Eq2 Bool"));
 }
 
 #[test]
 fn test_field_access_on_var_error() {
     // row polymorphism がないので dict.eq は失敗する
     let src = r#"
-        trait Eq a { eq : a -> a -> Bool; neq : a -> a -> Bool; };
-        impl Eq Int { eq = \a.\b. a == b; neq = \a.\b. a != b; };
+        trait Eq2 a {
+            eq  : a -> a -> Bool;
+            neq : a -> a -> Bool;
+        };
+        impl Eq2 Int {
+            eq  = \a.\b. @{Eq Int}.(==) a b;
+            neq = \a.\b. @{Eq Int}.(!=) a b;
+        };
         let f = \dict.\x.\y. dict.eq x y;
-        f @{Eq Int} 1 2
+        f @{Eq2 Int} 1 2
     "#;
     let err = eval_program(src).unwrap_err();
     assert!(format!("{}", err).contains("infer error: ExpectedRecord"));

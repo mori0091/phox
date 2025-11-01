@@ -90,7 +90,8 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
                 // 組み込み関数（Builtin）
                 Value::Builtin(func) => {
                     // Builtin は「Vec<Value>」を受け取るので単引数なら vec![arg_val]
-                    func(vec![arg_val])
+                    // func(vec![arg_val])
+                    func(arg_val)
                 }
 
                 _ => panic!("attempted to apply non-function"),
@@ -259,35 +260,26 @@ use crate::syntax::ast::Lit;
 pub fn initial_env() -> Env {
     let env = Env::new();
 
-    // Option
-    env.insert("None".into(), Value::Con("None".into(), vec![]));
-    env.insert("Some".into(), make_constructor("Some", 1));
-
-    // List
-    env.insert("Nil".into(), Value::Con("Nil".into(), vec![]));
-    env.insert("Cons".into(), make_constructor("Cons", 2));
-
     // 比較演算子
-    env.insert("__builtin_==__".into(), make_eq());
-    env.insert("__builtin_!=__".into(), make_neq());
-    env.insert("__builtin_<__".into() , make_cmpop(|a, b| a < b));
-    env.insert("__builtin_<=__".into(), make_cmpop(|a, b| a <= b));
-    env.insert("__builtin_>__".into() , make_cmpop(|a, b| a > b));
-    env.insert("__builtin_>=__".into(), make_cmpop(|a, b| a >= b));
+    env.insert("__i64_eq__".into(), make_i64_cmp_op(|a, b| a == b));
+    env.insert("__i64_ne__".into(), make_i64_cmp_op(|a, b| a != b));
+    env.insert("__i64_le__".into(), make_i64_cmp_op(|a, b| a <= b));
+    env.insert("__i64_lt__".into(), make_i64_cmp_op(|a, b| a < b));
+    env.insert("__i64_ge__".into(), make_i64_cmp_op(|a, b| a >= b));
+    env.insert("__i64_gt__".into(), make_i64_cmp_op(|a, b| a > b));
 
     // 演算子
-    env.insert("__builtin_+__".into(), make_binop(|a, b| a + b));
-    env.insert("__builtin_-__".into(), make_binop(|a, b| a - b));
-    env.insert("__builtin_*__".into(), make_binop(|a, b| a * b));
-    env.insert("__builtin_/__".into(), make_binop(|a, b| {
+    env.insert("__i64_add__".into(), make_i64_arith_op(|a, b| a + b));
+    env.insert("__i64_sub__".into(), make_i64_arith_op(|a, b| a - b));
+    env.insert("__i64_mul__".into(), make_i64_arith_op(|a, b| a * b));
+    env.insert("__i64_div__".into(), make_i64_arith_op(|a, b| {
         if b == 0 {
             panic!("division by zero");
         }
         a / b
     }));
 
-    env.insert("negate".into(), make_unary_op_int(|x| -x));
-    env.insert("not".into(), make_unary_op_bool(|x| !x));
+    env.insert("__i64_neg__".into(), make_i64_unary_op(|x| -x));
 
     env
 }
@@ -299,9 +291,9 @@ pub fn make_constructor(name: &str, arity: usize) -> Value {
         if args.len() == arity {
             Value::Con(name, args)
         } else {
-            Value::Builtin(Rc::new(move |mut more: Vec<Value>| {
+            Value::Builtin(Rc::new(move |arg: Value| {
                 let mut new_args = args.clone();
-                new_args.append(&mut more);
+                new_args.push(arg);
                 curry(name.clone(), arity, new_args)
             }))
         }
@@ -311,165 +303,45 @@ pub fn make_constructor(name: &str, arity: usize) -> Value {
 
 /// 単項の整数演算子をBuiltinとして作る
 /// Int -> Int
-pub fn make_unary_op_int<F>(op: F) -> Value
+pub fn make_i64_unary_op<F>(op: F) -> Value
 where
     F: Fn(i64) -> i64 + 'static,
 {
-    fn curry<F>(op: Rc<F>, args: Vec<Value>) -> Value
-    where
-        F: Fn(i64) -> i64 + 'static,
-    {
-        if args.len() == 1 {
-            match &args[0] {
-                Value::Lit(Lit::Int(a)) => {
-                    Value::Lit(Lit::Int(op(*a)))
-                }
-                _ => panic!("type error: expected Int arguments"),
-            }
-        } else {
-            Value::Builtin(Rc::new(move |mut more: Vec<Value>| {
-                let mut new_args = args.clone();
-                new_args.append(&mut more);
-                curry(op.clone(), new_args)
-            }))
+    Value::Builtin(Rc::new(move |arg: Value| {
+        if let Value::Lit(Lit::Int(a)) = arg {
+            return Value::Lit(Lit::Int(op(a)));
         }
-    }
-
-    let op = Rc::new(op);
-    curry(op, vec![])
+        panic!("type error in <builtin>");
+    }))
 }
 
-/// 単項のBool演算子をBuiltinとして作る
-/// Bool -> Bool
-pub fn make_unary_op_bool<F>(op: F) -> Value
-where
-    F: Fn(bool) -> bool + 'static,
-{
-    fn curry<F>(op: Rc<F>, args: Vec<Value>) -> Value
-    where
-        F: Fn(bool) -> bool + 'static,
-    {
-        if args.len() == 1 {
-            match &args[0] {
-                Value::Lit(Lit::Bool(a)) => {
-                    Value::Lit(Lit::Bool(op(*a)))
-                }
-                _ => panic!("type error: expected Bool arguments"),
-            }
-        } else {
-            Value::Builtin(Rc::new(move |mut more: Vec<Value>| {
-                let mut new_args = args.clone();
-                new_args.append(&mut more);
-                curry(op.clone(), new_args)
-            }))
-        }
-    }
-
-    let op = Rc::new(op);
-    curry(op, vec![])
-}
-
-/// 2引数の整数演算子をBuiltinとして作る
 /// Int -> Int -> Int
-pub fn make_binop<F>(op: F) -> Value
+pub fn make_i64_arith_op<F>(op: F) -> Value
 where
     F: Fn(i64, i64) -> i64 + 'static,
 {
-    fn curry<F>(op: Rc<F>, args: Vec<Value>) -> Value
-    where
-        F: Fn(i64, i64) -> i64 + 'static,
-    {
-        if args.len() == 2 {
-            match (&args[0], &args[1]) {
-                (Value::Lit(Lit::Int(a)), Value::Lit(Lit::Int(b))) => {
-                    Value::Lit(Lit::Int(op(*a, *b)))
-                }
-                _ => panic!("type error: expected Int arguments"),
+    Value::Builtin(Rc::new(move |arg: Value| {
+        if let Value::Tuple(xs) = arg {
+            if let [Value::Lit(Lit::Int(a)), Value::Lit(Lit::Int(b))] = &xs[..] {
+                return Value::Lit(Lit::Int(op(*a, *b)));
             }
-        } else {
-            Value::Builtin(Rc::new(move |mut more: Vec<Value>| {
-                let mut new_args = args.clone();
-                new_args.append(&mut more);
-                curry(op.clone(), new_args)
-            }))
         }
-    }
-
-    let op = Rc::new(op);
-    curry(op, vec![])
+        panic!("type error in <builtin>");
+    }))
 }
 
 /// 2引数の比較演算子をBuiltinとして作る
 /// Int -> Int -> Bool
-pub fn make_cmpop<F>(op: F) -> Value
+pub fn make_i64_cmp_op<F>(op: F) -> Value
 where
     F: Fn(i64, i64) -> bool + 'static,
 {
-    fn curry<F>(op: Rc<F>, args: Vec<Value>) -> Value
-    where
-        F: Fn(i64, i64) -> bool + 'static,
-    {
-        if args.len() == 2 {
-            match (&args[0], &args[1]) {
-                (Value::Lit(Lit::Int(a)), Value::Lit(Lit::Int(b))) => {
-                    Value::Lit(Lit::Bool(op(*a, *b)))
-                }
-                _ => panic!("type error: expected Int arguments"),
+    Value::Builtin(Rc::new(move |arg: Value| {
+        if let Value::Tuple(xs) = arg {
+            if let [Value::Lit(Lit::Int(a)), Value::Lit(Lit::Int(b))] = &xs[..] {
+                return Value::Lit(Lit::Bool(op(*a, *b)));
             }
-        } else {
-            Value::Builtin(Rc::new(move |mut more: Vec<Value>| {
-                let mut new_args = args.clone();
-                new_args.append(&mut more);
-                curry(op.clone(), new_args)
-            }))
         }
-    }
-
-    let op = Rc::new(op);
-    curry(op, vec![])
-}
-
-pub fn make_eq() -> Value {
-    fn curry(args: Vec<Value>) -> Value {
-        if args.len() == 2 {
-            match eq_values(&args[0], &args[1]) {
-                Some(b) => Value::Lit(Lit::Bool(b)),
-                None => panic!("type error: unsupported operands for =="),
-            }
-        } else {
-            Value::Builtin(Rc::new(move |mut more: Vec<Value>| {
-                let mut new_args = args.clone();
-                new_args.append(&mut more);
-                curry(new_args)
-            }))
-        }
-    }
-    curry(vec![])
-}
-
-pub fn make_neq() -> Value {
-    fn curry(args: Vec<Value>) -> Value {
-        if args.len() == 2 {
-            match eq_values(&args[0], &args[1]) {
-                Some(b) => Value::Lit(Lit::Bool(!b)),
-                None => panic!("type error: unsupported operands for !="),
-            }
-        } else {
-            Value::Builtin(Rc::new(move |mut more: Vec<Value>| {
-                let mut new_args = args.clone();
-                new_args.append(&mut more);
-                curry(new_args)
-            }))
-        }
-    }
-    curry(vec![])
-}
-
-fn eq_values(a: &Value, b: &Value) -> Option<bool> {
-    match (a, b) {
-        (Value::Lit(Lit::Int(x)), Value::Lit(Lit::Int(y))) => Some(x == y),
-        (Value::Lit(Lit::Bool(x)), Value::Lit(Lit::Bool(y))) => Some(x == y),
-        (Value::Lit(Lit::Unit), Value::Lit(Lit::Unit)) => Some(true),
-        _ => None,
-    }
+        panic!("type error in <builtin>");
+    }))
 }

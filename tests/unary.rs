@@ -24,7 +24,7 @@ fn unary_neg_function_application() {
 #[test]
 fn abs_with_negative_literal() {
     let (val, sch) = eval_program(
-        "let abs = \\x. if (x < 0) -x else x; (abs -5, abs 7)"
+        "let abs = \\x. if (0 > x) -x else x; (abs -5, abs 7)"
     ).unwrap();
     assert_eq!(format!("{}", val), "(5, 7)");
     assert_eq!(format!("{}", sch.pretty()), "(Int, Int)");
@@ -51,7 +51,7 @@ fn not_comparison() {
 #[test]
 fn mixed_unary_ops_with_abs() {
     let (val, sch) = eval_program(r#"
-        let abs = \x. if (x < 0) -x else x;
+        let abs = \x. if (0 > x) -x else x;
         let x = -10;
         let y = not (x < 0);
         (y, abs x)

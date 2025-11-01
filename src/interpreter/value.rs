@@ -7,7 +7,7 @@ pub enum Value {
     Lit(Lit),
     Closure { pat: Pat, body: Box<Expr>, env: Env },
     Con(String, Vec<Value>),
-    Builtin(Rc<dyn Fn(Vec<Value>) -> Value>), // ← Rust 側の関数をラップ
+    Builtin(Rc<dyn Fn(Value) -> Value>), // ← Rust 側の関数をラップ
 
     Tuple(Vec<Value>),
     Record(Vec<(String, Value)>),

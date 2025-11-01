@@ -739,211 +739,109 @@ pub fn initial_kind_env() -> KindEnv {
     env.insert("()".into(), Kind::Star);
     env.insert("Int".into(), Kind::Star);
     env.insert("Bool".into(), Kind::Star);
-    env.insert("List".into(), Kind::Fun(Box::new(Kind::Star), Box::new(Kind::Star)));
-    env.insert("Option".into(), Kind::Fun(Box::new(Kind::Star), Box::new(Kind::Star)));
 
     env
 }
 
-pub fn initial_type_env(ctx: &mut TypeContext) -> TypeEnv {
+pub fn initial_type_env(_ctx: &mut TypeContext) -> TypeEnv {
     let mut type_env = TypeEnv::new();
 
-    // None : ∀a. Option a
-    let a = ctx.fresh_type_var_id();
     type_env.insert(
-        "None".into(),
+        "__i64_eq__".into(),
         TypeScheme {
-            vars: vec![a],
+            vars: vec![],
             constraints: vec![],
-            target: Type::app(
-                Type::con("Option"),
-                Type::var(a),
-            ),
+            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
         },
     );
 
-    // Some : ∀a. a -> Option a
-    let a = ctx.fresh_type_var_id();
     type_env.insert(
-        "Some".into(),
+        "__i64_ne__".into(),
         TypeScheme {
-            vars: vec![a],
+            vars: vec![],
             constraints: vec![],
-            target: Type::fun(
-                Type::var(a),
-                Type::app(
-                    Type::con("Option"),
-                    Type::var(a),
-                ),
-            ),
+            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
         },
     );
 
-    // Nil : ∀a. List a
-    let a = ctx.fresh_type_var_id();
     type_env.insert(
-        "Nil".into(),
+        "__i64_le__".into(),
         TypeScheme {
-            vars: vec![a],
+            vars: vec![],
             constraints: vec![],
-            target: Type::app(Type::con("List"), Type::var(a)),
+            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
         },
     );
 
-    // Cons : ∀a. a -> List a -> List a
-    let a = ctx.fresh_type_var_id();
     type_env.insert(
-        "Cons".into(),
+        "__i64_lt__".into(),
         TypeScheme {
-            vars: vec![a],
+            vars: vec![],
             constraints: vec![],
-            target: Type::fun(
-                Type::var(a),
-                Type::fun(
-                    Type::app(Type::con("List"), Type::var(a)),
-                    Type::app(Type::con("List"), Type::var(a)),
-                ),
-            ),
+            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
         },
     );
 
-    // // map : ∀a b. (a -> b) -> List a -> List b
-    // let a = ctx.fresh_type_var_id();
-    // let b = ctx.fresh_type_var_id();
-
-    // type_env.insert(
-    //     "map".into(),
-    //     Scheme {
-    //         vars: vec![a, b],
-    //         constraints: vec![],
-    //         ty: Type::fun(
-    //             Type::fun(Type::var(a), Type::var(b)), // (a -> b)
-    //             Type::fun(
-    //                 Type::app(Type::con("List"), Type::var(a)), // List a
-    //                 Type::app(Type::con("List"), Type::var(b)), // List b
-    //             ),
-    //         ),
-    //     },
-    // );
-
-    let a = ctx.fresh_type_var_id();
     type_env.insert(
-        "__builtin_==__".into(),
+        "__i64_ge__".into(),
         TypeScheme {
-            vars: vec![a],
+            vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
         },
     );
 
-    let a = ctx.fresh_type_var_id();
     type_env.insert(
-        "__builtin_!=__".into(),
+        "__i64_gt__".into(),
         TypeScheme {
-            vars: vec![a],
+            vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
         },
     );
 
-    let a = ctx.fresh_type_var_id();
     type_env.insert(
-        "__builtin_<__".into(),
+        "__i64_add__".into(),
         TypeScheme {
-            vars: vec![a],
+            vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Int")), // (Int, Int) -> Int
         },
     );
 
-
-    let a = ctx.fresh_type_var_id();
     type_env.insert(
-        "__builtin_<=__".into(),
+        "__i64_sub__".into(),
         TypeScheme {
-            vars: vec![a],
+            vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Int")), // (Int, Int) -> Int
         },
     );
 
-    let a = ctx.fresh_type_var_id();
     type_env.insert(
-        "__builtin_>__".into(),
+        "__i64_mul__".into(),
         TypeScheme {
-            vars: vec![a],
+            vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Int")), // (Int, Int) -> Int
         },
     );
 
-    let a = ctx.fresh_type_var_id();
     type_env.insert(
-        "__builtin_>=__".into(),
+        "__i64_div__".into(),
         TypeScheme {
-            vars: vec![a],
+            vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::con("Bool"))),
+            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Int")), // (Int, Int) -> Int
         },
     );
 
-    let a = ctx.fresh_type_var_id();
     type_env.insert(
-        "__builtin_+__".into(),
+        "__i64_neg__".into(),
         TypeScheme {
-            vars: vec![a],
+            vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
-        },
-    );
-
-    let a = ctx.fresh_type_var_id();
-    type_env.insert(
-        "__builtin_-__".into(),
-        TypeScheme {
-            vars: vec![a],
-            constraints: vec![],
-            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
-        },
-    );
-
-    let a = ctx.fresh_type_var_id();
-    type_env.insert(
-        "__builtin_*__".into(),
-        TypeScheme {
-            vars: vec![a],
-            constraints: vec![],
-            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
-        },
-    );
-
-    let a = ctx.fresh_type_var_id();
-    type_env.insert(
-        "__builtin_/__".into(),
-        TypeScheme {
-            vars: vec![a],
-            constraints: vec![],
-            target: Type::fun(Type::var(a), Type::fun(Type::var(a), Type::var(a))),
-        },
-    );
-
-    let a = ctx.fresh_type_var_id();
-    type_env.insert(
-        "negate".into(),
-        TypeScheme {
-            vars: vec![a],
-            constraints: vec![],
-            target: Type::fun(Type::var(a), Type::var(a)),
-        },
-    );
-
-    let a = ctx.fresh_type_var_id();
-    type_env.insert(
-        "not".into(),
-        TypeScheme {
-            vars: vec![a],
-            constraints: vec![],
-            target: Type::fun(Type::var(a), Type::var(a)),
+            target: Type::fun(Type::con("Int"), Type::con("Int")),
         },
     );
 

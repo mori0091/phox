@@ -2,21 +2,15 @@ use crate::api;
 
 use crate::resolve::resolve_item;
 
-use crate::typesys::{ImplEnv, InferCtx, TypeContext};
 use crate::typesys::{infer_item, generalize};
 use crate::typesys::apply_trait_impls_item;
 
-use crate::interpreter::initial_env;
 use crate::interpreter::eval_item;
 
 use lalrpop_util::ParseError;
 
 pub fn repl() {
-    let mut ctx = TypeContext::new();
-    let mut icx = InferCtx::initial(&mut ctx);
-    let mut impl_env = ImplEnv::new();
-    let mut env = initial_env();
-
+    let mut boot = api::Bootstrap::new();
     let mut buffer = String::new();
     let mut prompt = "> ";
 
@@ -44,23 +38,23 @@ pub fn repl() {
         match api::parse_items(&buffer) {
             Ok(items) => {
                 for mut item in items {
-                    if let Err(e) = resolve_item(&mut ctx, &mut icx, &mut impl_env, &mut env, &mut item) {
+                    if let Err(e) = resolve_item(&mut boot.ctx, &mut boot.icx, &mut boot.impl_env, &mut boot.env, &mut item) {
                         println!("resolve error: {}", e);
                     }
                     else {
-                        match infer_item(&mut ctx, &mut icx, &mut item) {
+                        match infer_item(&mut boot.ctx, &mut boot.icx, &mut item) {
                             Err(e) => {
                                 println!("infer error: {}", e);
                             }
                             Ok(ty) => {
-                                if let Err(e) = apply_trait_impls_item(&mut item, &mut ctx, &icx, &impl_env) {
+                                if let Err(e) = apply_trait_impls_item(&mut item, &mut boot.ctx, &boot.icx, &boot.impl_env) {
                                     println!("infer error: {}", e);
                                 }
                                 else {
                                     // eprintln!("** ImplEnv **\n {:?}\n**", impl_env);
                                     // eprintln!("** obligations **\n {:?}\n**", icx.obligations);
-                                    let sch = generalize(&mut ctx, &icx, &ty);
-                                    let val = eval_item(&item, &mut env);
+                                    let sch = generalize(&mut boot.ctx, &boot.icx, &ty);
+                                    let val = eval_item(&item, &mut boot.env);
                                     println!("=> {}: {}", val, sch.pretty());
                                 }
                             }

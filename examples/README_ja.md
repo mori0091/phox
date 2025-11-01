@@ -139,7 +139,7 @@ cargo run examples/higher_order_function.phx
 
 ```ml
 let rec (**) = λx. λy.
-  if (y <= 0) 1
+  if (0 >= y) 1
   else x * (x ** (y - 1));
 
 (2 ** 3, 3 ** 4)
@@ -155,7 +155,7 @@ cargo run examples/operator_pow.phx
 ## 9. 再帰関数
 ```ml
 let rec fact = λn.
-  if (n == 0) 1 else n * fact (n - 1);
+  if (0 == n) 1 else n * fact (n - 1);
 
 fact 5
 // => 120: Int

@@ -28,8 +28,8 @@ let qsort = \cmp. {
 
 // ---- test ----
 let list = (Cons 10 (Cons 2 (Cons 4 (Cons 9 (Cons 1 (Cons (-5) Nil))))));
-let accend = qsort (<=) list;
-let decend = qsort (>=) list;
+let accend = qsort @{Ord Int}.(<=) list;
+let decend = qsort @{Ord Int}.(>=) list;
 @{
     list:   list,
     accend: accend,
