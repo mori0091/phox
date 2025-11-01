@@ -1,11 +1,11 @@
-trait Eq a {
+trait Eq2 a {
     eq : a -> a -> Bool;
     neq: a -> a -> Bool;
 };
 
-impl Eq Int {
-    eq  = \a.\b. a == b;
-    neq = \a.\b. a != b;
+impl Eq2 Int {
+    eq  = \a.\b. @{Eq Int}.(==) a b;
+    neq = \a.\b. @{Eq Int}.(!=) a b;
 };
 
 let x = eq 1 1 ; // => true        (discarded)

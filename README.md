@@ -170,7 +170,7 @@ let normSq = λx.λy. x * x + y * y;
 ```ml
 // User-defined operator
 let rec (**) = λx.λy.
-    if (y <= 0) 1
+    if (0 >= y) 1
     else x * x ** (y - 1);
 
 ((**) 2 3, 3 ** 4)
@@ -204,7 +204,7 @@ not true  // => false: Bool  (unary not)
 Phox supports **traits** (`trait`; similar to type classes) to define shared behavior across types.
 
 ```ml
-trait Eq a {
+trait Eq2 a {
   eq  : a -> a -> Bool;
   neq : a -> a -> Bool;
 }
@@ -213,14 +213,14 @@ trait Eq a {
 An **implementation** (`impl`) provides concrete definitions for a trait and a type:
 
 ```ml
-impl Eq Int {
-  eq  = λx.λy. x == y;
-  neq = λx.λy. x != y;
+impl Eq2 Int {
+  eq  = λx.λy. @{Eq Int}.(==) x y;
+  neq = λx.λy. @{Eq Int}.(!=) x y;
 };
 
-impl Eq Bool {
-  eq  = λx.λy. x == y;
-  neq = λx.λy. x != y;
+impl Eq2 Bool {
+  eq  = λx.λy. @{Eq Bool}.(==) x y;
+  neq = λx.λy. @{Eq Bool}.(!=) x y;
 };
 ```
 
@@ -246,7 +246,8 @@ You can explicitly pass or select an implementation:
 ```ml
 let eqInt = @{Eq Int};   // trait record for `Eq Int`
 
-eqInt.eq 2 3   // => false
+eqInt.(==) 2 3     // => false
+2 `eqInt.(==)` 3   // => false
 ```
 
 Trait records make resolution explicit and predictable.  
@@ -269,7 +270,7 @@ id 42
 ### Factorial
 ```ml
 let rec fact = λn.
-  if (n == 0) 1 else n * fact (n - 1);
+  if (0 == n) 1 else n * fact (n - 1);
 
 fact 5
 // => 120: Int
@@ -326,7 +327,7 @@ If you run without arguments, Phox starts an interactive REPL:
 
 ``` sh
 cargo run
-> let rec fact = λn. if (n == 0) 1 else n * fact (n - 1);
+> let rec fact = λn. if (0 == n) 1 else n * fact (n - 1);
 > fact 5
 => 120: Int
 ```

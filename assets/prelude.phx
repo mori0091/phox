@@ -1,0 +1,123 @@
+type Option a = None | Some a;
+type Result e a = Err e | Ok a;
+type List a = Nil | Cons a (List a);
+
+// -------------------------------------------------------------
+let (&&) = \x.\y. match ((x, y)) {
+    (true, true) => true,
+    (_, _)       => false,
+};
+
+let (||) = \x.\y. match ((x, y)) {
+    (true, _) => true,
+    (_, true) => true,
+    (_, _)    => false,
+};
+
+let not = \x. match (x) {
+    true  => false,
+    false => true,
+};
+
+// -------------------------------------------------------------
+// === Eq ===
+trait Eq a {
+    (==) : a -> a -> Bool;
+    (!=) : a -> a -> Bool;
+};
+
+// // Default implementation.
+// impl Eq a {
+//     // Override either or both members.
+//     (==) = \x.\y. !(x != y);
+//     (!=) = \x.\y. !(x == y);
+// };
+
+// -------------------------------------------------------------
+// === Ord ===
+trait Ord a /* : Eq a */ {
+    (<=) : a -> a -> Bool;
+    (<)  : a -> a -> Bool;
+    (>=) : a -> a -> Bool;
+    (>)  : a -> a -> Bool;
+};
+
+// impl Ord a {
+//     (<)  = \x.\y. (x != y) && (x <= y);
+//     (>=) = \x.\y. (x == y) || (x > y);
+//     (>)  = \x.\y. !(x <= y);
+// };
+
+// -------------------------------------------------------------
+// === Num ===
+trait Num a {
+    (+) : a -> a -> a;
+    (-) : a -> a -> a;
+    (*) : a -> a -> a;
+    (/) : a -> a -> a;
+    negate : a -> a;
+};
+
+// -------------------------------------------------------------
+// === () ===
+
+impl Eq () {
+    (==) = \x.\y. true;
+    (!=) = \x.\y. false;
+};
+
+impl Ord () {
+    (<=) = \x.\y. true;
+    (<)  = \x.\y. false;
+    (>=) = \x.\y. true;
+    (>)  = \x.\y. false;
+};
+
+// -------------------------------------------------------------
+// === Bool ===
+
+impl Eq Bool {
+    (==) = \x.\y. match ((x, y)) {
+        (true , true ) => true,
+        (false, false) => true,
+        _              => false,
+    };
+    (!=) = \x.\y. match ((x, y)) {
+        (true , true ) => false,
+        (false, false) => false,
+        _              => true,
+    };
+};
+
+impl Ord Bool {
+    (<=) = \x.\y. match ((x, y)) {
+        (false, true) => true,
+        (true , true) => true,
+        _             => false,
+    };
+    (<)  = \x.\y. (x != y) && (x <= y);
+    (>=) = \x.\y. (x == y) || (x > y);
+    (>)  = \x.\y. !(x <= y);
+};
+
+// === Int ===
+
+impl Eq Int {
+    (==) = \x.\y. __i64_eq__ (x, y);
+    (!=) = \x.\y. __i64_ne__ (x, y);
+};
+
+impl Ord Int {
+    (<=) = \x.\y. __i64_le__ (x, y);
+    (<)  = \x.\y. __i64_lt__ (x, y);
+    (>=) = \x.\y. __i64_ge__ (x, y);
+    (>)  = \x.\y. __i64_gt__ (x, y);
+};
+
+impl Num Int {
+    (+) = \x.\y. __i64_add__ (x, y);
+    (-) = \x.\y. __i64_sub__ (x, y);
+    (*) = \x.\y. __i64_mul__ (x, y);
+    (/) = \x.\y. __i64_div__ (x, y);
+    negate = \x. __i64_neg__ x;
+};

@@ -16,10 +16,36 @@ use crate::resolve::resolve_item;
 use crate::typesys::infer_item;
 use crate::typesys::{Type, TypeScheme};
 use crate::typesys::{TypeContext, InferCtx, ImplEnv, infer_expr, generalize};
-use crate::typesys::apply_trait_impls_item;
+use crate::typesys::{apply_trait_impls_item, apply_trait_impls_expr};
 
-use crate::interpreter::{initial_env, Value};
+use crate::interpreter::{initial_env, Value, Env};
 use crate::interpreter::eval;
+
+use crate::prelude::*;
+
+pub struct Bootstrap {
+    pub ctx: TypeContext,
+    pub icx: InferCtx,
+    pub impl_env: ImplEnv,
+    pub env: Env,
+}
+
+impl Bootstrap {
+    pub fn new() -> Self {
+        let mut ctx = TypeContext::new();
+        let icx = InferCtx::initial(&mut ctx);
+        let impl_env = ImplEnv::new();
+        let env = initial_env();
+        let mut boot = Bootstrap {
+            ctx,
+            icx,
+            impl_env,
+            env,
+        };
+        eval_program_0(&mut boot, PRELUDE).unwrap();
+        boot
+    }
+}
 
 /// Parse an expression.
 pub fn parse_expr(src: &str) -> Result<Expr, String> {
@@ -31,11 +57,14 @@ pub fn parse_expr(src: &str) -> Result<Expr, String> {
 
 /// Infer type scheme of Expr AST.
 pub fn infer_expr_scheme(ast: &mut Expr) -> Result<TypeScheme, String> {
-    let mut ctx = TypeContext::new();
-    let mut icx = InferCtx::initial(&mut ctx);
-    let ty = infer_expr(&mut ctx, &mut icx, ast)
+    let mut boot = Bootstrap::new();
+    infer_expr_scheme_0(&mut boot, ast)
+}
+
+fn infer_expr_scheme_0(boot: &mut Bootstrap, ast: &mut Expr) -> Result<TypeScheme, String> {
+    let ty = infer_expr(&mut boot.ctx, &mut boot.icx, ast)
         .map_err(|e| format!("infer error: {e:?}"))?;
-    let sch = generalize(&mut ctx, &icx, &ty);
+    let sch = generalize(&mut boot.ctx, &boot.icx, &ty);
     Ok(sch)
 }
 
@@ -59,10 +88,12 @@ pub fn check_expr_type(src: &str) -> Result<Type, String> {
 
 /// Parse, infer type scheme, and evaluate of an expression.
 pub fn eval_expr(src: &str) -> Result<(Value, TypeScheme), String> {
+    let mut boot = Bootstrap::new();
     let mut ast = parse_expr(src)?;
-    let sch = infer_expr_scheme(&mut ast)?;
-    let mut env = initial_env();
-    let val = eval::eval_expr(&ast, &mut env);
+    let sch = infer_expr_scheme_0(&mut boot, &mut ast)?;
+    apply_trait_impls_expr(&mut ast, &mut boot.ctx, &boot.icx, &boot.impl_env)
+        .map_err(|e| format!("infer error: {e}"))?;
+    let val = eval::eval_expr(&ast, &mut boot.env);
     Ok((val, sch))
 }
 
@@ -79,24 +110,24 @@ pub fn parse_program(src: &str) -> Result<Program, ParseError<usize, Token, Lexi
 
 /// Parse, infer type scheme, and evaluate of a program.
 pub fn eval_program(src: &str) -> Result<(Value, TypeScheme), String> {
+    let mut boot = Bootstrap::new();
+    eval_program_0(&mut boot, src)
+}
+
+pub fn eval_program_0(boot: &mut Bootstrap, src: &str) -> Result<(Value, TypeScheme), String> {
     let tops = parse_program(src)
         .map_err(|e| format!("parse error: {e:?}"))?;
 
-    let mut ctx = TypeContext::new();
-    let mut icx = InferCtx::initial(&mut ctx);
-    let mut impl_env = ImplEnv::new();
-    let mut env = initial_env();
-
     let mut last = None;
     for mut item in tops {
-        resolve_item(&mut ctx, &mut icx, &mut impl_env, &mut env, &mut item)
+        resolve_item(&mut boot.ctx, &mut boot.icx, &mut boot.impl_env, &mut boot.env, &mut item)
             .map_err(|e| format!("resolve error: {e}"))?;
-        let ty = infer_item(&mut ctx, &mut icx, &mut item)
+        let ty = infer_item(&mut boot.ctx, &mut boot.icx, &mut item)
             .map_err(|e| format!("infer error: {e}"))?;
-        apply_trait_impls_item(&mut item, &mut ctx, &icx, &impl_env)
+        apply_trait_impls_item(&mut item, &mut boot.ctx, &boot.icx, &boot.impl_env)
             .map_err(|e| format!("infer error: {e}"))?;
-        let sch = generalize(&mut ctx, &icx, &ty);
-        let val = eval_item(&item, &mut env);
+        let sch = generalize(&mut boot.ctx, &boot.icx, &ty);
+        let val = eval_item(&item, &mut boot.env);
         last = Some((val, sch));
     }
     last.ok_or_else(|| "program contained no expression".to_string())

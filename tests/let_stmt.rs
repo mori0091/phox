@@ -37,7 +37,7 @@ fn test_let_polymorphism_id() {
 fn test_letrec_factorial() {
     // let rec fact = \n. if (n == 0) 1 else n * fact (n - 1) ; fact 5
     let (val, sch) = eval_program(
-        "let rec fact = \\n. if (n == 0) 1 else n * fact (n - 1) ; fact 5"
+        "let rec fact = \\n. if (0 == n) 1 else n * fact (n - 1) ; fact 5"
     ).unwrap();
     assert_eq!(format!("{}", val), "120");
     assert_eq!(format!("{}", sch.pretty()), "Int");
@@ -47,7 +47,7 @@ fn test_letrec_factorial() {
 fn test_letrec_fibonacci() {
     // let rec fib = \n. if (n == 0) 0 else if (n == 1) 1 else fib (n - 1) + fib (n - 2) ; fib 6
     let (val, sch) = eval_program(
-        "let rec fib = \\n. if (n == 0) 0 else if (n == 1) 1 else fib (n - 1) + fib (n - 2) ; fib 6"
+        "let rec fib = \\n. if (0 == n) 0 else if (n == 1) 1 else fib (n - 1) + fib (n - 2) ; fib 6"
     ).unwrap();
     assert_eq!(format!("{}", val), "8");
     assert_eq!(format!("{}", sch.pretty()), "Int");
@@ -71,13 +71,13 @@ fn test_letrec_mutual_simple() {
 
 #[test]
 fn test_fib_conditions() {
-    let (val, _) = eval_program("let rec fib = \\n. if (n == 0) 0 else if (n == 1) 1 else 999 ; fib 0").unwrap();
+    let (val, _) = eval_program("let rec fib = \\n. if (0 == n) 0 else if (n == 1) 1 else 999 ; fib 0").unwrap();
     assert_eq!(format!("{}", val), "0");
 
-    let (val, _) = eval_program("let rec fib = \\n. if (n == 0) 0 else if (n == 1) 1 else 999 ; fib 1").unwrap();
+    let (val, _) = eval_program("let rec fib = \\n. if (0 == n) 0 else if (n == 1) 1 else 999 ; fib 1").unwrap();
     assert_eq!(format!("{}", val), "1");
 
-    let (val, _) = eval_program("let rec fib = \\n. if (n == 0) 0 else if (n == 1) 1 else 999 ; fib 2").unwrap();
+    let (val, _) = eval_program("let rec fib = \\n. if (0 == n) 0 else if (n == 1) 1 else 999 ; fib 2").unwrap();
     assert_eq!(format!("{}", val), "999");
 }
 

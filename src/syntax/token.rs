@@ -48,6 +48,9 @@ pub enum Token {
     #[token(">"    , priority = 4)]  Gt,
     #[token(">="   , priority = 4)]  Ge,
 
+    #[token("&&"   , priority = 3)]  And,
+    #[token("||"   , priority = 3)]  Or,
+
     // --- 記号 ---
     #[token("="    , priority = 3)]  Assign,
     #[token("->"   , priority = 3)]  Arrow,
