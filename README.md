@@ -96,7 +96,7 @@ x + y;     // => 3: Int  (discarded)
 ```ml
 type Option a = Some a | None;
 type Pair a b = Pair a b;
-type Result a e = Ok a | Err e;
+type Result e a = Ok a | Err e;
 ```
 
 - Variants can take **0 or more arguments**.
@@ -292,7 +292,7 @@ getOrZero (Some 42)
 
 ### Result
 ```ml
-type Result a e = Ok a | Err e;
+type Result e a = Ok a | Err e;
 
 let unwrapOr = λr. λdefault.
   match (r) {

@@ -103,7 +103,7 @@ cargo run examples/newtype_tuple.phx
 
 ## 7. 複数バリアントの型
 ```ml
-type Result a e = Ok a | Err e;
+type Result e a = Ok a | Err e;
 
 let unwrapOr = λr. λdefault.
   match (r) {

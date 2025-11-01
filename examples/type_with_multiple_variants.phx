@@ -1,4 +1,4 @@
-type Result a e = Ok a | Err e;
+type Result e a = Ok a | Err e;
 
 let unwrapOr = λr. λdefault.
   match (r) {
