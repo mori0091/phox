@@ -51,6 +51,11 @@ pub enum Token {
     #[token("&&"   , priority = 3)]  And,
     #[token("||"   , priority = 3)]  Or,
 
+    #[token(">>"   , priority = 4)]  ComposeR,
+    #[token("<<"   , priority = 4)]  ComposeL,
+    #[token("|>"   , priority = 4)]  PipeR,
+    #[token("<|"   , priority = 4)]  PipeL,
+
     // --- 記号 ---
     #[token("="    , priority = 3)]  Assign,
     #[token("->"   , priority = 3)]  Arrow,

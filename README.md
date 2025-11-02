@@ -200,6 +200,52 @@ let x = 3;
 not true  // => false: Bool  (unary not)
 ```
 
+### Pipeline and Composition operators
+
+Phox provides **pipeline operators** and **composition operators** to make function application and chaining more readable.  
+They allow you to express nested calls as a clear flow of data or a sequence of transformations.
+
+#### Pipeline operators
+- `x |> f` is the same as `f x`.  
+- `f <| x` is also the same as `f x`.  
+- Use `|>` when you want to read left‑to‑right, and `<|` when you prefer right‑to‑left.
+
+```ml
+x |> f |> g    // g (f x)
+g <| f <| x    // g (f x)
+```
+
+#### Composition operators
+- `f >> g` creates a function that applies `f` first, then `g`.  
+- `f << g` creates a function that applies `g` first, then `f`.
+
+```ml
+(f >> g) x    // g (f x)
+(f << g) x    // f (g x)
+```
+
+#### Precedence
+- Composition operators `>>` / `<<` bind more tightly than pipeline operators.  
+- Among pipelines, `|>` binds more tightly than `<|`.
+
+```ml
+x |> f >> g    // x |> (f >> g)
+f <| x |> g    // f <| (x |> g)
+```
+
+``` ml
+let f = \x. x + 1;
+let g = \x. x * 2;
+let h = \x. x * x;
+1 |> f |> g |> h;       // => 16: Int  ; h (g (f 1))
+1 |> f >> g >> h;       // => 16: Int  ; h (g (f 1))
+f >> g >> h <| 1;       // => 16: Int  ; h (g (f 1))
+f >> g >> h <| 1 |> f;  // => 36: Int  ; h (g (f (f 1)))
+```
+
+👉 In short: **use pipelines to pass data, and composition to connect functions**. You can freely combine both styles to write in the way that feels most natural.
+
+
 ### Traits and Implementations
 Phox supports **traits** (`trait`; similar to type classes) to define shared behavior across types.
 

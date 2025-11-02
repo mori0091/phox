@@ -42,6 +42,11 @@ extern {
         "&&" =>  Token::And,
         "||" =>  Token::Or,
 
+        ">>" => Token::ComposeR,
+        "<<" => Token::ComposeL,
+        "|>" => Token::PipeR,
+        "<|" => Token::PipeL,
+
         // --- 記号 ---
         "="  =>  Token::Assign,
         "->" =>  Token::Arrow,
@@ -339,24 +344,60 @@ ExprInfixOp: Expr = {
 };
 
 Expr7: Expr = {
-    ExprUnary,
+    ExprPipeL,
     Expr8,
+};
+
+ExprPipeL: Expr = {
+    <f:Expr8> "<|" <x:Expr7> => Expr::app(f, x),
+};
+
+Expr8: Expr = {
+    ExprPipeR,
+    Expr9,
+};
+
+ExprPipeR: Expr = {
+    <x:Expr8> "|>" <f:Expr9> => Expr::app(f, x),
+};
+
+Expr9: Expr = {
+    ExprCompose,
+    Expr10,
+};
+
+ExprCompose: Expr = {
+    <f:Expr9> ">>" <g:Expr10> => {
+        let x = Pat::var("__tmp_var__");
+        let body = Expr::app(g, Expr::app(f, Expr::var("__tmp_var__")));
+        Expr::abs(x, body)
+    },
+    <f:Expr9> "<<" <g:Expr10> => {
+        let x = Pat::var("__tmp_var__");
+        let body = Expr::app(f, Expr::app(g, Expr::var("__tmp_var__")));
+        Expr::abs(x, body)
+    },
+};
+
+Expr10: Expr = {
+    ExprUnary,
+    Expr11,
 };
 
 // 単項演算子 (prefix)
 ExprUnary: Expr = {
-    "-" <r:Expr7> => Expr::app(Expr::var("negate"), r),
-    "!" <r:Expr7> => Expr::app(Expr::var("not"), r),
+    "-" <r:Expr10> => Expr::app(Expr::var("negate"), r),
+    "!" <r:Expr10> => Expr::app(Expr::var("not"), r),
 };
 
-Expr8: Expr = {
+Expr11: Expr = {
     ExprApp,
     Atom,
 };
 
 // 関数適用（左結合）
 ExprApp: Expr = {
-    <f:Expr8> <x:Atom> => Expr::app(f, x),
+    <f:Expr11> <x:Atom> => Expr::app(f, x),
 };
 
 // 原子的な式
