@@ -1,8 +1,8 @@
-use phox::api::eval_program;
+use phox::api::eval;
 
 #[test]
 fn test_user_defined_pair() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Pair a b = MkPair a b;
          MkPair 1 true"
     ).unwrap();
@@ -12,7 +12,7 @@ fn test_user_defined_pair() {
 
 #[test]
 fn test_user_defined_pair_match() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Pair a b = MkPair a b;
          match(MkPair 10 20) { MkPair x y => x + y }"
     ).unwrap();
@@ -22,7 +22,7 @@ fn test_user_defined_pair_match() {
 
 #[test]
 fn test_user_defined_result_like() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type MyResult a e = MyOk a | MyErr e;
          (MyOk 42, MyErr false)"
     ).unwrap();
@@ -32,7 +32,7 @@ fn test_user_defined_result_like() {
 
 #[test]
 fn test_user_defined_record_variant() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Point = P @{ x: Int, y: Int };
          P @{ x: 3, y: 4 }"
     ).unwrap();
@@ -42,7 +42,7 @@ fn test_user_defined_record_variant() {
 
 #[test]
 fn test_user_defined_record_variant_match() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Point = P @{ x: Int, y: Int };
          match(P @{ x: 3, y: 4 }) { P @{ x, y } => x + y }"
     ).unwrap();
@@ -52,7 +52,7 @@ fn test_user_defined_record_variant_match() {
 
 #[test]
 fn test_user_defined_tree_leaf() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Tree a = Leaf a | Node (Tree a) (Tree a);
          Leaf 42"
     ).unwrap();
@@ -62,7 +62,7 @@ fn test_user_defined_tree_leaf() {
 
 #[test]
 fn test_user_defined_tree_node() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Tree a = Leaf a | Node (Tree a) (Tree a);
          Node (Leaf 1) (Leaf 2)"
     ).unwrap();
@@ -72,7 +72,7 @@ fn test_user_defined_tree_node() {
 
 #[test]
 fn test_user_defined_tree_match() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Tree a = Leaf a | Node (Tree a) (Tree a);
          match(Node (Leaf 10) (Leaf 20)) {
              Leaf x => x,
@@ -85,7 +85,7 @@ fn test_user_defined_tree_match() {
 
 #[test]
 fn test_user_defined_tree_record_leaf() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Tree a = Leaf @{ value: a } | Node @{ left: Tree a, right: Tree a };
          Leaf @{ value: 42 }"
     ).unwrap();
@@ -95,7 +95,7 @@ fn test_user_defined_tree_record_leaf() {
 
 #[test]
 fn test_user_defined_tree_record_node() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Tree a = Leaf @{ value: a } | Node @{ left: Tree a, right: Tree a };
          Node @{ left: Leaf @{ value: 1 }, right: Leaf @{ value: 2 } }"
     ).unwrap();
@@ -105,7 +105,7 @@ fn test_user_defined_tree_record_node() {
 
 #[test]
 fn test_user_defined_tree_record_match() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Tree a = Leaf @{ value: a } | Node @{ left: Tree a, right: Tree a };
          match(Node @{ left: Leaf @{ value: 10 }, right: Leaf @{ value: 20 } }) {
              Leaf @{ value: x } => x,

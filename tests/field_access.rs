@@ -1,4 +1,5 @@
 use phox::api::check_expr_scheme;
+use phox::api::eval;
 
 #[test]
 fn test_field_access_type_simple() {
@@ -24,25 +25,23 @@ fn test_field_access_type_non_record() {
     assert!(format!("{:?}", err).contains("ExpectedRecord"));
 }
 
-use phox::api::eval_expr;
-
 #[test]
 fn test_field_access_simple() {
-    let (val, sch) = eval_expr("{ let p = @{ x: 42, y: true }; p.x }").unwrap();
+    let (val, sch) = eval("{ let p = @{ x: 42, y: true }; p.x }").unwrap();
     assert_eq!(format!("{}", val), "42");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
 
 #[test]
 fn test_field_access_bool() {
-    let (val, sch) = eval_expr("{ let p = @{ x: 42, y: true }; p.y }").unwrap();
+    let (val, sch) = eval("{ let p = @{ x: 42, y: true }; p.y }").unwrap();
     assert_eq!(format!("{}", val), "true");
     assert_eq!(format!("{}", sch.pretty()), "Bool");
 }
 
 #[test]
 fn test_field_access_nested() {
-    let (val, sch) = eval_expr("{ let p = @{ inner: @{ x: 1 } }; p.inner.x }").unwrap();
+    let (val, sch) = eval("{ let p = @{ inner: @{ x: 1 } }; p.inner.x }").unwrap();
     assert_eq!(format!("{}", val), "1");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
@@ -50,20 +49,18 @@ fn test_field_access_nested() {
 #[test]
 #[should_panic(expected = "UnknownField")]
 fn test_field_access_missing_field() {
-    let _ = eval_expr("{ let p = @{ x: 42 }; p.y }").unwrap();
+    let _ = eval("{ let p = @{ x: 42 }; p.y }").unwrap();
 }
 
 #[test]
 #[should_panic(expected = "ExpectedRecord")]
 fn test_field_access_non_record() {
-    let _ = eval_expr("{ let n = 42; n.x }").unwrap();
+    let _ = eval("{ let n = 42; n.x }").unwrap();
 }
-
-use phox::api::eval_program;
 
 #[test]
 fn test_user_defined_record_variant_field_access() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Point = P @{ x: Int, y: Int };
          let p = P @{ x: 10, y: 20 };
          match (p) {
@@ -76,7 +73,7 @@ fn test_user_defined_record_variant_field_access() {
 
 #[test]
 fn test_user_defined_record_variant_nested_field_access() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Wrapper = W @{ inner: @{ x: Int } };
          let w = W @{ inner: @{ x: 42 } };
          match (w) {
@@ -89,7 +86,7 @@ fn test_user_defined_record_variant_nested_field_access() {
 
 #[test]
 fn test_user_defined_record_variant_direct_field_access() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Point = P @{ x: Int, y: Int };
          match (P @{ x: 3, y: 4 }) {
              P @{ x: a, y: b } => @{ sum: a + b }.sum
@@ -102,7 +99,7 @@ fn test_user_defined_record_variant_direct_field_access() {
 #[test]
 fn test_newtype_named_record_field_access() {
     // 型名とコンストラクタ名が一致する newtype レコード
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Point = Point @{ x: Int, y: Int };
          let p = Point @{ x: 1, y: 2 };
          p.x"
@@ -113,7 +110,7 @@ fn test_newtype_named_record_field_access() {
 
 #[test]
 fn test_newtype_named_record_field_access_y() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Point = Point @{ x: Int, y: Int };
          let p = Point @{ x: 1, y: 2 };
          p.y"
@@ -125,7 +122,7 @@ fn test_newtype_named_record_field_access_y() {
 #[test]
 fn test_newtype_named_tuple_field_access() {
     // 型名とコンストラクタ名が一致する newtype タプル
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Pair = Pair (Int, Bool);
          let p = Pair (42, true);
          p.0"
@@ -136,7 +133,7 @@ fn test_newtype_named_tuple_field_access() {
 
 #[test]
 fn test_newtype_named_tuple_field_access_second() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Pair = Pair (Int, Bool);
          let p = Pair (42, true);
          p.1"
@@ -148,7 +145,7 @@ fn test_newtype_named_tuple_field_access_second() {
 #[test]
 fn test_newtype_parametric_record_field_access() {
     // 型引数付き newtype レコード
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Point a = Point @{ x: a, y: a };
          let p = Point @{ x: 100, y: 200 };
          p.x"
@@ -159,7 +156,7 @@ fn test_newtype_parametric_record_field_access() {
 
 #[test]
 fn test_newtype_parametric_record_field_access_y() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Point a = Point @{ x: a, y: a };
          let p = Point @{ x: 100, y: 200 };
          p.y"
@@ -171,7 +168,7 @@ fn test_newtype_parametric_record_field_access_y() {
 #[test]
 fn test_newtype_parametric_tuple_field_access_first() {
     // 型引数付き newtype タプル
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Pair a b = Pair (a, b);
          let p = Pair (42, true);
          p.0"
@@ -182,7 +179,7 @@ fn test_newtype_parametric_tuple_field_access_first() {
 
 #[test]
 fn test_newtype_parametric_tuple_field_access_second() {
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Pair a b = Pair (a, b);
          let p = Pair (42, true);
          p.1"
@@ -195,7 +192,7 @@ fn test_newtype_parametric_tuple_field_access_second() {
 fn test_newtype_parametric_record_field_access_function_lambda() {
     // Point a = Point @{ x: a, y: a }
     // f = \p. p.x
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Point a = Point @{ x: a, y: a };
          let f = \\p. { let Point r = p; r.x };
          f (Point @{ x: 123, y: 456 })"
@@ -208,7 +205,7 @@ fn test_newtype_parametric_record_field_access_function_lambda() {
 fn test_newtype_parametric_tuple_field_access_function_lambda() {
     // Pair a b = Pair (a, b)
     // g = \p. p.1
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Pair a b = Pair (a, b);
          let g = \\p. { let Pair t = p; t.1 };
          g (Pair (42, true))"
@@ -221,7 +218,7 @@ fn test_newtype_parametric_tuple_field_access_function_lambda() {
 fn test_newtype_parametric_record_field_access_function_lambda_pat() {
     // Point a = Point @{ x: a, y: a }
     // f = \p. p.x
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Point a = Point @{ x: a, y: a };
          let f = \\Point r. r.x;
          f (Point @{ x: 123, y: 456 })"
@@ -234,7 +231,7 @@ fn test_newtype_parametric_record_field_access_function_lambda_pat() {
 fn test_newtype_parametric_tuple_field_access_function_lambda_pat() {
     // Pair a b = Pair (a, b)
     // g = \p. p.1
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Pair a b = Pair (a, b);
          let g = \\Pair t. t.1;
          g (Pair (42, true))"

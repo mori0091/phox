@@ -19,7 +19,7 @@ fn main() {
             })
         };
 
-        match phox::api::eval_program(&source) {
+        match phox::api::eval(&source) {
             Ok((val, sch)) => {
                 println!("=> {}: {}", val, sch.pretty())
             }

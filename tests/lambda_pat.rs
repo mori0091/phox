@@ -1,9 +1,9 @@
-use phox::api::eval_program;
+use phox::api::eval;
 
 #[test]
 fn test_lambda_var_pattern_identity() {
     // f = \x. x
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let f = \\x. x;
          f 123"
     ).unwrap();
@@ -14,7 +14,7 @@ fn test_lambda_var_pattern_identity() {
 #[test]
 fn test_lambda_tuple_pattern() {
     // f = \(x, y). x
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let f = \\(x, y). x;
          f (1, true)"
     ).unwrap();
@@ -25,7 +25,7 @@ fn test_lambda_tuple_pattern() {
 #[test]
 fn test_lambda_record_pattern() {
     // f = \@{x, y}. y
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let f = \\@{ x, y }. y;
          f @{ x: 10, y: true }"
     ).unwrap();
@@ -36,7 +36,7 @@ fn test_lambda_record_pattern() {
 #[test]
 fn test_lambda_nested_pattern() {
     // f = \((x, y), z). y
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let f = \\((x, y), z). y;
          f ((1, 2), 3)"
     ).unwrap();
@@ -48,7 +48,7 @@ fn test_lambda_nested_pattern() {
 fn test_lambda_constructor_pattern() {
     // Option a = Some a | None
     // f = \Some x. x
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "type Option a = Some a | None;
          let f = \\Some x. x;
          f (Some 42)"
@@ -60,7 +60,7 @@ fn test_lambda_constructor_pattern() {
 #[test]
 fn test_lambda_curried_add() {
     // add = \x. \y. x + y
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let add = \\x. \\y. x + y;
          add 2 3"
     ).unwrap();
@@ -72,7 +72,7 @@ fn test_lambda_curried_add() {
 fn test_lambda_curried_identity_application() {
     // id = \x. x
     // f = \x. \y. x
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let id = \\x. x;
          let f = \\x. \\y. x;
          f (id 42) true"
@@ -84,7 +84,7 @@ fn test_lambda_curried_identity_application() {
 #[test]
 fn test_lambda_curried_tuple() {
     // f = \x. \y. (x, y)
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let f = \\x. \\y. (x, y);
          f 1 true"
     ).unwrap();
@@ -95,7 +95,7 @@ fn test_lambda_curried_tuple() {
 #[test]
 fn test_lambda_curried_three_args() {
     // f = \x. \y. \z. x + y + z
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let f = \\x. \\y. \\z. x + y + z;
          f 1 2 3"
     ).unwrap();
@@ -107,7 +107,7 @@ fn test_lambda_curried_three_args() {
 fn test_lambda_partial_application() {
     // add = \x. \y. x + y
     // inc = add 1
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let add = \\x. \\y. x + y;
          let inc = add 1;
          inc 41"
@@ -119,7 +119,7 @@ fn test_lambda_partial_application() {
 #[test]
 fn test_polymorphic_identity_reuse() {
     // id = \x. x
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let id = \\x. x;
          (id 1, id true)"
     ).unwrap();
@@ -130,7 +130,7 @@ fn test_polymorphic_identity_reuse() {
 #[test]
 fn test_partial_application_polymorphic() {
     // const = \x. \y. x
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let const = \\x. \\y. x;
          let k = const 42;
          (k true, k 99)"
@@ -142,7 +142,7 @@ fn test_partial_application_polymorphic() {
 #[test]
 fn test_let_polymorphism_with_partial_application() {
     // pair = \x. \y. (x, y)
-    let (val, sch) = eval_program(
+    let (val, sch) = eval(
         "let pair = \\x. \\y. (x, y);
          let p1 = pair 1;
          let p2 = pair true;
@@ -156,25 +156,25 @@ fn test_let_polymorphism_with_partial_application() {
 
 #[test]
 fn test_type_error_add_int_and_bool() {
-    let err = eval_program("1 + true").unwrap_err();
+    let err = eval("1 + true").unwrap_err();
     assert!(err.contains("Mismatch"), "unexpected error: {err}");
 }
 
 #[test]
 fn test_pattern_tuple_length_mismatch() {
-    let err = eval_program("let (x, y) = (1, 2, 3);").unwrap_err();
+    let err = eval("let (x, y) = (1, 2, 3);").unwrap_err();
     assert!(err.contains("TupleLengthMismatch"), "unexpected error: {err}");
 }
 
 #[test]
 fn test_unbound_variable() {
-    let err = eval_program("x + 1").unwrap_err();
+    let err = eval("x + 1").unwrap_err();
     assert!(err.contains("UnboundVariable"), "unexpected error: {err}");
 }
 
 #[test]
 fn test_constructor_arity_mismatch() {
-    let err = eval_program(
+    let err = eval(
         "type Pair a b = Pair (a, b);
          let f = \\Pair x y. x;"  // Pair は1引数なのに2引数でパターンマッチ
     ).unwrap_err();
@@ -183,7 +183,7 @@ fn test_constructor_arity_mismatch() {
 
 #[test]
 fn test_unknown_field_access() {
-    let err = eval_program(
+    let err = eval(
         "let r = @{ x: 1 };
          r.y"
     ).unwrap_err();
@@ -192,7 +192,7 @@ fn test_unknown_field_access() {
 
 #[test]
 fn test_unknown_field_in_pattern() {
-    let err = eval_program(
+    let err = eval(
         "let @{ x, y } = @{ x: 1 };"
     ).unwrap_err();
     assert!(err.contains("Mismatch"), "unexpected error: {err}");

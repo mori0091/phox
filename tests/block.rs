@@ -1,15 +1,15 @@
-use phox::api::eval_expr;
+use phox::api::eval;
 
 #[test]
 fn test_empty_block() {
-    let (val, sch) = eval_expr("{}").unwrap();
+    let (val, sch) = eval("{}").unwrap();
     assert_eq!(format!("{}", val), "()");
     assert_eq!(format!("{}", sch.pretty()), "()");
 }
 
 #[test]
 fn test_trailing_semicolon() {
-    let (val, sch) = eval_expr("{ 1; 2; }").unwrap();
+    let (val, sch) = eval("{ 1; 2; }").unwrap();
     assert_eq!(format!("{}", val), "()");
     assert_eq!(format!("{}", sch.pretty()), "()");
 }
@@ -19,7 +19,7 @@ fn test_trailing_semicolon() {
 #[test]
 fn test_block_with_expr_tail() {
     // { let x = 1; let y = 2; x + y }
-    let (val, sch) = eval_expr("{ let x = 1; let y = 2; x + y }").unwrap();
+    let (val, sch) = eval("{ let x = 1; let y = 2; x + y }").unwrap();
     assert_eq!(format!("{}", val), "3");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
@@ -27,7 +27,7 @@ fn test_block_with_expr_tail() {
 #[test]
 fn test_block_with_only_stmts() {
     // { let x = 42; let y = x; }
-    let (val, sch) = eval_expr("{ let x = 42; let y = x; }").unwrap();
+    let (val, sch) = eval("{ let x = 42; let y = x; }").unwrap();
     assert_eq!(format!("{}", val), "()");
     assert_eq!(format!("{}", sch.pretty()), "()");
 }
@@ -35,7 +35,7 @@ fn test_block_with_only_stmts() {
 #[test]
 fn test_nested_blocks() {
     // { let x = { let y = 1; y + 2 }; x * 3 }
-    let (val, sch) = eval_expr("{ let x = { let y = 1; y + 2 }; x * 3 }").unwrap();
+    let (val, sch) = eval("{ let x = { let y = 1; y + 2 }; x * 3 }").unwrap();
     assert_eq!(format!("{}", val), "9");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }

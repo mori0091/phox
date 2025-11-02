@@ -1,12 +1,5 @@
 use crate::api;
 
-use crate::resolve::resolve_item;
-
-use crate::typesys::{infer_item, generalize};
-use crate::typesys::apply_trait_impls_item;
-
-use crate::interpreter::eval_item;
-
 use lalrpop_util::ParseError;
 
 pub fn repl() {
@@ -35,30 +28,12 @@ pub fn repl() {
                 continue;
             }
         }
-        match api::parse_items(&buffer) {
+        match api::parse(&buffer) {
             Ok(items) => {
                 for mut item in items {
-                    if let Err(e) = resolve_item(&mut boot.ctx, &mut boot.icx, &mut boot.impl_env, &mut boot.env, &mut item) {
-                        println!("resolve error: {}", e);
-                    }
-                    else {
-                        match infer_item(&mut boot.ctx, &mut boot.icx, &mut item) {
-                            Err(e) => {
-                                println!("infer error: {}", e);
-                            }
-                            Ok(ty) => {
-                                if let Err(e) = apply_trait_impls_item(&mut item, &mut boot.ctx, &boot.icx, &boot.impl_env) {
-                                    println!("infer error: {}", e);
-                                }
-                                else {
-                                    // eprintln!("** ImplEnv **\n {:?}\n**", impl_env);
-                                    // eprintln!("** obligations **\n {:?}\n**", icx.obligations);
-                                    let sch = generalize(&mut boot.ctx, &boot.icx, &ty);
-                                    let val = eval_item(&item, &mut boot.env);
-                                    println!("=> {}: {}", val, sch.pretty());
-                                }
-                            }
-                        }
+                    match boot.eval_item(&mut item) {
+                        Err(e)         => println!("{}", e),
+                        Ok((val, sch)) => println!("=> {}: {}", val, sch.pretty()),
                     }
                 }
                 println!();

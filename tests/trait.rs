@@ -1,4 +1,4 @@
-use phox::api::eval_program;
+use phox::api::eval;
 
 #[test]
 fn test_trait_eq_int() {
@@ -13,7 +13,7 @@ fn test_trait_eq_int() {
         };
         eq 1 1
     "#;
-    let (val, sch) = eval_program(src).unwrap();
+    let (val, sch) = eval(src).unwrap();
     assert_eq!(format!("{}", val), "true");
     assert_eq!(format!("{}", sch.pretty()), "Bool");
 }
@@ -32,7 +32,7 @@ fn test_trait_record_access() {
         let d = @{Eq2 Int};
         d.eq 1 2
     "#;
-    let (val, sch) = eval_program(src).unwrap();
+    let (val, sch) = eval(src).unwrap();
     assert_eq!(format!("{}", val), "false");
     assert_eq!(format!("{}", sch.pretty()), "Bool");
 }
@@ -51,7 +51,7 @@ fn test_trait_record_infix() {
         let d = @{Eq2 Int};
         1 `d.eq` 1
     "#;
-    let (val, sch) = eval_program(src).unwrap();
+    let (val, sch) = eval(src).unwrap();
     assert_eq!(format!("{}", val), "true");
     assert_eq!(format!("{}", sch.pretty()), "Bool");
 }
@@ -71,7 +71,7 @@ fn test_trait_record_first_class() {
         let f = \@{eq, neq}.\x.\y. eq x y;  // same as the above
         f @{Eq2 Int} 3 4
     "#;
-    let (val, sch) = eval_program(src).unwrap();
+    let (val, sch) = eval(src).unwrap();
     assert_eq!(format!("{}", val), "false");
     assert_eq!(format!("{}", sch.pretty()), "Bool");
 }
@@ -93,7 +93,7 @@ fn test_trait_polymorphism() {
         };
         eq 1 2
     "#;
-    let (val, sch) = eval_program(src).unwrap();
+    let (val, sch) = eval(src).unwrap();
     assert_eq!(format!("{}", val), "false");
     assert_eq!(format!("{}", sch.pretty()), "Bool");
 }
@@ -107,7 +107,7 @@ fn test_unimplemented_trait_error() {
         trait Eq2 a { eq : a -> a -> Bool; };
         eq true false
     "#;
-    let err = eval_program(src).unwrap_err();
+    let err = eval(src).unwrap_err();
     assert!(format!("{}", err).contains("infer error: UnboundVariable"));
 }
 
@@ -118,7 +118,7 @@ fn test_unbound_trait_record_error() {
         trait Eq2 a { eq : a -> a -> Bool; };
         @{Eq2 Bool}
     "#;
-    let err = eval_program(src).unwrap_err();
+    let err = eval(src).unwrap_err();
     assert!(format!("{}", err).contains("resolve error: no implementation for Eq2 Bool"));
 }
 
@@ -137,7 +137,7 @@ fn test_field_access_on_var_error() {
         let f = \dict.\x.\y. dict.eq x y;
         f @{Eq2 Int} 1 2
     "#;
-    let err = eval_program(src).unwrap_err();
+    let err = eval(src).unwrap_err();
     assert!(format!("{}", err).contains("infer error: ExpectedRecord"));
 }
 
@@ -150,7 +150,7 @@ fn test_trait_member_conflict_ok() {
         impl Foo Int { f = \x. x; };
         impl Bar Int { f = \x. x; };
     "#;
-    eval_program(src).unwrap();
+    eval(src).unwrap();
 }
 
 #[test]
@@ -163,7 +163,7 @@ fn test_trait_member_conflict_error() {
         impl Bar Int { f = \x. x; };
         f 100
     "#;
-    let err = eval_program(src).unwrap_err();
+    let err = eval(src).unwrap_err();
     eprintln!("{err}");
     assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
     assert!(format!("{}", err).contains("candidates: Bar Int => Int -> Int, Foo Int => Int -> Int"));
@@ -180,7 +180,7 @@ fn test_trait_member_non_conflict_1() {
         impl Bar Int { f = \x. x; };
         f 100
     "#;
-    let err = eval_program(src).unwrap_err();
+    let err = eval(src).unwrap_err();
     eprintln!("{err}");
     assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
     assert!(format!("{}", err).contains("candidates: Bar Int => Int -> Int, Foo Int => Int -> Bool"));
@@ -197,7 +197,7 @@ fn test_trait_member_non_conflict_2() {
         impl Bar Int { f = \x. x; };
         @{Bar Int}.f 100
     "#;
-    let (val, sch) = eval_program(src).unwrap();
+    let (val, sch) = eval(src).unwrap();
     assert_eq!(format!("{}", val), "100");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
@@ -212,7 +212,7 @@ fn test_trait_member_non_conflict_3() {
         impl Bar Int { f = \x. x; };
         @{Foo Int}.f 100
     "#;
-    let (val, sch) = eval_program(src).unwrap();
+    let (val, sch) = eval(src).unwrap();
     assert_eq!(format!("{}", val), "true");
     assert_eq!(format!("{}", sch.pretty()), "Bool");
 }
@@ -227,7 +227,7 @@ fn test_trait_member_non_conflict_4() {
         impl Bar Int { f = \x. x; };
         f true
     "#;
-    let (val, sch) = eval_program(src).unwrap();
+    let (val, sch) = eval(src).unwrap();
     assert_eq!(format!("{}", val), "1");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
@@ -242,7 +242,7 @@ fn test_trait_member_non_conflict_5() {
         impl Bar Int { f = \x. x; };
         f 100
     "#;
-    let (val, sch) = eval_program(src).unwrap();
+    let (val, sch) = eval(src).unwrap();
     assert_eq!(format!("{}", val), "100");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
@@ -255,7 +255,7 @@ fn test_ambiguous_trait_type() {
         impl Foo Int { f = \x. x; };
         f
     "#;
-    let err = eval_program(src).unwrap_err();
+    let err = eval(src).unwrap_err();
     // assert!(format!("{}", err).contains("infer error: AmbiguousVariable"));
     eprintln!("{err}");
     assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
