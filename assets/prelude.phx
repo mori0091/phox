@@ -1,7 +1,3 @@
-type Option a = None | Some a;
-type Result e a = Err e | Ok a;
-type List a = Nil | Cons a (List a);
-
 // -------------------------------------------------------------
 let (&&) = \x.\y. match ((x, y)) {
     (true, true) => true,
@@ -56,6 +52,25 @@ trait Num a {
     (*) : a -> a -> a;
     (/) : a -> a -> a;
     negate : a -> a;
+};
+
+// -------------------------------------------------------------
+// === Functor ===
+trait Functor f {
+    fmap: (a -> b) -> f a -> f b;
+};
+
+// -------------------------------------------------------------
+// === Applicative Functor ===
+trait Applicative f {
+    pure : a -> f a;
+    afmap: f (a -> b) -> f a -> f b;
+};
+
+// -------------------------------------------------------------
+// === Monad ===
+trait Monad m {
+    (?>) : m a -> (a -> m b) -> m b;
 };
 
 // -------------------------------------------------------------
@@ -120,4 +135,92 @@ impl Num Int {
     (*) = \x.\y. __i64_mul__ (x, y);
     (/) = \x.\y. __i64_div__ (x, y);
     negate = \x. __i64_neg__ x;
+};
+
+// === Option ===
+type Option a = None | Some a;
+
+impl Functor Option {
+    fmap = \f.\x. match (x) {
+        Some a => Some (f a),
+        _ => None,
+    };
+};
+
+impl Applicative Option {
+    pure = \x. Some x;
+    afmap = \f.\x. match ((f, x)) {
+        (Some g, Some a) => Some (g a),
+        _ => None,
+    };
+};
+
+impl Monad Option {
+    (?>) = \x.\f. match (x) {
+        Some a => f a,
+        _ => None,
+    };
+};
+
+// === Result ===
+type Result e a = Err e | Ok a;
+
+impl Functor (Result e) {
+    fmap = \f.\x. match (x) {
+        Ok a => Ok (f a),
+        Err err => Err err,
+    };
+};
+
+impl Applicative (Result e) {
+    pure = \x. Ok x;
+    afmap = \f.\x. match ((f, x)) {
+        (Ok g, Ok a) => Ok (g a),
+        Err err => Err err,
+    };
+};
+
+impl Monad (Result e) {
+    (?>) = \x.\f. match (x) {
+        Ok a => f a,
+        Err err => Err err,
+    };
+};
+
+// === List ===
+type List a = Nil | Cons a (List a);
+
+let rec append = \xs.\ys. match (xs) {
+    Cons z zs => Cons z (append zs ys),
+    _ => ys,
+};
+
+let rec join = \xss. match (xss) {
+    Cons xs xss_ => append xs (join xss_),
+    _ => Nil,
+};
+
+let rec __List__fmap = \f.\xs. match (xs) {
+    Cons y ys => Cons (f y) (__List__fmap f ys),
+    _ => Nil,
+};
+
+let map = __List__fmap;
+
+let rec __List__afmap = \fs.\xs. match ((fs, xs)) {
+    (Cons g gs, Cons y ys) => Cons (g y) (__List__afmap gs ys),
+    _ => Nil,
+};
+
+impl Functor List {
+    fmap = __List__fmap;
+};
+
+impl Applicative List {
+    pure = \x. Cons x Nil;
+    afmap = __List__afmap;
+};
+
+impl Monad List {
+    (?>) = \xs.\f. join (__List__fmap f xs);
 };
