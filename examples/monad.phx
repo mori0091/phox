@@ -1,67 +1,79 @@
-type Option a = None | Some a;
-type Result e a = Err e | Ok a;
+/*
+ * These are already defined in default. see `assets/prelude.phx`.
+ *
+ * ```phox
+ * type Option a = None | Some a;
+ * type Result e a = Err e | Ok a;
+ *
+ * trait Monad m {
+ *     (?>): m a -> (a -> m b) -> m b;
+ * };
+ *
+ * impl Monad Option {
+ *     (?>) = \a.\f. match (a) {
+ *         None => None,
+ *         Some x => f x,
+ *     };
+ * };
+ *
+ * impl Monad (Result e) {
+ *     (?>) = \a.\f. match (a) {
+ *         Err err => Err err,
+ *         Ok ok  => f ok,
+ *     };
+ * };
+ * ```
+ */
 
-trait Monad m {
-    pure: a -> m a;
-    bind: m a -> (a -> m b) -> m b;
-};
+let res1 =
+Some 1 ?> (\x.
+Some 2 ?> (\y.
+Some (x + y)
+));
 
-impl Monad Option {
-    pure = \a. Some a;
-    bind = \a.\f. match (a) {
-        None => None,
-        Some x => f x,
-    };
-};
+let res2 =
+Ok 3 ?> (\x.
+Ok 4 ?> (\y.
+Ok (x + y)
+));
 
-impl Monad (Result e) {
-    pure = \a. Ok a;
-    bind = \a.\f. match (a) {
-        Err err => Err err,
-        Ok ok  => f ok,
-    };
-};
-
+// Typically, `Monad (Result e)` is already implemented and sufficient, so there
+// is no need to implement `Monad (Result <CONCRETE_TYPE>)`.
+//
+// Though, you may implement specialized version if you want, like this:
+// (e.g. to remove constraints or give a different behavior for a concrete type)
 impl Monad (Result ()) {
-    pure = \a. Ok a;
-    bind = \a.\f. match (a) {
+    (?>) = \a.\f. match (a) {
         Err () => Err (),
         Ok ok  => f ok,
     };
 };
 
-let res1 =
-Some 1 `bind` (\x.
-Some 2 `bind` (\y.
-Some (x + y)
-));
-
-let m = @{Monad (Result ())};
-let res2 =
-Ok 3 `m.bind` (\x.
-Ok 4 `m.bind` (\y.
-Ok (x + y)
-));
-
+// In this case, you should disambiguate like this:
+// (disambiguation example 1) Explicitly choose the generic Result e instance
+let m = @{Monad (Result e)};
 let res3 =
-Err 5 `bind` (\x.
-Ok  6 `bind` (\y.
+Err 5 `m.(?>)` (\x.
+Ok  6 `m.(?>)` (\y.
 Ok (x + y)
 ));
 
-let m = @{Monad (Result e)};
+// (disambiguation example 2) Explicitly choose the specialized Result () instance
+let m = @{Monad (Result ())};
 let res4 =
-Ok 7 `m.bind` (\x.
-Ok 8 `m.bind` (\y.
+Ok 7 `m.(?>)` (\x.
+Ok 8 `m.(?>)` (\y.
 Ok (x + y)
 ));
 
-let m = @{Monad (Result e)};
+// (disambiguation example 3) Explicitly choose the generic Result e instance
+// let m = @{Monad (Result Int)}; // <- error, `Monad (Result Int)` is not implemented.
+let m = @{Monad (Result e)};      // Thus, choose `Monad (Result e)` in this case.
 let res5 =
-Err 9 `m.bind` (\x.
-Ok 10 `m.bind` (\y.
+Err 9 `m.(?>)` (\x.
+Ok 10 `m.(?>)` (\y.
 Ok (x + y)
 ));
 
 (res1, res2, res3, res4, res5)
-// => (Some 3, Ok 7, Err 5, Ok 15, Err 9): ∀ a. (Option Int, Result () Int, Result Int Int, Result a Int, Result Int Int)
+// => (Some 3, Ok 7, Err 5, Ok 15, Err 9): ∀ a. (Option Int, Result a Int, Result Int Int, Result () Int, Result Int Int)

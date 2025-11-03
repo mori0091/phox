@@ -540,7 +540,7 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
                         return Err(TypeError::NoMatchingOverload);
                     }
 
-                    let (best_score, raw_winner) = filtered.iter().min_by_key(|(score, _)| score).unwrap();
+                    let (best_score, raw_winner) = filtered.iter().max_by_key(|(score, _)| score).unwrap();
                     {
                         let candidates: Vec<_> = filtered.iter().filter(|(score, _)| score == best_score).cloned().collect();
                         if candidates.len() > 1 {
