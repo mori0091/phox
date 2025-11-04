@@ -1,5 +1,5 @@
 use std::fmt;
-use super::{Item, Lit, Pat, RawConstraint};
+use super::{Item, Lit, Pat, RawTraitHead};
 use crate::typesys::Type;
 
 #[derive(Clone, Debug)]
@@ -20,7 +20,7 @@ pub enum ExprBody {
 
     Tuple(Vec<Expr>),               // ex. `(1,)`, `(1, true, ())`
     Record(Vec<(String, Expr)>),    // ex. `@{ x:a, y:b }`
-    RawTraitRecord(RawConstraint),  // ex. `@{ Eq Int }`
+    RawTraitRecord(RawTraitHead),  // ex. `@{ Eq Int }`
     FieldAccess(Box<Expr>, String), // ex. `p.x`
     TupleAccess(Box<Expr>, usize),  // ex. `p.0`
     Block(Vec<Item>),               // ex. `{stmt; stmt; expr; expr}`
@@ -63,8 +63,8 @@ impl Expr {
         Expr { body: ExprBody::Tuple(elems), ty: None }
     }
 
-    pub fn raw_trait_record(raw_constraint: RawConstraint) -> Self {
-        Expr { body: ExprBody::RawTraitRecord(raw_constraint), ty: None }
+    pub fn raw_trait_record(raw: RawTraitHead) -> Self {
+        Expr { body: ExprBody::RawTraitRecord(raw), ty: None }
     }
 
     pub fn field_access<S: Into<String>>(e: Expr, s: S) -> Self {

@@ -3,7 +3,7 @@ use crate::api;
 use lalrpop_util::ParseError;
 
 pub fn repl() {
-    let mut boot = api::Bootstrap::new();
+    let mut phox = api::PhoxEngine::new();
     let mut buffer = String::new();
     let mut prompt = "> ";
 
@@ -30,8 +30,9 @@ pub fn repl() {
         }
         match api::parse(&buffer) {
             Ok(items) => {
+                let mut module = phox.roots.get(api::DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
                 for mut item in items {
-                    match boot.eval_item(&mut item) {
+                    match phox.eval_item(&mut module, &mut item) {
                         Err(e)         => println!("{}", e),
                         Ok((val, sch)) => println!("=> {}: {}", val, sch.pretty()),
                     }

@@ -1,7 +1,7 @@
 use super::Expr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RawConstraint {
+pub struct RawTraitHead {
     pub name: String,           // trait name (ex. Eq)
     pub params: Vec<RawType>,   // instance type params (ex. [Int])
 }

@@ -1,5 +1,5 @@
 use crate::syntax::ast::Pat;
-use super::{Constraint, Type, RawTypeScheme};
+use super::*;
 
 // ===== Type error =====
 #[derive(Debug)]
@@ -9,18 +9,18 @@ pub enum TypeError {
     UnknownTrait(String),
     UnknownTraitMember(String),
     ArityMismatch { trait_name: String, member: String, expected: usize, actual: usize },
-    UnificationFail { expected: Constraint, actual: Constraint },
+    UnificationFail { expected: TraitHead, actual: TraitHead },
 
     // ----from `apply_trait_impls_*`
 
     MissingType,
-    MissingTraitImpl(Constraint),
+    MissingTraitImpl(TraitHead),
     MissingTraitMemberImpl(String),
     // MissingTraitImplForMember: "no trait impl for member: eq with type Bool -> Bool -> Bool; expected: Eq Bool"
-    MissingTraitImplForMember { member: String, ty: Type, expected: Vec<Constraint> },
+    MissingTraitImplForMember { member: String, ty: Type, expected: Vec<TraitHead> },
     // AmbiguousTraitMember: "ambiguous trait member: f for type Int; candidates: Foo, Bar"
     AmbiguousTraitMember { member: String, ty: Type, candidates: Vec<String> },
-    AmbiguousTrait { constraint: String, candidates: Vec<String> },
+    AmbiguousTrait { trait_head: String, candidates: Vec<String> },
 
     // ---- from `infer_*`
 

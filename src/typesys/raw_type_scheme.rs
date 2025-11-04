@@ -1,9 +1,9 @@
-use crate::syntax::ast::{RawConstraint, RawType};
+use crate::syntax::ast::{RawTraitHead, RawType};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RawTypeScheme {
     pub vars: Vec<String>,               // `∀ [e]`
-    pub constraints: Vec<RawConstraint>, // `Monad (Result e) =>`
+    pub constraints: Vec<RawTraitHead>, // `Monad (Result e) =>`
     pub target: RawType,                 // `Result e 'a -> ('a -> Result e 'b) -> Result e 'b`
 }
 
@@ -15,7 +15,7 @@ impl fmt::Display for RawTypeScheme {
     }
 }
 
-impl fmt::Display for RawConstraint {
+impl fmt::Display for RawTraitHead {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let tys = self.params
                     .iter()
@@ -116,10 +116,10 @@ impl RawTypeScheme {
     }
 }
 
-impl RawConstraint {
+impl RawTraitHead {
     pub fn apply_subst(&self, subst: &HashMap<String, RawType>) -> Self {
         let params = self.params.iter().map(|p| p.apply_subst(subst)).collect();
-        RawConstraint { name: self.name.clone(), params }
+        RawTraitHead { name: self.name.clone(), params }
     }
 
     pub fn free_type_vars(&self, free: &mut HashSet<String>) {

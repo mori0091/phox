@@ -1,6 +1,6 @@
-use crate::resolve::{resolve_raw_constraint, resolve_raw_type};
-
-use super::{RawTypeScheme, Scheme, Type, TypeVarId};
+use std::collections::HashMap;
+use crate::resolve::*;
+use super::*;
 
 pub type TypeScheme = Scheme<Type>;
 
@@ -80,9 +80,6 @@ impl TypeScheme {
     }
 }
 
-use super::TypeContext;
-use std::collections::HashMap;
-
 impl TypeScheme {
     pub fn from(raw: &RawTypeScheme, ctx: &mut TypeContext) -> Self {
         let mut var_map = HashMap::new();
@@ -96,7 +93,7 @@ impl TypeScheme {
         let constraints = raw
             .constraints
             .iter()
-            .map(|c| resolve_raw_constraint(ctx, c, &var_map))
+            .map(|c| resolve_raw_trait_head(ctx, c, &var_map))
             .collect();
 
         let target = resolve_raw_type(ctx, &raw.target, &var_map);

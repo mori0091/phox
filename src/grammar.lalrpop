@@ -1,4 +1,4 @@
-use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType, RawConstraint};
+use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType, RawTraitHead};
 use crate::syntax::ast::{RawTraitDecl, RawTraitMemberDecl};
 use crate::syntax::ast::{RawImplDecl, RawImplMemberDecl};
 use crate::syntax::ast::{Item, Stmt, Expr, Lit, Pat};
@@ -428,14 +428,14 @@ ExprRecord: Expr = {
 };
 
 ExprTraitRecord: Expr = {
-    "@" "{" <raw_constraint:Constraint> "}" => {
-        Expr::raw_trait_record(raw_constraint)
+    "@" "{" <raw:TraitHead> "}" => {
+        Expr::raw_trait_record(raw)
     },
 };
 
-Constraint: RawConstraint = {
+TraitHead: RawTraitHead = {
     <name:ConIdent> <params:TypeAtom+> => {
-        RawConstraint { name, params }
+        RawTraitHead { name, params }
     },
 };
 

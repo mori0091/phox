@@ -1,48 +1,42 @@
+use std::cell::RefMut;
 use std::collections::HashMap;
-use crate::typesys::{generalize, ImplEnv, InferCtx, RawTypeScheme, TypeContext};
-use crate::typesys::{TypeVarId, Kind, Type, Constraint};
-use crate::typesys::TypeError;
-use crate::syntax::ast::{RawTraitDecl, RawImplDecl};
-use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType};
-use crate::syntax::ast::RawConstraint;
-use crate::syntax::ast::{TypeDecl, Variant};
-use crate::syntax::ast::{Item, Stmt, Expr, ExprBody};
+
+use crate::typesys::*;
+use crate::syntax::ast::*;
+use crate::module::Module;
+use crate::api::PhoxEngine;
 
 pub fn resolve_item(
-    ctx: &mut TypeContext,
-    icx: &mut InferCtx,
-    impl_env: &mut ImplEnv,
-    env: &mut Env,
+    phox: &mut PhoxEngine,
+    module: &mut RefMut<Module>,
     item: &mut Item,
 ) -> Result<(), TypeError> {
     match item {
         Item::RawTraitDecl(raw) => {
-            register_trait(ctx, icx, raw);
+            register_trait(module, raw);
             Ok(())
         }
         Item::RawImplDecl(raw) => {
-            register_impl(ctx, icx, impl_env, env, raw)
+            register_impl(phox, module, raw)
         }
         Item::RawTypeDecl(raw) => {
-            let tydecl = resolve_raw_type_decl(ctx, raw.clone());
-            register_type_decl(&tydecl, icx, env);
+            register_type_decl(phox, module, raw);
             Ok(())
         }
         Item::Stmt(stmt) => {
-            resolve_stmt(ctx, icx, impl_env, env, stmt)
+            resolve_stmt(phox, module, stmt)
         }
         Item::Expr(expr) => {
-            resolve_expr(ctx, icx, impl_env, env, expr)
+            resolve_expr(phox, module, expr)
         }
     }
 }
 
 pub fn register_trait(
-    _ctx: &mut TypeContext,
-    icx: &mut InferCtx,
+    module: &mut RefMut<Module>,
     raw: &RawTraitDecl,
 ) {
-    let head = RawConstraint {
+    let head = RawTraitHead {
         name: raw.name.clone(),
         params: raw
             .params
@@ -56,7 +50,7 @@ pub fn register_trait(
             constraints: vec![head.clone()],
             target: *member.ty.clone(),
         };
-        icx.trait_member_env
+        module.icx.trait_member_env
             .entry(member.name.clone())
             .or_default()
             .insert(sch);
@@ -64,19 +58,17 @@ pub fn register_trait(
 }
 
 pub fn register_impl(
-    ctx: &mut TypeContext,
-    icx: &mut InferCtx,
-    impl_env: &mut ImplEnv,
-    env: &mut Env,
+    phox: &mut PhoxEngine,
+    module: &mut RefMut<Module>,
     raw: &RawImplDecl,
 ) -> Result<(), TypeError> {
-    let impl_head = RawConstraint {
+    let impl_head = RawTraitHead {
         name: raw.name.clone(),
         params: raw.params.clone(),
     };
 
     for member in raw.members.iter() {
-        let trait_schemes = icx
+        let trait_schemes = module.icx
             .trait_member_env
             .get(&member.name)
             .ok_or(TypeError::UnknownTraitMember(member.name.clone()))?;
@@ -109,8 +101,8 @@ pub fn register_impl(
                     other => {
                         if other != t2 {
                             let empty_map = HashMap::new();
-                            let expected = resolve_raw_type(ctx, other, &empty_map);
-                            let actual   = resolve_raw_type(ctx, t2, &empty_map);
+                            let expected = resolve_raw_type(&mut phox.ctx, other, &empty_map);
+                            let actual   = resolve_raw_type(&mut phox.ctx, t2, &empty_map);
                             return Err(TypeError::Mismatch(expected, actual));
                         }
                     }
@@ -123,29 +115,29 @@ pub fn register_impl(
         // eprintln!("trait: @{{{}}}.{}: {}", trait_head, member.name, trait_scheme.pretty());
         // eprintln!("impl : @{{{}}}.{}: {}", impl_head, member.name, impl_scheme.pretty());
 
-        icx.impl_member_env
+        module.icx.impl_member_env
             .entry(member.name.clone())
             .or_default()
             .insert(impl_scheme);
     };
 
     let trait_sch = {
-        let constraint = {
+        let trait_head = {
             let name = raw.name.clone();
             let params: Vec<Type> = raw
                 .params
                 .iter()
-                .map(|raw_ty| resolve_raw_type(ctx, raw_ty, &HashMap::new()))
+                .map(|raw_ty| resolve_raw_type(&mut phox.ctx, raw_ty, &HashMap::new()))
                 .collect();
-            Constraint { name, params }
+            TraitHead { name, params }
         };
-        generalize(ctx, icx, &constraint)
+        generalize(&mut phox.ctx, &module.icx, &trait_head)
     };
 
     let mut member_map = HashMap::new();
     for member in raw.members.iter() {
         let mut expr = member.expr.clone();
-        resolve_expr(ctx, icx, impl_env, env, &mut expr)?;
+        resolve_expr(phox, module, &mut expr)?;
         member_map.insert(member.name.clone(), *expr);
     }
 
@@ -156,88 +148,84 @@ pub fn register_impl(
     //     }
     //     eprintln!("}}");
     // }
-    impl_env.insert(trait_sch, member_map);
+    module.impl_env.insert(trait_sch, member_map);
 
     Ok(())
 }
 
 pub fn resolve_stmt(
-    ctx: &mut TypeContext,
-    icx: &mut InferCtx,
-    impl_env: &mut ImplEnv,
-    env: &mut Env,
+    phox: &mut PhoxEngine,
+    module: &mut RefMut<Module>,
     stmt: &mut Stmt,
 ) -> Result<(), TypeError> {
     match stmt {
         Stmt::Let(_p, expr) | Stmt::LetRec(_p, expr) => {
-            resolve_expr(ctx, icx, impl_env, env, expr)
+            resolve_expr(phox, module, expr)
         }
     }
 }
 
 pub fn resolve_expr(
-    ctx: &mut TypeContext,
-    icx: &mut InferCtx,
-    impl_env: &mut ImplEnv,
-    env: &mut Env,
+    phox: &mut PhoxEngine,
+    module: &mut RefMut<Module>,
     expr: &mut Expr,
 ) -> Result<(), TypeError> {
     match &mut expr.body {
         ExprBody::App(f, x) => {
-            resolve_expr(ctx, icx, impl_env, env, f)?;
-            resolve_expr(ctx, icx, impl_env, env, x)
+            resolve_expr(phox, module, f)?;
+            resolve_expr(phox, module, x)
         }
         ExprBody::Abs(_p, e) => {
-            resolve_expr(ctx, icx, impl_env, env, e)
+            resolve_expr(phox, module, e)
         }
         ExprBody::If(cond, e1, e2) => {
-            resolve_expr(ctx, icx, impl_env, env, cond)?;
-            resolve_expr(ctx, icx, impl_env, env, e1)?;
-            resolve_expr(ctx, icx, impl_env, env, e2)
+            resolve_expr(phox, module, cond)?;
+            resolve_expr(phox, module, e1)?;
+            resolve_expr(phox, module, e2)
         }
         ExprBody::Match(strut, arms) => {
-            resolve_expr(ctx, icx, impl_env, env, strut)?;
+            resolve_expr(phox, module, strut)?;
             for (_p, e) in arms {
-                resolve_expr(ctx, icx, impl_env, env, e)?;
+                resolve_expr(phox, module, e)?;
             }
             Ok(())
         }
         ExprBody::Tuple(es) => {
             for e in es {
-                resolve_expr(ctx, icx, impl_env, env, e)?;
+                resolve_expr(phox, module, e)?;
             }
             Ok(())
         }
         ExprBody::Record(fields) => {
             for (_field, e) in fields {
-                resolve_expr(ctx, icx, impl_env, env, e)?;
+                resolve_expr(phox, module, e)?;
             }
             Ok(())
         }
         ExprBody::FieldAccess(e, _field) => {
-            resolve_expr(ctx, icx, impl_env, env, e)
+            resolve_expr(phox, module, e)
         }
         ExprBody::TupleAccess(e, _index) => {
-            resolve_expr(ctx, icx, impl_env, env, e)
+            resolve_expr(phox, module, e)
         }
         ExprBody::Block(items) => {
             for item in items {
-                resolve_item(ctx, icx, impl_env, env, item)?;
+                resolve_item(phox, module, item)?;
             }
             Ok(())
         }
         ExprBody::RawTraitRecord(raw) => {
-            let constraint = resolve_raw_constraint(ctx, &raw, &HashMap::new());
-            let base_score = constraint.score();
+            let trait_head = resolve_raw_trait_head(&mut phox.ctx, &raw, &HashMap::new());
+            let base_score = trait_head.score();
             let mut matches = Vec::new();
-            for (impl_sch, member_map) in impl_env.iter() {
+            for (impl_sch, member_map) in module.impl_env.iter() {
                 // impl_sch: TraitScheme
-                let (_impl_constraints, impl_head) = impl_sch.instantiate(ctx);
+                let (_impl_constraints, impl_head) = impl_sch.instantiate(&mut phox.ctx);
 
-                // impl_head と required constraint を unify
-                if impl_head.name == constraint.name && impl_head.score() == base_score {
-                    let mut dummy_ctx = ctx.clone();
-                    if constraint.unify(&mut dummy_ctx, &impl_head).is_ok() {
+                // impl_head と required trait_head を unify
+                if impl_head.name == trait_head.name && impl_head.score() == base_score {
+                    let mut dummy_ctx = phox.ctx.clone();
+                    if trait_head.unify(&mut dummy_ctx, &impl_head).is_ok() {
                         matches.push((impl_sch, member_map));
                     }
                 }
@@ -245,12 +233,12 @@ pub fn resolve_expr(
             match matches.len() {
                 0 => {
                     // 実装が見つからない
-                    Err(TypeError::MissingTraitImpl(constraint.clone()))
+                    Err(TypeError::MissingTraitImpl(trait_head.clone()))
                 }
                 1 => {
                     let (impl_sch, impls) = matches[0];
-                    let (_impl_constraints, impl_head) = impl_sch.instantiate(ctx);
-                    constraint.unify(ctx, &impl_head)?;
+                    let (_impl_constraints, impl_head) = impl_sch.instantiate(&mut phox.ctx);
+                    trait_head.unify(&mut phox.ctx, &impl_head)?;
                     let fields: Vec<(String, Expr)> = impls
                         .iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                     expr.body = ExprBody::Record(fields);
@@ -260,7 +248,7 @@ pub fn resolve_expr(
                     let cand_traits: Vec<String> =
                         matches.into_iter().map(|(trait_sch, _)| trait_sch.target.to_string()).collect();
                     Err(TypeError::AmbiguousTrait {
-                        constraint: constraint.to_string(),
+                        trait_head: trait_head.to_string(),
                         candidates: cand_traits,
                     })
                 }
@@ -271,26 +259,26 @@ pub fn resolve_expr(
 }
 
 pub fn resolve_raw_type_decl(
-    ctx: &mut TypeContext,
-    raw: RawTypeDecl,
+    phox: &mut PhoxEngine,
+    raw: &RawTypeDecl,
 ) -> TypeDecl {
     match raw {
         RawTypeDecl::SumType { name, params, variants } => {
             let mut param_map = HashMap::new();
             let mut param_ids = Vec::new();
             for p in params {
-                let id = ctx.fresh_type_var_id();
+                let id = phox.ctx.fresh_type_var_id();
                 param_map.insert(p.clone(), id);
                 param_ids.push(id);
             }
 
             let resolved_variants = variants
                 .into_iter()
-                .map(|v| resolve_raw_variant(ctx, v, &param_map))
+                .map(|v| resolve_raw_variant(phox, v, &param_map))
                 .collect();
 
             TypeDecl::SumType {
-                name,
+                name: name.to_string(),
                 params: param_ids,
                 variants: resolved_variants,
             }
@@ -300,18 +288,18 @@ pub fn resolve_raw_type_decl(
 
 /// RawVariant を解決して Variant に変換する
 pub fn resolve_raw_variant(
-    ctx: &mut TypeContext,
-    raw: RawVariant,
+    phox: &mut PhoxEngine,
+    raw: &RawVariant,
     param_map: &HashMap<String, TypeVarId>,
 ) -> Variant {
     match raw {
-        RawVariant::Unit(name) => Variant::Unit(name),
+        RawVariant::Unit(name) => Variant::Unit(name.to_string()),
         RawVariant::Tuple(name, elems) => {
             let elems2 = elems
                 .into_iter()
-                .map(|t| resolve_raw_type(ctx, &t, param_map))
+                .map(|t| resolve_raw_type(&mut phox.ctx, &t, param_map))
                 .collect();
-            Variant::Tuple(name, elems2)
+            Variant::Tuple(name.to_string(), elems2)
         }
     }
 }
@@ -365,12 +353,13 @@ use crate::interpreter::Env;
 use crate::interpreter::make_constructor;
 
 pub fn register_type_decl(
-    decl: &TypeDecl,
-    icx: &mut InferCtx,
-    env: &mut Env,
+    phox: &mut PhoxEngine,
+    module: &mut RefMut<Module>,
+    raw: &RawTypeDecl,
 ) {
-    register_type(decl, icx);
-    register_variants(decl, env);
+    let decl = resolve_raw_type_decl(phox, raw);
+    register_type(&decl, &mut module.icx);
+    register_variants(&decl, &mut module.env);
 }
 
 pub fn register_type(decl: &TypeDecl, icx: &mut InferCtx) {
@@ -408,18 +397,18 @@ pub fn register_variants(decl: &TypeDecl, env: &mut Env) {
     }
 }
 
-pub fn resolve_raw_constraint(
+pub fn resolve_raw_trait_head(
     ctx: &mut TypeContext,
-    raw: &RawConstraint,
+    raw: &RawTraitHead,
     param_map: &HashMap<String, TypeVarId>,
-) -> Constraint {
+) -> TraitHead {
     let params = raw
         .params
         .iter()
         .map(|p| resolve_raw_type(ctx, p, param_map))
         .collect();
 
-    Constraint {
+    TraitHead {
         name: raw.name.clone(),
         params,
     }

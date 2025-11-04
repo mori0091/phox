@@ -18,7 +18,7 @@ mod rawdecl;
 pub use rawdecl::{RawTypeDecl, RawVariant, RawType};
 pub use rawdecl::{RawTraitDecl, RawTraitMemberDecl};
 pub use rawdecl::{RawImplDecl, RawImplMemberDecl};
-pub use rawdecl::RawConstraint;
+pub use rawdecl::RawTraitHead;
 
 mod decl;
 pub use decl::{TypeDecl, Variant};
