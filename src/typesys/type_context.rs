@@ -129,8 +129,8 @@ impl TypeContext {
                 Ok(())
             }
 
-            (Type::Overloaded(_, _), Type::Overloaded(_, _)) => {
-                todo!()
+            (Type::Overloaded(_, _), _) | (_, Type::Overloaded(_, _)) => {
+                unreachable!("Overloaded should be resolved before unify");
             }
 
             _ => {

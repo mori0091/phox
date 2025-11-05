@@ -11,7 +11,7 @@ pub fn infer_item(phox: &mut PhoxEngine, icx: &mut InferCtx, item: &mut Item) ->
         Item::Expr(expr) => {
             infer_expr(phox, icx, expr)
         }
-        _ => Ok(Type::con("()"))
+        _ => Ok(Type::unit())
     }
 }
 
@@ -23,7 +23,7 @@ pub fn infer_stmt(phox: &mut PhoxEngine, icx: &mut InferCtx, stmt: &mut Stmt) ->
             phox.ctx.unify(&t_expr, &t_pat)?;
             let ref_icx = icx.clone(); // snapshot for reference
             phox.ctx.match_pattern(icx, pat, &t_pat, &ref_icx, true)?;
-            Ok(Type::con("()"))
+            Ok(Type::unit())
         }
         Stmt::LetRec(pat, expr) => {
             match pat {
@@ -34,7 +34,7 @@ pub fn infer_stmt(phox: &mut PhoxEngine, icx: &mut InferCtx, stmt: &mut Stmt) ->
                     phox.ctx.unify(&tv, &t_expr)?;
                     let sch = generalize(&mut phox.ctx, icx, &tv);
                     icx.type_env.insert(x.clone(), sch);
-                    Ok(Type::con("()"))
+                    Ok(Type::unit())
                 }
                 _ => Err(TypeError::LetRecPatternNotSupported(pat.clone())),
             }
@@ -53,14 +53,8 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
                     ty
                 }
                 None => {
-                    match icx.impl_member_env.get(name).clone() {
+                    match phox.impl_member_env.get(name).clone() {
                         None => return Err(TypeError::UnboundVariable(name.clone())),
-                        Some(cands) if cands.len() == 1 => {
-                            let raw_cand = cands.iter().next().unwrap();
-                            let cand = TypeScheme::from(raw_cand, &mut phox.ctx);
-                            let (_constraints, ty) = cand.instantiate(&mut phox.ctx);
-                            ty
-                        }
                         Some(cands) => {
                             let name = name.clone();
                             let cands: Vec<_> = cands.iter().cloned().collect();

@@ -45,8 +45,6 @@ pub struct InferCtx {
     pub kind_env: KindEnv,            // 型コンストラクタの kind 情報 (ex. List: * -> *)
     pub type_env: TypeEnv,            // スコープ内の識別子の型スキーム (ex. `==`: ∀ a. a -> a -> Bool)
     pub trait_member_env: TraitMemberEnv, // traitメンバの型スキーム集合 (ex. "f": { ∀ a. Foo a => a -> a, ∀ a. Bar a => a -> a })
-    pub impl_member_env: TraitMemberEnv, // implメンバの型スキーム集合 (ex. "f": { ∀ Int. Foo Int => Int -> Int, ∀ Bool. Foo Bool => Bool -> Bool })
-    // pub obligations: Vec<Constraint>, // 推論中に発生した未解決の制約(ex. Eq α)
 }
 
 impl InferCtx {
@@ -55,8 +53,6 @@ impl InferCtx {
             kind_env: KindEnv::new(),
             type_env: TypeEnv::new(),
             trait_member_env: TraitMemberEnv::new(),
-            impl_member_env: TraitMemberEnv::new(),
-            // obligations: vec![],
         }
     }
 
@@ -65,8 +61,6 @@ impl InferCtx {
             kind_env: initial_kind_env(),
             type_env: initial_type_env(ctx),
             trait_member_env: TraitMemberEnv::new(),
-            impl_member_env: TraitMemberEnv::new(),
-            // obligations: vec![],
         }
     }
 

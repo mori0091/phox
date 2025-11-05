@@ -1,19 +1,14 @@
 use lalrpop_util::ParseError;
-use crate::grammar::{ItemListParser, ExprParser};
+use crate::grammar::*;
 
-use crate::syntax::ast::{Program, Item, Expr};
-use crate::syntax::lexer::Lexer;
-use crate::syntax::token::{Token, LexicalError};
+use crate::syntax::ast::*;
+use crate::syntax::lexer::*;
+use crate::syntax::token::*;
 
-use crate::resolve::resolve_item;
-
-use crate::typesys::{Type, TypeScheme};
-use crate::typesys::TypeContext;
-use crate::typesys::{infer_item, apply_trait_impls_item, generalize};
-
-use crate::interpreter::Value;
-use crate::interpreter::eval_item;
-use crate::module::{Module, RefModule, RootModules};
+use crate::module::*;
+use crate::resolve::*;
+use crate::typesys::*;
+use crate::interpreter::*;
 
 use crate::prelude::*;
 
@@ -22,6 +17,8 @@ pub const DEFAULT_USER_ROOT_MODULE_NAME: &str = "__main__";
 pub struct PhoxEngine {
     pub ctx: TypeContext,
     pub roots: RootModules,
+    pub impl_member_env: TraitMemberEnv, // implメンバの型スキーム集合 (ex. "f": { ∀ Int. Foo Int => Int -> Int, ∀ Bool. Foo Bool => Bool -> Bool })
+    pub impl_env: ImplEnv,
 }
 
 impl PhoxEngine {
@@ -29,6 +26,8 @@ impl PhoxEngine {
         let mut phox = PhoxEngine {
             ctx: TypeContext::new(),
             roots: RootModules::new(),
+            impl_member_env: TraitMemberEnv::new(),
+            impl_env: ImplEnv::new(),
         };
         let mut prelude = Module::new_root(&mut phox.ctx);
         phox.eval_mod(&mut prelude, PRELUDE).unwrap();
@@ -74,7 +73,7 @@ impl PhoxEngine {
         let ty = infer_item(self, &mut module.borrow_mut().icx, item)
             .map_err(|e| format!("infer error: {e}"))?;
 
-        apply_trait_impls_item(item, &mut self.ctx, &mut module.borrow_mut())
+        apply_trait_impls_item(self, &mut module.borrow_mut(), item)
             .map_err(|e| format!("infer error: {e}"))?;
 
         Ok(generalize(&mut self.ctx, &module.borrow_mut().icx, &ty))

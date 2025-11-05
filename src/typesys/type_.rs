@@ -256,7 +256,7 @@ impl Type {
                 ret
             }
             Type::Overloaded(_, _) => {
-                todo!()
+                unreachable!()
             }
         }
     }

@@ -115,7 +115,7 @@ pub fn register_impl(
         // eprintln!("trait: @{{{}}}.{}: {}", trait_head, member.name, trait_scheme.pretty());
         // eprintln!("impl : @{{{}}}.{}: {}", impl_head, member.name, impl_scheme.pretty());
 
-        module.icx.impl_member_env
+        phox.impl_member_env
             .entry(member.name.clone())
             .or_default()
             .insert(impl_scheme);
@@ -148,7 +148,7 @@ pub fn register_impl(
     //     }
     //     eprintln!("}}");
     // }
-    module.impl_env.insert(trait_sch, member_map);
+    phox.impl_env.insert(trait_sch, member_map);
 
     Ok(())
 }
@@ -218,7 +218,7 @@ pub fn resolve_expr(
             let trait_head = resolve_raw_trait_head(&mut phox.ctx, &raw, &HashMap::new());
             let base_score = trait_head.score();
             let mut matches = Vec::new();
-            for (impl_sch, member_map) in module.impl_env.iter() {
+            for (impl_sch, member_map) in phox.impl_env.iter() {
                 // impl_sch: TraitScheme
                 let (_impl_constraints, impl_head) = impl_sch.instantiate(&mut phox.ctx);
 

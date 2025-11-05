@@ -2,19 +2,17 @@ use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 
-use crate::typesys::{InferCtx, ImplEnv, TypeContext, TypeScheme};
-use crate::interpreter::{initial_env, Env, Value};
+use crate::typesys::*;
+use crate::interpreter::*;
+use super::*;
 
 // use crate::prelude::*;
-
-pub type Path = String;
 
 pub type RefModule = Rc<RefCell<Module>>;
 pub type WeakRefModule = Weak<RefCell<Module>>;
 
 pub struct Module {
     pub icx: InferCtx,
-    pub impl_env: ImplEnv,
     pub env: Env,
     submods: HashMap<String, RefModule>,
     _exports: HashSet<String>,     // for `pub ...`
@@ -30,7 +28,6 @@ impl ModuleExt for RefModule {
     fn add_submod(&self, name: String) -> RefModule {
         let child = Rc::new(RefCell::new(Module {
             icx: InferCtx::new(),
-            impl_env: ImplEnv::new(),
             env: Env::new(),
             submods: HashMap::new(),
             _exports: HashSet::new(),
@@ -46,7 +43,6 @@ impl Module {
     pub fn new_root(ctx: &mut TypeContext) -> RefModule {
         Rc::new(RefCell::new(Module {
             icx: InferCtx::initial(ctx),
-            impl_env: ImplEnv::new(),
             env: initial_env(),
             submods: HashMap::new(),
             _exports: HashSet::new(),
