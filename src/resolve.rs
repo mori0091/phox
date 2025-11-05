@@ -159,6 +159,8 @@ pub fn resolve_stmt(
     stmt: &mut Stmt,
 ) -> Result<(), TypeError> {
     match stmt {
+        Stmt::Mod(_m) => todo!(),
+        Stmt::Use(_p) => todo!(),
         Stmt::Let(_p, expr) | Stmt::LetRec(_p, expr) => {
             resolve_expr(phox, module, expr)
         }

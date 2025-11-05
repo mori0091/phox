@@ -17,6 +17,8 @@ pub fn infer_item(phox: &mut PhoxEngine, icx: &mut InferCtx, item: &mut Item) ->
 
 pub fn infer_stmt(phox: &mut PhoxEngine, icx: &mut InferCtx, stmt: &mut Stmt) -> Result<Type, TypeError> {
     match stmt {
+        Stmt::Mod(_) => Ok(Type::unit()),
+        Stmt::Use(_) => Ok(Type::unit()),
         Stmt::Let(pat, expr) => {
             let t_expr = infer_expr(phox, icx, expr)?;
             let t_pat = phox.ctx.fresh_type_for_pattern(pat);

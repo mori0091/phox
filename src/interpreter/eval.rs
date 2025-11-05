@@ -21,6 +21,8 @@ pub fn eval_item(item: &Item, env: &mut Env) -> Value {
 
 pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
     match stmt {
+        Stmt::Mod(_) => {},
+        Stmt::Use(_) => {},
         Stmt::Let(pat, expr) => {
             let val = eval_expr(expr, env);
             if let Some(bindings) = match_pat(pat, &val) {
