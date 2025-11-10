@@ -465,9 +465,12 @@ pub fn infer_stmt(ctx: &mut TypeContext, icx: &mut InferCtx, stmt: &mut Stmt) ->
             match pat {
                 Pat::Var(x) => {
                     let tv = Type::Var(ctx.fresh_type_var_id());
-                    icx.type_env.insert(x.clone(), TypeScheme::mono(tv.clone()));
-                    let t_expr = infer_expr(ctx, icx, expr)?;
-                    ctx.unify(&tv, &t_expr)?;
+                    let mut icx2 = icx.clone();
+                    {
+                        icx2.type_env.insert(x.clone(), TypeScheme::mono(tv.clone()));
+                        let t_expr = infer_expr(ctx, &mut icx2, expr)?;
+                        ctx.unify(&tv, &t_expr)?;
+                    }
                     let sch = generalize(ctx, icx, &tv);
                     icx.type_env.insert(x.clone(), sch);
                     Ok(Type::con("()"))
