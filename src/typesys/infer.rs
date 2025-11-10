@@ -71,6 +71,10 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
 
         ExprBody::App(f, a) => {
             let ta = infer_expr(phox, icx, a)?;
+            if let Type::Overloaded(name, candidates) = ta {
+                return Err(TypeError::AmbiguousVariable { name, candidates })
+            }
+
             let tf = infer_expr(phox, icx, f)?;
             let tr = Type::Var(phox.ctx.fresh_type_var_id());
 
