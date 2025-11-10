@@ -106,13 +106,23 @@ impl Eq Bool {
 
 impl Ord Bool {
     (<=) = \x.\y. match ((x, y)) {
-        (false, true) => true,
-        (true , true) => true,
-        _             => false,
+        (false , false) => true,
+        (_, true)       => true,
+        _               => false,
     };
-    (<)  = \x.\y. (x != y) && (x <= y);
-    (>=) = \x.\y. (x == y) || (x > y);
-    (>)  = \x.\y. !(x <= y);
+    (<)  = \x.\y. match ((x, y)) {
+        (false, true)   => true,
+        _               => false,
+    };
+    (>)  = \x.\y. match ((x, y)) {
+        (true, false)   => true,
+        _               => false,
+    };
+    (>=) = \x.\y. match ((x, y)) {
+        (false, false) => true,
+        (true, _)      => true,
+        _              => false,
+    };
 };
 
 // === Int ===
