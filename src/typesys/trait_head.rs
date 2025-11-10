@@ -1,22 +1,21 @@
 use std::fmt;
 use std::collections::{HashMap, HashSet};
-use crate::typesys::ApplySubst;
-use crate::typesys::{Type, TypeVarId};
-use crate::typesys::{TypeError, TypeContext, TraitMemberEnv};
+use crate::typesys::*;
+use crate::module::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Constraint {
-    pub name: String,           // trait name (ex. Eq, Ord)
+pub struct TraitHead {
+    pub name: Symbol,           // trait name (ex. Eq, Ord)
     pub params: Vec<Type>,      // type parameters
 }
 
-impl Constraint {
+impl TraitHead {
     pub fn from_trait_member(
         ctx: &mut TypeContext,
         member_env: &TraitMemberEnv,
-        member_name: &str,
+        member_name: &Symbol,
         member_ty: &Type,
-    ) -> Result<Vec<Constraint>, TypeError> {
+    ) -> Result<Vec<TraitHead>, TypeError> {
         let entries = member_env
             .get(member_name)
             .ok_or_else(|| TypeError::UnknownTraitMember(member_name.to_string()))?;
@@ -39,7 +38,7 @@ impl Constraint {
 
 use super::{FreeTypeVars, TypeScheme};
 
-impl FreeTypeVars for Constraint {
+impl FreeTypeVars for TraitHead {
     fn free_type_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<TypeVarId>) {
         for t in self.params.iter() {
             t.free_type_vars(ctx, acc);
@@ -49,16 +48,16 @@ impl FreeTypeVars for Constraint {
 
 use super::Repr;
 
-impl Repr for Constraint {
+impl Repr for TraitHead {
     fn repr(&self, ctx: &mut TypeContext) -> Self {
         let name = self.name.clone();
         let params = self.params.iter().map(|t| t.repr(ctx)).collect();
-        Constraint { name, params }
+        TraitHead { name, params }
     }
 }
 
-impl Constraint {
-    pub fn unify(&self, ctx: &mut TypeContext, other: &Constraint) -> Result<(), TypeError> {
+impl TraitHead {
+    pub fn unify(&self, ctx: &mut TypeContext, other: &TraitHead) -> Result<(), TypeError> {
         if self.name != other.name {
             return Err(TypeError::UnificationFail {
                 expected: self.clone(),
@@ -80,27 +79,43 @@ impl Constraint {
     }
 }
 
-impl fmt::Display for Constraint {
+impl fmt::Display for TraitHead {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let tys = self.params
                     .iter()
-                    .map(|ty| ty.to_string())
+                    .map(|ty| {
+                        match ty {
+                            Type::App(_, _) | Type::Fun(_, _) => {
+                                format!("({})", ty)
+                            }
+                            _ => {
+                                format!("{}", ty)
+                            }
+                        }
+                    })
                     .collect::<Vec<_>>()
             .join(" ");
         write!(f, "{} {}", self.name, tys)
      }
 }
 
-impl ApplySubst for Constraint {
+impl SchemePretty for TraitHead {
+    fn rename_type_var(&self, map: &HashMap<TypeVarId, String>) -> Self {
+        let ts = self.params.iter().map(|t| t.rename_type_var(map)).collect();
+        TraitHead {name: self.name.clone(), params: ts}
+    }
+}
+
+impl ApplySubst for TraitHead {
     fn apply_subst(&self, subst: &HashMap<TypeVarId, Type>) -> Self {
-        Constraint {
+        TraitHead {
             name: self.name.clone(),
             params: self.params.iter().map(|t| t.apply_subst(subst)).collect(),
         }
     }
 }
 
-impl Constraint {
+impl TraitHead {
     pub fn score(&self) -> (usize, i64) {
         let mut ret = (0, 0);
         for e in self.params.iter() {

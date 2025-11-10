@@ -1,75 +1,78 @@
-use crate::syntax::ast::{Item, Stmt, Expr, ExprBody};
-use super::{Constraint, ImplEnv, InferCtx, Type, TypeContext, TypeError};
+use crate::api::PhoxEngine;
+use crate::syntax::ast::*;
+use crate::typesys::*;
+use crate::module::*;
+
+use std::cell::RefMut;
 
 pub fn apply_trait_impls_item(
+    phox: &mut PhoxEngine,
+    module: &mut RefMut<Module>,
     item: &mut Item,
-    ctx: &mut TypeContext,
-    icx: &InferCtx,
-    impl_env: &ImplEnv,
 ) -> Result<(), TypeError> {
     match item {
         Item::RawTraitDecl(_) => Ok(()), // trait decl: no need to apply trait impls
         Item::RawImplDecl(_) => Ok(()),  // impl decl : no need to apply trait impls
         Item::RawTypeDecl(_) => Ok(()),  // type decl : no need to apply trait impls
-        Item::Expr(expr) => apply_trait_impls_expr(expr, ctx, icx, impl_env),
-        Item::Stmt(stmt) => apply_trait_impls_stmt(stmt, ctx, icx, impl_env),
+        Item::Expr(expr) => apply_trait_impls_expr(phox, module, expr),
+        Item::Stmt(stmt) => apply_trait_impls_stmt(phox, module, stmt),
     }
 }
 
 pub fn apply_trait_impls_stmt(
+    phox: &mut PhoxEngine,
+    module: &mut RefMut<Module>,
     stmt: &mut Stmt,
-    ctx: &mut TypeContext,
-    icx: &InferCtx,
-    impl_env: &ImplEnv,
 ) -> Result<(), TypeError> {
     match stmt {
-        Stmt::Let(_pat, expr) => apply_trait_impls_expr(expr, ctx, icx, impl_env),
-        Stmt::LetRec(_pat, expr) => apply_trait_impls_expr(expr, ctx, icx, impl_env),
+        Stmt::Mod(_) => Ok(()),
+        Stmt::Use(_) => Ok(()),
+        Stmt::Let(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
+        Stmt::LetRec(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
     }
 }
 
 pub fn apply_trait_impls_expr(
+    phox: &mut PhoxEngine,
+    module: &mut RefMut<Module>,
     expr: &mut Expr,
-    ctx: &mut TypeContext,
-    icx: &InferCtx,
-    impl_env: &ImplEnv,
 ) -> Result<(), TypeError> {
     // 再帰的に子ノードを処理
     match &mut expr.body {
         ExprBody::App(f, a) => {
-            apply_trait_impls_expr(f, ctx, icx, impl_env)?;
-            apply_trait_impls_expr(a, ctx, icx, impl_env)?;
+            apply_trait_impls_expr(phox, module, f)?;
+            apply_trait_impls_expr(phox, module, a)?;
         }
         ExprBody::Abs(_, body) => {
-            apply_trait_impls_expr(body, ctx, icx, impl_env)?;
+            apply_trait_impls_expr(phox, module, body)?;
         }
         ExprBody::If(cond, then_, else_) => {
-            apply_trait_impls_expr(cond, ctx, icx, impl_env)?;
-            apply_trait_impls_expr(then_, ctx, icx, impl_env)?;
-            apply_trait_impls_expr(else_, ctx, icx, impl_env)?;
+            apply_trait_impls_expr(phox, module, cond)?;
+            apply_trait_impls_expr(phox, module, then_)?;
+            apply_trait_impls_expr(phox, module, else_)?;
         }
         ExprBody::Match(scrutinee, arms) => {
-            apply_trait_impls_expr(scrutinee, ctx, icx, impl_env)?;
+            apply_trait_impls_expr(phox, module, scrutinee)?;
             for (_, arm_expr) in arms.iter_mut() {
-                apply_trait_impls_expr(arm_expr, ctx, icx, impl_env)?;
+                apply_trait_impls_expr(phox, module, arm_expr)?;
             }
         }
         ExprBody::Tuple(es) => {
             for e in es.iter_mut() {
-                apply_trait_impls_expr(e, ctx, icx, impl_env)?;
+                apply_trait_impls_expr(phox, module, e)?;
             }
         }
         ExprBody::Record(fields) => {
             for (_, e) in fields.iter_mut() {
-                apply_trait_impls_expr(e, ctx, icx, impl_env)?;
+                apply_trait_impls_expr(phox, module, e)?;
             }
         }
         ExprBody::TupleAccess(e, _) | ExprBody::FieldAccess(e, _) => {
-            apply_trait_impls_expr(e, ctx, icx, impl_env)?;
+            apply_trait_impls_expr(phox, module, e)?;
         }
         ExprBody::Block(items) => {
             for item in items.iter_mut() {
-                apply_trait_impls_item(item, ctx, icx, impl_env)?;
+                apply_trait_impls_item(phox, module, item)?;
             }
         }
         ExprBody::Var(name) => {
@@ -84,20 +87,19 @@ pub fn apply_trait_impls_expr(
                 });
             }
 
-            // if icx.type_env.contains_key(name) {
-            if icx.trait_member_env.contains_key(name) {
+            if module.icx.trait_member_env.contains_key(name) {
                 // このメンバに必要な制約を構築（型から導出）
-                let constraints = Constraint::from_trait_member(ctx, &icx.trait_member_env, name, ty)?;
+                let constraints = TraitHead::from_trait_member(&mut phox.ctx, &module.icx.trait_member_env, name, ty)?;
 
                 let mut matches = Vec::new();
-                for (impl_head, member_map) in impl_env.iter() {
+                for (impl_head, member_map) in phox.impl_env.iter() {
                     // impl_sch: TraitScheme
-                    let (_impl_constraints, impl_head) = impl_head.instantiate(ctx);
+                    let (_impl_constraints, impl_head) = impl_head.instantiate(&mut phox.ctx);
 
                     for constraint in constraints.iter() {
                         // impl_head と required constraint を unify
                         if impl_head.name == constraint.name {
-                            let mut try_ctx = ctx.clone();
+                            let mut try_ctx = phox.ctx.clone();
                             if constraint.unify(&mut try_ctx, &impl_head).is_ok() {
                                 if let Some(impl_expr) = member_map.get(name) {
                                     matches.push((constraint.clone(), impl_expr.clone()));

@@ -1,19 +1,18 @@
 use std::fmt;
-use std::collections::HashMap;
-use crate::typesys::ApplySubst;
-use crate::typesys::{TypeVarId, Type, Constraint};
+use std::collections::{HashMap, HashSet};
+use super::*;
 
 // ===== Schemes (∀ vars . (constraints) => target) =====
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Scheme<T> {
     pub vars: Vec<TypeVarId>,         // quantified variables              (ex. `∀ a.`)
-    pub constraints: Vec<Constraint>, // constraints / trait bounds        (ex. `(Eq a, Ord a) =>`)
+    pub constraints: Vec<TraitHead>,  // constraints / trait bounds        (ex. `(Eq a, Ord a) =>`)
     pub target: T,                    // the type, or                      (ex. `a -> a -> Bool`)
                                       // the constraint produced by `impl` (ex. `Eq (List a)`)
 }
 
 impl <T> Scheme<T> {
-    pub fn new(vars: Vec<TypeVarId>, constraints: Vec<Constraint>, target: T) -> Scheme<T> {
+    pub fn new(vars: Vec<TypeVarId>, constraints: Vec<TraitHead>, target: T) -> Scheme<T> {
         Scheme { vars, constraints, target }
     }
     pub fn mono(target: T) -> Scheme<T> {
@@ -22,6 +21,15 @@ impl <T> Scheme<T> {
     pub fn poly(vars: Vec<TypeVarId>, target: T) -> Scheme<T> {
         Scheme::new(vars, vec![], target)
     }
+}
+
+pub fn generalize<T: FreeTypeVars + Repr>(ctx: &mut TypeContext, icx: &InferCtx, target: &T) -> Scheme<T> {
+    let mut fty = HashSet::new();
+    target.free_type_vars(ctx, &mut fty);
+    let fenv = icx.free_env_vars(ctx);
+    let mut vars: Vec<TypeVarId> = fty.difference(&fenv).cloned().collect();
+    vars.sort_by_key(|v| v.0);
+    Scheme::poly(vars, target.repr(ctx))
 }
 
 impl <T: ApplySubst> ApplySubst for Scheme<T> {
@@ -46,7 +54,7 @@ impl <T: ApplySubst> ApplySubst for Scheme<T> {
 use super::TypeContext;
 
 impl <T: ApplySubst> Scheme<T> {
-    pub fn instantiate(&self, ctx: &mut TypeContext) -> (Vec<Constraint>, T) {
+    pub fn instantiate(&self, ctx: &mut TypeContext) -> (Vec<TraitHead>, T) {
         let mut subst: HashMap<TypeVarId, Type> = HashMap::new();
         for &v in self.vars.iter() {
             subst.insert(v, Type::var(ctx.fresh_type_var_id()));
@@ -67,6 +75,43 @@ impl <T: fmt::Display> fmt::Display for Scheme<T> {
             write!(f, "{}", self.target)
         } else {
             write!(f, "∀ {}. {}", TypeVarList(&self.vars), self.target)
+        }
+    }
+}
+
+impl <T: SchemePretty + fmt::Display> Scheme<T> {
+    pub fn pretty(&self) -> String {
+        use std::collections::HashMap;
+
+        // 量化変数に a, b, c... を割り当てる
+        let mut map = HashMap::new();
+        for (i, v) in self.vars.iter().enumerate() {
+            let ch = (b'a' + i as u8) as char;
+            map.insert(*v, ch.to_string());
+        }
+
+        let mut renamed = self.target.rename_type_var(&map).to_string();
+
+        if !self.constraints.is_empty() {
+            let cs = self.constraints
+                         .iter()
+                         .map(|c| c.rename_type_var(&map).to_string())
+                         .collect::<Vec<_>>();
+            if cs.len() == 1 {
+                renamed = format!("{} => {}", cs[0], renamed);
+            }
+            else {
+                renamed = format!("({}) => {}", cs.join(", "), renamed);
+            }
+        }
+
+        if self.vars.is_empty() {
+            format!("{}", renamed)
+        } else {
+            let vars: Vec<String> = (0..self.vars.len())
+                .map(|i| ((b'a' + i as u8) as char).to_string())
+                .collect();
+            format!("∀ {}. {}", vars.join(" "), renamed)
         }
     }
 }

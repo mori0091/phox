@@ -1,5 +1,5 @@
-use crate::syntax::ast::Pat;
-use super::{Constraint, Type, RawTypeScheme};
+use crate::{module::Symbol, syntax::ast::Pat};
+use super::*;
 
 // ===== Type error =====
 #[derive(Debug)]
@@ -8,30 +8,30 @@ pub enum TypeError {
 
     UnknownTrait(String),
     UnknownTraitMember(String),
-    ArityMismatch { trait_name: String, member: String, expected: usize, actual: usize },
-    UnificationFail { expected: Constraint, actual: Constraint },
+    ArityMismatch { trait_name: Symbol, member: String, expected: usize, actual: usize },
+    UnificationFail { expected: TraitHead, actual: TraitHead },
 
     // ----from `apply_trait_impls_*`
 
     MissingType,
-    MissingTraitImpl(Constraint),
+    MissingTraitImpl(TraitHead),
     MissingTraitMemberImpl(String),
     // MissingTraitImplForMember: "no trait impl for member: eq with type Bool -> Bool -> Bool; expected: Eq Bool"
-    MissingTraitImplForMember { member: String, ty: Type, expected: Vec<Constraint> },
+    MissingTraitImplForMember { member: String, ty: Type, expected: Vec<TraitHead> },
     // AmbiguousTraitMember: "ambiguous trait member: f for type Int; candidates: Foo, Bar"
     AmbiguousTraitMember { member: String, ty: Type, candidates: Vec<String> },
-    AmbiguousTrait { constraint: String, candidates: Vec<String> },
+    AmbiguousTrait { trait_head: String, candidates: Vec<String> },
 
     // ---- from `infer_*`
 
     Mismatch(Type, Type),
     NoMatchingOverload,
     RecursiveType,
-    UnboundVariable(String),
-    AmbiguousVariable { name: String, candidates: Vec<RawTypeScheme> },
+    UnboundVariable(Symbol),
+    AmbiguousVariable { name: Symbol, candidates: Vec<RawTypeScheme> },
 
-    UnknownConstructor(String),
-    ConstructorArityMismatch(String, usize, Type),
+    UnknownConstructor(Symbol),
+    ConstructorArityMismatch(Symbol, usize, Type),
 
     EmptyMatch,
     UnsupportedPattern(Pat),
@@ -62,12 +62,12 @@ impl fmt::Display for TypeError {
                 cands.sort();
                 let mut hints: Vec<_> = candidates
                     .iter()
-                    .map(|sch| format!("@{{{}}}.{name}", sch.constraints[0].to_string()))
+                    .map(|sch| format!("@{{{}}}.{}", sch.constraints[0], name.pretty()))
                     .collect();
                 hints.sort();
-                writeln!(f, "ambiguous variable `{name}`")?;
-                writeln!(f, "candidates: {}", cands.join(", "))?;
-                write!(f, "hint: use {}", hints.join(" or "))
+                writeln!(f, "ambiguous variable `{}`", name.pretty())?;
+                writeln!(f, "candidates:\n  {}", cands.join("\n  "))?;
+                write!(f, "solution:\n  {}", hints.join("\n  "))
             }
              _ => write!(f, "{:?}", self),
         }

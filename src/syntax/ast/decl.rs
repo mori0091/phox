@@ -1,13 +1,20 @@
 use std::fmt;
-use crate::typesys::{Type, TypeVarId, TypeScheme};
+use crate::module::*;
+use crate::typesys::*;
 
 #[derive(Clone, Debug)]
 pub enum TypeDecl {
     SumType {
-        name: String,           // Type constructor name of the ADT type
+        name: Symbol,           // Type constructor name of the ADT type
         params: Vec<TypeVarId>, // Type variables of the ADT type
         variants: Vec<Variant>, // Constructor variants
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum Variant {
+    Unit(Symbol),               // ex. `None, `Nil`,
+    Tuple(Symbol, Vec<Type>),   // ex. `Some a`, `Result a e`,
 }
 
 impl fmt::Display for TypeDecl {
@@ -16,9 +23,9 @@ impl fmt::Display for TypeDecl {
             TypeDecl::SumType {name, params, variants} => {
                 assert!(!variants.is_empty());
                 let s = if params.is_empty() {
-                    name.clone()
+                    name.to_string()
                 } else {
-                    format!("{} {}", name, params.iter()
+                    format!("{} {}", name.to_string(), params.iter()
                             .map(|id| format!("{}", id))
                             .collect::<Vec<_>>().join(" "))
                 };
@@ -27,12 +34,6 @@ impl fmt::Display for TypeDecl {
             }
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub enum Variant {
-    Unit(String),                        // ex. `None, `Nil`,
-    Tuple(String, Vec<Type>),            // ex. `Some a`, `Result a e`,
 }
 
 impl fmt::Display for Variant {
@@ -55,7 +56,7 @@ impl fmt::Display for Variant {
 }
 
 impl Variant {
-    pub fn name(&self) -> String {
+    pub fn name(&self) -> Symbol {
         match self {
             Variant::Unit(n) | Variant::Tuple(n, _) => n.clone(),
         }
@@ -63,9 +64,9 @@ impl Variant {
 }
 
 impl Variant {
-    pub fn as_scheme(&self, type_name: &str, params: &[TypeVarId]) -> (String, TypeScheme) {
+    pub fn as_scheme(&self, type_name: &Symbol, params: &[TypeVarId]) -> (String, TypeScheme) {
         // 型コンストラクタ適用: Option a, Result a b, ...
-        let mut applied = Type::Con(type_name.to_string());
+        let mut applied = Type::Con(type_name.clone());
         for &p in params {
             applied = Type::App(Box::new(applied), Box::new(Type::Var(p)));
         }

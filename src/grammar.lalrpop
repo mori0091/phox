@@ -1,4 +1,4 @@
-use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType, RawConstraint};
+use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType, RawTraitHead};
 use crate::syntax::ast::{RawTraitDecl, RawTraitMemberDecl};
 use crate::syntax::ast::{RawImplDecl, RawImplMemberDecl};
 use crate::syntax::ast::{Item, Stmt, Expr, Lit, Pat};
@@ -278,8 +278,8 @@ Expr1: Expr = {
 
 // 論理演算
 ExprBool: Expr = {
-    <l:Expr1> "&&" <r:Expr2> => Expr::app(Expr::app(Expr::var("&&"), l), r),
-    <l:Expr1> "||" <r:Expr2> => Expr::app(Expr::app(Expr::var("||"), l), r),
+    <l:Expr1> "&&" <r:Expr2> => Expr::app(Expr::app(Expr::unresolved_var("&&"), l), r),
+    <l:Expr1> "||" <r:Expr2> => Expr::app(Expr::app(Expr::unresolved_var("||"), l), r),
 };
 
 Expr2: Expr = {
@@ -289,12 +289,12 @@ Expr2: Expr = {
 
 // 比較演算子 (infix)
 ExprCmp: Expr = {
-    <l:Expr3> "==" <r:Expr3> => Expr::app(Expr::app(Expr::var("=="), l), r),
-    <l:Expr3> "!=" <r:Expr3> => Expr::app(Expr::app(Expr::var("!="), l), r),
-    <l:Expr3> "<"  <r:Expr3> => Expr::app(Expr::app(Expr::var("<") , l), r),
-    <l:Expr3> "<=" <r:Expr3> => Expr::app(Expr::app(Expr::var("<="), l), r),
-    <l:Expr3> ">"  <r:Expr3> => Expr::app(Expr::app(Expr::var(">") , l), r),
-    <l:Expr3> ">=" <r:Expr3> => Expr::app(Expr::app(Expr::var(">="), l), r),
+    <l:Expr3> "==" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("=="), l), r),
+    <l:Expr3> "!=" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("!="), l), r),
+    <l:Expr3> "<"  <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("<") , l), r),
+    <l:Expr3> "<=" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("<="), l), r),
+    <l:Expr3> ">"  <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var(">") , l), r),
+    <l:Expr3> ">=" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var(">="), l), r),
 };
 
 Expr3: Expr = {
@@ -304,8 +304,8 @@ Expr3: Expr = {
 
 // 加減算 (infixl)
 ExprAdd: Expr = {
-    <l:Expr3> "+" <r:Expr4> => Expr::app(Expr::app(Expr::var("+"), l), r),
-    <l:Expr3> "-" <r:Expr4> => Expr::app(Expr::app(Expr::var("-"), l), r),
+    <l:Expr3> "+" <r:Expr4> => Expr::app(Expr::app(Expr::unresolved_var("+"), l), r),
+    <l:Expr3> "-" <r:Expr4> => Expr::app(Expr::app(Expr::unresolved_var("-"), l), r),
 };
 
 Expr4: Expr = {
@@ -316,8 +316,8 @@ Expr4: Expr = {
 
 // 乗除算 (infixl)
 ExprMul: Expr = {
-    <l:Expr4> "*" <r:Expr5> => Expr::app(Expr::app(Expr::var("*"), l), r),
-    <l:Expr4> "/" <r:Expr5> => Expr::app(Expr::app(Expr::var("/"), l), r),
+    <l:Expr4> "*" <r:Expr5> => Expr::app(Expr::app(Expr::unresolved_var("*"), l), r),
+    <l:Expr4> "/" <r:Expr5> => Expr::app(Expr::app(Expr::unresolved_var("/"), l), r),
 };
 
 Expr5: Expr = {
@@ -339,7 +339,7 @@ Expr6: Expr = {
 
 ExprInfixOp: Expr = {
     <l:Expr6> <op:"infixOp"> <r:Expr7> => {
-        Expr::app(Expr::app(Expr::var(op), l), r)
+        Expr::app(Expr::app(Expr::unresolved_var(op), l), r)
     },
 };
 
@@ -349,7 +349,7 @@ Expr7: Expr = {
 };
 
 ExprPipeL: Expr = {
-    <f:Expr8> "<|" <x:Expr7> => Expr::app(f, x),
+    <f:Expr8> "<|" <x:Expr7> => Expr::app(Expr::app(Expr::unresolved_var("<|"), f), x),
 };
 
 Expr8: Expr = {
@@ -358,7 +358,7 @@ Expr8: Expr = {
 };
 
 ExprPipeR: Expr = {
-    <x:Expr8> "|>" <f:Expr9> => Expr::app(f, x),
+    <x:Expr8> "|>" <f:Expr9> => Expr::app(Expr::app(Expr::unresolved_var("|>"), x), f),
 };
 
 Expr9: Expr = {
@@ -367,16 +367,8 @@ Expr9: Expr = {
 };
 
 ExprCompose: Expr = {
-    <f:Expr9> ">>" <g:Expr10> => {
-        let x = Pat::var("__tmp_var__");
-        let body = Expr::app(g, Expr::app(f, Expr::var("__tmp_var__")));
-        Expr::abs(x, body)
-    },
-    <f:Expr9> "<<" <g:Expr10> => {
-        let x = Pat::var("__tmp_var__");
-        let body = Expr::app(f, Expr::app(g, Expr::var("__tmp_var__")));
-        Expr::abs(x, body)
-    },
+    <f:Expr9> ">>" <g:Expr10> => Expr::app(Expr::app(Expr::unresolved_var(">>"), f), g),
+    <f:Expr9> "<<" <g:Expr10> => Expr::app(Expr::app(Expr::unresolved_var("<<"), f), g),
 };
 
 Expr10: Expr = {
@@ -386,8 +378,8 @@ Expr10: Expr = {
 
 // 単項演算子 (prefix)
 ExprUnary: Expr = {
-    "-" <r:Expr10> => Expr::app(Expr::var("negate"), r),
-    "!" <r:Expr10> => Expr::app(Expr::var("not"), r),
+    "-" <r:Expr10> => Expr::app(Expr::unresolved_var("negate"), r),
+    "!" <r:Expr10> => Expr::app(Expr::unresolved_var("not"), r),
 };
 
 Expr11: Expr = {
@@ -403,8 +395,8 @@ ExprApp: Expr = {
 // 原子的な式
 Atom: Expr = {
     Lit => Expr::lit(<>),
-    Ident => Expr::var(<>),
-    ConIdent => Expr::var(<>),
+    Ident => Expr::unresolved_var(<>),
+    ConIdent => Expr::unresolved_var(<>),
     ExprParen,
     ExprTuple,
     ExprRecord,
@@ -428,14 +420,14 @@ ExprRecord: Expr = {
 };
 
 ExprTraitRecord: Expr = {
-    "@" "{" <raw_constraint:Constraint> "}" => {
-        Expr::raw_trait_record(raw_constraint)
+    "@" "{" <raw:TraitHead> "}" => {
+        Expr::raw_trait_record(raw)
     },
 };
 
-Constraint: RawConstraint = {
+TraitHead: RawTraitHead = {
     <name:ConIdent> <params:TypeAtom+> => {
-        RawConstraint { name, params }
+        RawTraitHead { name, params }
     },
 };
 
@@ -471,13 +463,13 @@ Pat0: Pat = {
 };
 
 PatCon: Pat = {
-    <name:ConIdent> <args:PatAtom*> => Pat::con(name, args),
+    <name:ConIdent> <args:PatAtom*> => Pat::unresolved_con(name, args),
 };
 
 PatAtom: Pat = {
     "_" => Pat::Wildcard,
     Lit => Pat::Lit(<>),
-    Ident => Pat::var(<>),
+    Ident => Pat::unresolved_var(<>),
     PatParen,
     PatTuple,
     PatRecord,
@@ -498,7 +490,7 @@ PatRecord: Pat = {
 
 PatRecordField: (String, Pat) = {
     <name:Ident> ":" <pat:Pat> => (name, pat),
-    <name:Ident> => (name.clone(), Pat::Var(name)) // 省略形
+    <name:Ident> => (name.clone(), Pat::unresolved_var(name)) // 省略形
 };
 
 // === literal ===
@@ -542,6 +534,10 @@ Ident: String = {
     "(" "!" ")"  => "not".to_string(),
     "(" "&&" ")" => "&&".to_string(),
     "(" "||" ")" => "||".to_string(),
+    "(" "|>" ")" => "|>".to_string(),
+    "(" "<|" ")" => "<|".to_string(),
+    "(" ">>" ")" => ">>".to_string(),
+    "(" "<<" ")" => "<<".to_string(),
 };
 
 ConIdent: String = {

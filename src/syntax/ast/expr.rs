@@ -1,6 +1,8 @@
 use std::fmt;
-use super::{Item, Lit, Pat, RawConstraint};
+
+use super::*;
 use crate::typesys::Type;
+use crate::module::*;
 
 #[derive(Clone, Debug)]
 pub struct Expr {
@@ -11,7 +13,7 @@ pub struct Expr {
 #[derive(Clone, Debug)]
 pub enum ExprBody {
     Lit(Lit),
-    Var(String),
+    Var(Symbol),
     App(Box<Expr>, Box<Expr>),
 
     Abs(Pat, Box<Expr>),
@@ -20,7 +22,7 @@ pub enum ExprBody {
 
     Tuple(Vec<Expr>),               // ex. `(1,)`, `(1, true, ())`
     Record(Vec<(String, Expr)>),    // ex. `@{ x:a, y:b }`
-    RawTraitRecord(RawConstraint),  // ex. `@{ Eq Int }`
+    RawTraitRecord(RawTraitHead),   // ex. `@{ Eq Int }`
     FieldAccess(Box<Expr>, String), // ex. `p.x`
     TupleAccess(Box<Expr>, usize),  // ex. `p.0`
     Block(Vec<Item>),               // ex. `{stmt; stmt; expr; expr}`
@@ -39,8 +41,11 @@ impl Expr {
     pub fn bool_(b: bool) -> Self {
         Expr::lit(Lit::Bool(b))
     }
-    pub fn var<S: Into<String>>(s: S) -> Self {
-        Expr { body: ExprBody::Var(s.into()), ty: None }
+    pub fn unresolved_var<S: Into<String>>(s: S) -> Self {
+        Expr { body: ExprBody::Var(Symbol::Unresolved(Path::Relative(vec![s.into()]))), ty: None }
+    }
+    pub fn local_var<S: Into<String>>(s: S) -> Self {
+        Expr { body: ExprBody::Var(Symbol::Local(s.into())), ty: None }
     }
     pub fn app(f: Expr, x: Expr) -> Self {
         Expr { body: ExprBody::App(Box::new(f), Box::new(x)), ty: None }
@@ -63,8 +68,8 @@ impl Expr {
         Expr { body: ExprBody::Tuple(elems), ty: None }
     }
 
-    pub fn raw_trait_record(raw_constraint: RawConstraint) -> Self {
-        Expr { body: ExprBody::RawTraitRecord(raw_constraint), ty: None }
+    pub fn raw_trait_record(raw: RawTraitHead) -> Self {
+        Expr { body: ExprBody::RawTraitRecord(raw), ty: None }
     }
 
     pub fn field_access<S: Into<String>>(e: Expr, s: S) -> Self {
@@ -84,7 +89,8 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.body {
             ExprBody::Lit(a)            => write!(f, "{}", a),
-            ExprBody::Var(x)            => write!(f, "{}", x),
+            // ExprBody::Var(x)            => write!(f, "{}", x),
+            ExprBody::Var(x)            => write!(f, "{}", x.pretty()),
             ExprBody::Abs(x, e)         => write!(f, "λ{}.{}", x, e),
             ExprBody::App(e1, e2) => {
                 if let ExprBody::App(_, _) = e2.body {
