@@ -516,6 +516,10 @@ pub fn infer_expr(ctx: &mut TypeContext, icx: &mut InferCtx, expr: &mut Expr) ->
 
         ExprBody::App(f, a) => {
             let ta = infer_expr(ctx, icx, a)?;
+            if let Type::Overloaded(name, candidates) = ta {
+                return Err(TypeError::AmbiguousVariable { name, candidates })
+            }
+
             let tf = infer_expr(ctx, icx, f)?;
             let tr = Type::Var(ctx.fresh_type_var_id());
 
