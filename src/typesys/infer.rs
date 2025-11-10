@@ -32,9 +32,12 @@ pub fn infer_stmt(phox: &mut PhoxEngine, icx: &mut InferCtx, stmt: &mut Stmt) ->
             match pat {
                 Pat::Var(x) => {
                     let tv = Type::Var(phox.ctx.fresh_type_var_id());
-                    icx.type_env.insert(x.clone(), TypeScheme::mono(tv.clone()));
-                    let t_expr = infer_expr(phox, icx, expr)?;
-                    phox.ctx.unify(&tv, &t_expr)?;
+                    let mut icx2 = icx.clone();
+                    {
+                        icx2.type_env.insert(x.clone(), TypeScheme::mono(tv.clone()));
+                        let t_expr = infer_expr(phox, &mut icx2, expr)?;
+                        phox.ctx.unify(&tv, &t_expr)?;
+                    }
                     let sch = generalize(&mut phox.ctx, icx, &tv);
                     icx.type_env.insert(x.clone(), sch);
                     Ok(Type::unit())
