@@ -1,23 +1,29 @@
 use std::fmt;
 use super::Lit;
+use crate::module::*;
 
 #[derive(Debug, Clone)]
 pub enum Pat {
     Wildcard,                   // `_`
     Lit(Lit),                   // `()`, `true`, `1`, etc.
-    Var(String),                // `x`
-    Con(String, Vec<Pat>),      // `Cons x xs`
+    Var(Symbol),                // `x`
+    Con(Symbol, Vec<Pat>),      // `Cons x xs`
     Tuple(Vec<Pat>),            // `(p,)`, `(p1, p2)`
     Record(Vec<(String, Pat)>),
-    // Struct(String, Vec<(String, Pat)>),
 }
 
 impl Pat {
-    pub fn var<S: Into<String>>(s: S) -> Self {
-        Pat::Var(s.into())
+    pub fn unresolved_var<S: Into<String>>(s: S) -> Self {
+        Pat::Var(Symbol::Unresolved(Path::Relative(vec![s.into()])))
     }
-    pub fn con<S: Into<String>>(s: S, args: Vec<Pat>) -> Self {
-        Pat::Con(s.into(), args)
+    pub fn local_var<S: Into<String>>(s: S) -> Self {
+        Pat::Var(Symbol::Local(s.into()))
+    }
+    pub fn local_con<S: Into<String>>(s: S, args: Vec<Pat>) -> Self {
+        Pat::Con(Symbol::Local(s.into()), args) // TODO
+    }
+    pub fn unresolved_con<S: Into<String>>(s: S, args: Vec<Pat>) -> Self {
+        Pat::Con(Symbol::Unresolved(Path::Relative(vec![s.into()])), args)
     }
 }
 

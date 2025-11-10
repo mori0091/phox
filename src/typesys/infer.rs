@@ -1,5 +1,6 @@
 use crate::api::PhoxEngine;
 use crate::syntax::ast::*;
+use crate::module::*;
 use super::*;
 
 // ===== Inference (Algorithm J core) =====
@@ -46,25 +47,19 @@ pub fn infer_stmt(phox: &mut PhoxEngine, icx: &mut InferCtx, stmt: &mut Stmt) ->
 
 pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) -> Result<Type, TypeError> {
     let ty = match &mut expr.body {
-        ExprBody::Var(name) => {
-            // println!("lookup {}: type_env={:?}, trait_member_env={:?}, impl_member_env={:?}",
-            //          name, icx.type_env.get(name), icx.trait_member_env.get(name), icx.impl_member_env);
-            match icx.type_env.get(name) {
+        ExprBody::Var(symbol) => {
+            match icx.type_env.get(symbol) {
                 Some(sch) => {
                     let (_constraints, ty) = sch.instantiate(&mut phox.ctx);
                     ty
                 }
                 None => {
-                    match phox.impl_member_env.get(name).clone() {
-                        None => return Err(TypeError::UnboundVariable(name.clone())),
+                    match phox.impl_member_env.get(symbol).clone() {
+                        None => return Err(TypeError::UnboundVariable(symbol.clone())),
                         Some(cands) => {
-                            let name = name.clone();
+                            let symbol = symbol.clone();
                             let cands: Vec<_> = cands.iter().cloned().collect();
-                            // eprintln!("candidates (before filtered) for \"{name}\"");
-                            // for c in cands.iter() {
-                            //     eprintln!("  {}", c.pretty());
-                            // }
-                            Type::Overloaded(name, cands)
+                            Type::Overloaded(symbol, cands)
                         }
                     }
                 }
@@ -230,11 +225,11 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
                 }
                 other => {
                     if let Some(con) = is_tycon(&other) {
-                        let pat = Pat::con(con, vec![Pat::var("r")]);
+                        let pat = Pat::Con(con, vec![Pat::local_var("r")]);
                         let p = base.clone();
                         let mut expr = Expr::block(vec![
                             Item::Stmt(Stmt::Let(pat, p)),
-                            Item::Expr(Expr::field_access(Expr::var("r"), field.clone()))
+                            Item::Expr(Expr::field_access(Expr::local_var("r"), field.clone()))
                         ]);
                         let ty = infer_expr(phox, icx, &mut expr).map_err(|_| TypeError::ExpectedRecord(other))?;
                         ty
@@ -258,11 +253,11 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
                 }
                 other => {
                     if let Some(con) = is_tycon(&other) {
-                        let pat = Pat::con(con, vec![Pat::var("t")]);
+                        let pat = Pat::Con(con, vec![Pat::local_var("t")]);
                         let p = base.clone();
                         let mut expr = Expr::block(vec![
                             Item::Stmt(Stmt::Let(pat, p)),
-                            Item::Expr(Expr::tuple_access(Expr::var("t"), *index))
+                            Item::Expr(Expr::tuple_access(Expr::local_var("t"), *index))
                         ]);
                         let ty = infer_expr(phox, icx, &mut expr).map_err(|_| TypeError::ExpectedTuple(other))?;
                         ty
@@ -282,7 +277,7 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
     Ok(ty)
 }
 
-fn is_tycon(mut t: &Type) -> Option<String> {
+fn is_tycon(mut t: &Type) -> Option<Symbol> {
     while let Type::App(a, _) = t {
         t = a;
     }

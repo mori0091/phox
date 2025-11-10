@@ -10,7 +10,8 @@ impl RootModules {
         RootModules { map: HashMap::new() }
     }
 
-    pub fn add(&mut self, name: String, module: RefModule) {
+    pub fn add(&mut self, module: RefModule) {
+        let name = module.borrow().name.clone();
         self.map.insert(name, module);
     }
 
@@ -18,7 +19,7 @@ impl RootModules {
         self.map.get(name).cloned()
     }
 
-    // pub fn get_mut(&self, name: &str) -> Option<std::cell::RefMut<'_, Module>> {
-    //     self.map.get(name).map(|m| m.borrow_mut())
-    // }
+    pub fn keys(&self) -> std::collections::hash_map::Keys<'_, String, RefModule> {
+        self.map.keys()
+    }
 }

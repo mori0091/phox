@@ -1,4 +1,4 @@
-use crate::syntax::ast::Pat;
+use crate::{module::Symbol, syntax::ast::Pat};
 use super::*;
 
 // ===== Type error =====
@@ -8,7 +8,7 @@ pub enum TypeError {
 
     UnknownTrait(String),
     UnknownTraitMember(String),
-    ArityMismatch { trait_name: String, member: String, expected: usize, actual: usize },
+    ArityMismatch { trait_name: Symbol, member: String, expected: usize, actual: usize },
     UnificationFail { expected: TraitHead, actual: TraitHead },
 
     // ----from `apply_trait_impls_*`
@@ -27,11 +27,11 @@ pub enum TypeError {
     Mismatch(Type, Type),
     NoMatchingOverload,
     RecursiveType,
-    UnboundVariable(String),
-    AmbiguousVariable { name: String, candidates: Vec<RawTypeScheme> },
+    UnboundVariable(Symbol),
+    AmbiguousVariable { name: Symbol, candidates: Vec<RawTypeScheme> },
 
-    UnknownConstructor(String),
-    ConstructorArityMismatch(String, usize, Type),
+    UnknownConstructor(Symbol),
+    ConstructorArityMismatch(Symbol, usize, Type),
 
     EmptyMatch,
     UnsupportedPattern(Pat),
@@ -62,12 +62,12 @@ impl fmt::Display for TypeError {
                 cands.sort();
                 let mut hints: Vec<_> = candidates
                     .iter()
-                    .map(|sch| format!("@{{{}}}.{name}", sch.constraints[0].to_string()))
+                    .map(|sch| format!("@{{{}}}.{}", sch.constraints[0], name.pretty()))
                     .collect();
                 hints.sort();
-                writeln!(f, "ambiguous variable `{name}`")?;
-                writeln!(f, "candidates: {}", cands.join(", "))?;
-                write!(f, "hint: use {}", hints.join(" or "))
+                writeln!(f, "ambiguous variable `{}`", name.pretty())?;
+                writeln!(f, "candidates:\n  {}", cands.join("\n  "))?;
+                write!(f, "solution:\n  {}", hints.join("\n  "))
             }
              _ => write!(f, "{:?}", self),
         }

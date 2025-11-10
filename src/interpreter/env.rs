@@ -3,8 +3,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use super::Value;
 use crate::syntax::ast::Lit;
+use crate::module::*;
 
-pub type Binding = HashMap<String, Value>;
+pub type Binding = HashMap<Symbol, Value>;
 
 /// 評価時の環境
 #[derive(Clone)]
@@ -17,11 +18,11 @@ impl Env {
         Env { map: Rc::new(RefCell::new(HashMap::new())) }
     }
 
-    pub fn insert(&self, k: String, v: Value) {
+    pub fn insert(&self, k: Symbol, v: Value) {
         self.map.borrow_mut().insert(k, v);
     }
 
-    pub fn get(&self, k: &str) -> Option<Value> {
+    pub fn get(&self, k: &Symbol) -> Option<Value> {
         self.map.borrow().get(k).cloned()
     }
 
@@ -43,33 +44,32 @@ pub fn initial_env() -> Env {
     let env = Env::new();
 
     // 比較演算子
-    env.insert("__i64_eq__".into(), make_i64_cmp_op(|a, b| a == b));
-    env.insert("__i64_ne__".into(), make_i64_cmp_op(|a, b| a != b));
-    env.insert("__i64_le__".into(), make_i64_cmp_op(|a, b| a <= b));
-    env.insert("__i64_lt__".into(), make_i64_cmp_op(|a, b| a < b));
-    env.insert("__i64_ge__".into(), make_i64_cmp_op(|a, b| a >= b));
-    env.insert("__i64_gt__".into(), make_i64_cmp_op(|a, b| a > b));
+    env.insert(Symbol::Local("__i64_eq__".into()), make_i64_cmp_op(|a, b| a == b));
+    env.insert(Symbol::Local("__i64_ne__".into()), make_i64_cmp_op(|a, b| a != b));
+    env.insert(Symbol::Local("__i64_le__".into()), make_i64_cmp_op(|a, b| a <= b));
+    env.insert(Symbol::Local("__i64_lt__".into()), make_i64_cmp_op(|a, b| a < b));
+    env.insert(Symbol::Local("__i64_ge__".into()), make_i64_cmp_op(|a, b| a >= b));
+    env.insert(Symbol::Local("__i64_gt__".into()), make_i64_cmp_op(|a, b| a > b));
 
     // 演算子
-    env.insert("__i64_add__".into(), make_i64_arith_op(|a, b| a + b));
-    env.insert("__i64_sub__".into(), make_i64_arith_op(|a, b| a - b));
-    env.insert("__i64_mul__".into(), make_i64_arith_op(|a, b| a * b));
-    env.insert("__i64_div__".into(), make_i64_arith_op(|a, b| {
+    env.insert(Symbol::Local("__i64_add__".into()), make_i64_arith_op(|a, b| a + b));
+    env.insert(Symbol::Local("__i64_sub__".into()), make_i64_arith_op(|a, b| a - b));
+    env.insert(Symbol::Local("__i64_mul__".into()), make_i64_arith_op(|a, b| a * b));
+    env.insert(Symbol::Local("__i64_div__".into()), make_i64_arith_op(|a, b| {
         if b == 0 {
             panic!("division by zero");
         }
         a / b
     }));
 
-    env.insert("__i64_neg__".into(), make_i64_unary_op(|x| -x));
+    env.insert(Symbol::Local("__i64_neg__".into()), make_i64_unary_op(|x| -x));
 
     env
 }
 
-pub fn make_constructor(name: &str, arity: usize) -> Value {
-    let name = name.to_string();
+pub fn make_constructor(name: &Symbol, arity: usize) -> Value {
     // 部分適用を保持する内部関数
-    fn curry(name: String, arity: usize, args: Vec<Value>) -> Value {
+    fn curry(name: Symbol, arity: usize, args: Vec<Value>) -> Value {
         if args.len() == arity {
             Value::Con(name, args)
         } else {
@@ -80,7 +80,7 @@ pub fn make_constructor(name: &str, arity: usize) -> Value {
             }))
         }
     }
-    curry(name, arity, vec![])
+    curry(name.clone(), arity, vec![])
 }
 
 /// 単項の整数演算子をBuiltinとして作る

@@ -3,12 +3,13 @@ use std::collections::HashMap;
 
 use crate::typesys::*;
 use crate::syntax::ast::*;
-use crate::module::Module;
+use crate::module::*;
 use crate::api::PhoxEngine;
 
 pub fn resolve_item(
     phox: &mut PhoxEngine,
     module: &mut RefMut<Module>,
+    symbol_env: &mut SymbolEnv,
     item: &mut Item,
 ) -> Result<(), TypeError> {
     match item {
@@ -17,17 +18,17 @@ pub fn resolve_item(
             Ok(())
         }
         Item::RawImplDecl(raw) => {
-            register_impl(phox, module, raw)
+            register_impl(phox, module, symbol_env, raw)
         }
         Item::RawTypeDecl(raw) => {
             register_type_decl(phox, module, raw);
             Ok(())
         }
         Item::Stmt(stmt) => {
-            resolve_stmt(phox, module, stmt)
+            resolve_stmt(phox, module, symbol_env, stmt)
         }
         Item::Expr(expr) => {
-            resolve_expr(phox, module, expr)
+            resolve_expr(phox, module, symbol_env, expr)
         }
     }
 }
@@ -51,7 +52,7 @@ pub fn register_trait(
             target: *member.ty.clone(),
         };
         module.icx.trait_member_env
-            .entry(member.name.clone())
+            .entry(Symbol::Local(member.name.clone()))
             .or_default()
             .insert(sch);
     }
@@ -60,6 +61,7 @@ pub fn register_trait(
 pub fn register_impl(
     phox: &mut PhoxEngine,
     module: &mut RefMut<Module>,
+    symbol_env: &mut SymbolEnv,
     raw: &RawImplDecl,
 ) -> Result<(), TypeError> {
     let impl_head = RawTraitHead {
@@ -70,7 +72,7 @@ pub fn register_impl(
     for member in raw.members.iter() {
         let trait_schemes = module.icx
             .trait_member_env
-            .get(&member.name)
+            .get(&Symbol::Local(member.name.clone()))
             .ok_or(TypeError::UnknownTraitMember(member.name.clone()))?;
         if trait_schemes.is_empty() {
             return Err(TypeError::UnknownTraitMember(member.name.clone()));
@@ -84,7 +86,7 @@ pub fn register_impl(
         let trait_head = &trait_scheme.constraints[0];
         if impl_head.params.len() != trait_head.params.len() {
             return Err(TypeError::ArityMismatch {
-                trait_name: trait_head.name.clone(),
+                trait_name: Symbol::Local(trait_head.name.clone()),
                 member: member.name.clone(),
                 expected: trait_head.params.len(),
                 actual: impl_head.params.len()
@@ -116,14 +118,14 @@ pub fn register_impl(
         // eprintln!("impl : @{{{}}}.{}: {}", impl_head, member.name, impl_scheme.pretty());
 
         phox.impl_member_env
-            .entry(member.name.clone())
+            .entry(Symbol::Local(member.name.clone()))
             .or_default()
             .insert(impl_scheme);
     };
 
     let trait_sch = {
         let trait_head = {
-            let name = raw.name.clone();
+            let name = Symbol::Local(raw.name.clone());
             let params: Vec<Type> = raw
                 .params
                 .iter()
@@ -137,8 +139,8 @@ pub fn register_impl(
     let mut member_map = HashMap::new();
     for member in raw.members.iter() {
         let mut expr = member.expr.clone();
-        resolve_expr(phox, module, &mut expr)?;
-        member_map.insert(member.name.clone(), *expr);
+        resolve_expr(phox, module, symbol_env, &mut expr)?;
+        member_map.insert(Symbol::Local(member.name.clone()), *expr);
     }
 
     // {
@@ -156,63 +158,150 @@ pub fn register_impl(
 pub fn resolve_stmt(
     phox: &mut PhoxEngine,
     module: &mut RefMut<Module>,
+    symbol_env: &mut SymbolEnv,
     stmt: &mut Stmt,
 ) -> Result<(), TypeError> {
     match stmt {
         Stmt::Mod(_m) => todo!(),
         Stmt::Use(_p) => todo!(),
-        Stmt::Let(_p, expr) | Stmt::LetRec(_p, expr) => {
-            resolve_expr(phox, module, expr)
+        Stmt::Let(pat, expr) => {
+            resolve_expr(phox, module, symbol_env, expr)?;
+            resolve_pat(phox, module, symbol_env, pat)
+        }
+        Stmt::LetRec(pat, expr) => {
+            resolve_pat(phox, module, symbol_env, pat)?;
+            resolve_expr(phox, module, symbol_env, expr)
         }
     }
+}
+
+pub fn resolve_pat(
+    phox: &mut PhoxEngine,
+    module: &mut RefMut<Module>,
+    symbol_env: &mut SymbolEnv,
+    pat: &mut Pat,
+) -> Result<(), TypeError> {
+    match pat {
+        Pat::Var(symbol) => {
+            resolve_symbol(phox, module, symbol_env, symbol)?;
+            Ok(())
+        }
+        Pat::Con(symbol, args) => {
+            resolve_symbol(phox, module, symbol_env, symbol)?;
+            for p in args.iter_mut() {
+                resolve_pat(phox, module, symbol_env, p)?;
+            }
+            Ok(())
+        }
+        Pat::Tuple(ps) => {
+            for p in ps.iter_mut() {
+                resolve_pat(phox, module, symbol_env, p)?;
+            }
+            Ok(())
+        }
+        Pat::Record(fields) => {
+            for (_, p) in fields.iter_mut() {
+                resolve_pat(phox, module, symbol_env, p)?;
+            }
+            Ok(())
+        }
+        _ => Ok(())
+    }
+}
+
+pub fn resolve_symbol(
+    phox: &mut PhoxEngine,
+    module: &mut RefMut<Module>,
+    symbol_env: &mut SymbolEnv,
+    symbol: &mut Symbol,
+) -> Result<(), TypeError> {
+    if let Symbol::Unresolved(path) = symbol {
+        match path {
+            Path::Absolute(_) => {
+                if let Some(s) = phox.global_symbol_env.get(path) {
+                    *symbol = s.clone();
+                } else {
+                    let s = Symbol::Extern(GlobalId::new());
+                    phox.global_symbol_env.insert(path.clone(), s.clone());
+                    *symbol = s;
+
+                    // and then register target into corresponding tables.
+                    // - `impl` expr                  -> phox.impl_env
+                    // - `impl` member type scheme    -> phox.impl_member_env
+                    // - `trait` member type scheme   -> module.icx.trait_member_env
+                    // - `type` type constructor      -> module.icx.kind_env
+                    // - top-level `expr` type scheme -> module.icx.type_env
+                    // - top-level `expr` value       -> module.env
+                }
+            }
+            Path::Relative(_) => {
+                if let Some(s) = symbol_env.get(path) {
+                    *symbol = s.clone();
+                } else if let Some(alias_path) = module.resolve_alias(path) {
+                    resolve_symbol(phox, module, symbol_env, &mut Symbol::Unresolved(alias_path))?;
+                } else {
+                    let local = Symbol::Local(path.to_string());
+                    symbol_env.insert(path.clone(), local.clone());
+                    *symbol = local;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn resolve_expr(
     phox: &mut PhoxEngine,
     module: &mut RefMut<Module>,
+    symbol_env: &mut SymbolEnv,
     expr: &mut Expr,
 ) -> Result<(), TypeError> {
     match &mut expr.body {
         ExprBody::App(f, x) => {
-            resolve_expr(phox, module, f)?;
-            resolve_expr(phox, module, x)
+            resolve_expr(phox, module, symbol_env, f)?;
+            resolve_expr(phox, module, symbol_env, x)
         }
-        ExprBody::Abs(_p, e) => {
-            resolve_expr(phox, module, e)
+        ExprBody::Abs(pat, e) => {
+            let mut symbol_env2 = symbol_env.clone();
+            resolve_pat(phox, module, &mut symbol_env2, pat)?;
+            resolve_expr(phox, module, &mut symbol_env2, e)
         }
         ExprBody::If(cond, e1, e2) => {
-            resolve_expr(phox, module, cond)?;
-            resolve_expr(phox, module, e1)?;
-            resolve_expr(phox, module, e2)
+            resolve_expr(phox, module, symbol_env, cond)?;
+            resolve_expr(phox, module, symbol_env, e1)?;
+            resolve_expr(phox, module, symbol_env, e2)
         }
         ExprBody::Match(strut, arms) => {
-            resolve_expr(phox, module, strut)?;
-            for (_p, e) in arms {
-                resolve_expr(phox, module, e)?;
+            resolve_expr(phox, module, symbol_env, strut)?;
+            for (pat, e) in arms {
+                let mut symbol_env2 = symbol_env.clone();
+                resolve_pat(phox, module, &mut symbol_env2, pat)?;
+                resolve_expr(phox, module, &mut symbol_env2, e)?;
             }
             Ok(())
         }
         ExprBody::Tuple(es) => {
             for e in es {
-                resolve_expr(phox, module, e)?;
+                resolve_expr(phox, module, symbol_env, e)?;
             }
             Ok(())
         }
         ExprBody::Record(fields) => {
             for (_field, e) in fields {
-                resolve_expr(phox, module, e)?;
+                resolve_expr(phox, module, symbol_env, e)?;
             }
             Ok(())
         }
         ExprBody::FieldAccess(e, _field) => {
-            resolve_expr(phox, module, e)
+            resolve_expr(phox, module, symbol_env, e)
         }
         ExprBody::TupleAccess(e, _index) => {
-            resolve_expr(phox, module, e)
+            resolve_expr(phox, module, symbol_env, e)
         }
         ExprBody::Block(items) => {
+            let mut symbol_env2 = symbol_env.clone();
             for item in items {
-                resolve_item(phox, module, item)?;
+                resolve_item(phox, module, &mut symbol_env2, item)?;
             }
             Ok(())
         }
@@ -242,7 +331,7 @@ pub fn resolve_expr(
                     let (_impl_constraints, impl_head) = impl_sch.instantiate(&mut phox.ctx);
                     trait_head.unify(&mut phox.ctx, &impl_head)?;
                     let fields: Vec<(String, Expr)> = impls
-                        .iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                        .iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
                     expr.body = ExprBody::Record(fields);
                     Ok(())
                 }
@@ -256,7 +345,10 @@ pub fn resolve_expr(
                 }
             }
         }
-        ExprBody::Lit(_) | ExprBody::Var(_) => Ok(()),
+        ExprBody::Var(ref mut symbol) => {
+            resolve_symbol(phox, module, symbol_env, symbol)
+        }
+        ExprBody::Lit(_) => Ok(()),
     }
 }
 
@@ -280,7 +372,7 @@ pub fn resolve_raw_type_decl(
                 .collect();
 
             TypeDecl::SumType {
-                name: name.to_string(),
+                name: Symbol::Local(name.to_string()),
                 params: param_ids,
                 variants: resolved_variants,
             }
@@ -295,13 +387,13 @@ pub fn resolve_raw_variant(
     param_map: &HashMap<String, TypeVarId>,
 ) -> Variant {
     match raw {
-        RawVariant::Unit(name) => Variant::Unit(name.to_string()),
+        RawVariant::Unit(name) => Variant::Unit(Symbol::Local(name.to_string())),
         RawVariant::Tuple(name, elems) => {
             let elems2 = elems
                 .into_iter()
                 .map(|t| resolve_raw_type(&mut phox.ctx, &t, param_map))
                 .collect();
-            Variant::Tuple(name.to_string(), elems2)
+            Variant::Tuple(Symbol::Local(name.to_string()), elems2)
         }
     }
 }
@@ -323,7 +415,7 @@ pub fn resolve_raw_type(
                 Type::Var(id)
             }
         }
-        RawType::ConName(name) => Type::con(name),
+        RawType::ConName(name) => Type::local_con(name),
         RawType::App(f, x) => {
             let f2 = resolve_raw_type(ctx, f, param_map);
             let x2 = resolve_raw_type(ctx, x, param_map);
@@ -376,7 +468,7 @@ pub fn register_type(decl: &TypeDecl, icx: &mut InferCtx) {
             // 各コンストラクタを登録
             for v in variants {
                 let (ctor_name, ctor_scheme) = v.as_scheme(name, params);
-                icx.type_env.insert(ctor_name.clone(), ctor_scheme.clone());
+                icx.type_env.insert(Symbol::Local(ctor_name.clone()), ctor_scheme.clone());
             }
         }
     }
@@ -390,7 +482,6 @@ pub fn register_variants(decl: &TypeDecl, env: &mut Env) {
                 let arity = match v {
                     Variant::Unit(_) => 0,
                     Variant::Tuple(_, ts) => ts.len(),
-                    // Variant::Record(_, _) => 1,
                 };
                 env.insert(v.name(),
                            make_constructor(&v.name(), arity));
@@ -411,7 +502,7 @@ pub fn resolve_raw_trait_head(
         .collect();
 
     TraitHead {
-        name: raw.name.clone(),
+        name: Symbol::Local(raw.name.clone()),
         params,
     }
 }

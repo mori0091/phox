@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use crate::syntax::ast::*;
+use crate::module::*;
 use super::*;
 
 // ===== Impl Environment =====
@@ -30,4 +31,4 @@ use super::*;
 //     },
 //   },
 // }
-pub type ImplEnv = HashMap<TraitScheme, HashMap<String, Expr>>;
+pub type ImplEnv = HashMap<TraitScheme, HashMap<Symbol, Expr>>;

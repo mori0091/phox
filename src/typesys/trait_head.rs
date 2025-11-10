@@ -1,10 +1,11 @@
 use std::fmt;
 use std::collections::{HashMap, HashSet};
 use crate::typesys::*;
+use crate::module::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TraitHead {
-    pub name: String,           // trait name (ex. Eq, Ord)
+    pub name: Symbol,           // trait name (ex. Eq, Ord)
     pub params: Vec<Type>,      // type parameters
 }
 
@@ -12,7 +13,7 @@ impl TraitHead {
     pub fn from_trait_member(
         ctx: &mut TypeContext,
         member_env: &TraitMemberEnv,
-        member_name: &str,
+        member_name: &Symbol,
         member_ty: &Type,
     ) -> Result<Vec<TraitHead>, TypeError> {
         let entries = member_env
@@ -82,11 +83,27 @@ impl fmt::Display for TraitHead {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let tys = self.params
                     .iter()
-                    .map(|ty| ty.to_string())
+                    .map(|ty| {
+                        match ty {
+                            Type::App(_, _) | Type::Fun(_, _) => {
+                                format!("({})", ty)
+                            }
+                            _ => {
+                                format!("{}", ty)
+                            }
+                        }
+                    })
                     .collect::<Vec<_>>()
             .join(" ");
         write!(f, "{} {}", self.name, tys)
      }
+}
+
+impl SchemePretty for TraitHead {
+    fn rename_type_var(&self, map: &HashMap<TypeVarId, String>) -> Self {
+        let ts = self.params.iter().map(|t| t.rename_type_var(map)).collect();
+        TraitHead {name: self.name.clone(), params: ts}
+    }
 }
 
 impl ApplySubst for TraitHead {

@@ -1,9 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use super::*;
+use crate::module::*;
 
 // ===== Kind Environment =====
 // maps name of type constructor to Kind
-pub type KindEnv = HashMap<String, Kind>;
+pub type KindEnv = HashMap<Symbol, Kind>;
 
 // ===== Type Environment =====
 // maps name of variable to type scheme.
@@ -11,7 +12,7 @@ pub type KindEnv = HashMap<String, Kind>;
 // {
 //   "id": ∀ a. a -> a,
 // }
-pub type TypeEnv = HashMap<String, TypeScheme>;
+pub type TypeEnv = HashMap<Symbol, TypeScheme>;
 
 // ===== Type Environment for trait member =====
 // maps name of trait member to set of type schemes.
@@ -37,7 +38,7 @@ pub type TypeEnv = HashMap<String, TypeScheme>;
 //   },
 // }
 //
-pub type TraitMemberEnv = HashMap<String, HashSet<RawTypeScheme>>;
+pub type TraitMemberEnv = HashMap<Symbol, HashSet<RawTypeScheme>>;
 
 // ===== Infer Context =====
 #[derive(Clone)]
@@ -56,10 +57,10 @@ impl InferCtx {
         }
     }
 
-    pub fn initial(ctx: &mut TypeContext) -> Self {
+    pub fn initial() -> Self {
         Self {
             kind_env: initial_kind_env(),
-            type_env: initial_type_env(ctx),
+            type_env: initial_type_env(),
             trait_member_env: TraitMemberEnv::new(),
         }
     }
@@ -80,112 +81,112 @@ impl InferCtx {
 pub fn initial_kind_env() -> KindEnv {
     let mut env = KindEnv::new();
 
-    env.insert("()".into(), Kind::Star);
-    env.insert("Int".into(), Kind::Star);
-    env.insert("Bool".into(), Kind::Star);
+    env.insert(Symbol::Local("()".into()), Kind::Star);
+    env.insert(Symbol::Local("Int".into()), Kind::Star);
+    env.insert(Symbol::Local("Bool".into()), Kind::Star);
 
     env
 }
 
-pub fn initial_type_env(_ctx: &mut TypeContext) -> TypeEnv {
+pub fn initial_type_env() -> TypeEnv {
     let mut type_env = TypeEnv::new();
 
     type_env.insert(
-        "__i64_eq__".into(),
+        Symbol::Local("__i64_eq__".into()),
         TypeScheme {
             vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
+            target: Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
         },
     );
 
     type_env.insert(
-        "__i64_ne__".into(),
+        Symbol::Local("__i64_ne__".into()),
         TypeScheme {
             vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
+            target: Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
         },
     );
 
     type_env.insert(
-        "__i64_le__".into(),
+        Symbol::Local("__i64_le__".into()),
         TypeScheme {
             vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
+            target: Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
         },
     );
 
     type_env.insert(
-        "__i64_lt__".into(),
+        Symbol::Local("__i64_lt__".into()),
         TypeScheme {
             vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
+            target: Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
         },
     );
 
     type_env.insert(
-        "__i64_ge__".into(),
+        Symbol::Local("__i64_ge__".into()),
         TypeScheme {
             vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
+            target: Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
         },
     );
 
     type_env.insert(
-        "__i64_gt__".into(),
+        Symbol::Local("__i64_gt__".into()),
         TypeScheme {
             vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Bool")), // (Int, Int) -> Bool
+            target: Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
         },
     );
 
     type_env.insert(
-        "__i64_add__".into(),
+        Symbol::Local("__i64_add__".into()),
         TypeScheme {
             vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Int")), // (Int, Int) -> Int
+            target: Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::int()), // (Int, Int) -> Int
         },
     );
 
     type_env.insert(
-        "__i64_sub__".into(),
+        Symbol::Local("__i64_sub__".into()),
         TypeScheme {
             vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Int")), // (Int, Int) -> Int
+            target: Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::int()), // (Int, Int) -> Int
         },
     );
 
     type_env.insert(
-        "__i64_mul__".into(),
+        Symbol::Local("__i64_mul__".into()),
         TypeScheme {
             vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Int")), // (Int, Int) -> Int
+            target: Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::int()), // (Int, Int) -> Int
         },
     );
 
     type_env.insert(
-        "__i64_div__".into(),
+        Symbol::Local("__i64_div__".into()),
         TypeScheme {
             vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::Tuple(vec![Type::con("Int"), Type::con("Int")]), Type::con("Int")), // (Int, Int) -> Int
+            target: Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::int()), // (Int, Int) -> Int
         },
     );
 
     type_env.insert(
-        "__i64_neg__".into(),
+        Symbol::Local("__i64_neg__".into()),
         TypeScheme {
             vars: vec![],
             constraints: vec![],
-            target: Type::fun(Type::con("Int"), Type::con("Int")),
+            target: Type::fun(Type::int(), Type::int()),
         },
     );
 

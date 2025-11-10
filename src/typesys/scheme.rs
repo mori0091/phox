@@ -79,6 +79,43 @@ impl <T: fmt::Display> fmt::Display for Scheme<T> {
     }
 }
 
+impl <T: SchemePretty + fmt::Display> Scheme<T> {
+    pub fn pretty(&self) -> String {
+        use std::collections::HashMap;
+
+        // 量化変数に a, b, c... を割り当てる
+        let mut map = HashMap::new();
+        for (i, v) in self.vars.iter().enumerate() {
+            let ch = (b'a' + i as u8) as char;
+            map.insert(*v, ch.to_string());
+        }
+
+        let mut renamed = self.target.rename_type_var(&map).to_string();
+
+        if !self.constraints.is_empty() {
+            let cs = self.constraints
+                         .iter()
+                         .map(|c| c.rename_type_var(&map).to_string())
+                         .collect::<Vec<_>>();
+            if cs.len() == 1 {
+                renamed = format!("{} => {}", cs[0], renamed);
+            }
+            else {
+                renamed = format!("({}) => {}", cs.join(", "), renamed);
+            }
+        }
+
+        if self.vars.is_empty() {
+            format!("{}", renamed)
+        } else {
+            let vars: Vec<String> = (0..self.vars.len())
+                .map(|i| ((b'a' + i as u8) as char).to_string())
+                .collect();
+            format!("∀ {}. {}", vars.join(" "), renamed)
+        }
+    }
+}
+
 struct TypeVarList<'a>(&'a [TypeVarId]);
 
 impl<'a> fmt::Display for TypeVarList<'a> {

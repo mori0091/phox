@@ -184,9 +184,9 @@ impl TypeContext {
         match pat {
             Pat::Var(_) | Pat::Wildcard => Type::Var(self.fresh_type_var_id()),
             Pat::Lit(lit) => match lit {
-                Lit::Unit => Type::con("()"),
-                Lit::Bool(_) => Type::con("Bool"),
-                Lit::Int(_) => Type::con("Int"),
+                Lit::Unit => Type::local_con("()"),
+                Lit::Bool(_) => Type::local_con("Bool"),
+                Lit::Int(_) => Type::local_con("Int"),
             },
             Pat::Tuple(ps) => {
                 let ts = ps.iter().map(|p| self.fresh_type_for_pattern(p)).collect();
@@ -219,18 +219,17 @@ impl TypeContext {
 
             Pat::Lit(lit) => {
                 let expected = match lit {
-                    Lit::Unit => Type::Con("()".to_string()),
-                    Lit::Bool(_) => Type::Con("Bool".to_string()),
-                    Lit::Int(_) => Type::Con("Int".to_string()),
+                    Lit::Unit => Type::unit(),
+                    Lit::Bool(_) => Type::bool_(),
+                    Lit::Int(_) => Type::int(),
                 };
                 self.unify(&expected, ty)
             }
 
             Pat::Var(x) => {
                 let sch = if generalize_bindings {
-                    generalize(self, &outer_icx, ty)   // let の場合
+                    generalize(self, &outer_icx, ty) // let の場合
                 } else {
-                    // TypeScheme::mono(ty.repr(self))       // Abs や match の場合は単相
                     TypeScheme::mono(ty.clone()) // Abs や match の場合は単相
                 };
                 icx.type_env.insert(x.clone(), sch);
@@ -240,7 +239,6 @@ impl TypeContext {
             Pat::Con(name, args) => {
                 let scheme = icx.type_env.get(name).ok_or(TypeError::UnknownConstructor(name.clone()))?;
                 let (_constraints, con_ty) = scheme.instantiate(self);
-                // icx.obligations.extend(constraints);
 
                 let mut arg_types = Vec::new();
                 let mut ty_fun = con_ty;

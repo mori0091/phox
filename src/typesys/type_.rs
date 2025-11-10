@@ -1,36 +1,39 @@
 use std::fmt;
-use super::RawTypeScheme;
-use super::ApplySubst;
+use super::*;
+use crate::module::*;
 
 // ===== Types =====
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Var(TypeVarId),             // 型変数
     Fun(Box<Type>, Box<Type>),  // 関数型
-    Con(String),                // 型構築子
+    Con(Symbol),                // 型構築子
     App(Box<Type>, Box<Type>),  // 型適用
 
     Tuple(Vec<Type>),
     Record(Vec<(String, Type)>),
 
-    Overloaded(String, Vec<RawTypeScheme>),
+    Overloaded(Symbol, Vec<RawTypeScheme>),
 }
 
 impl Type {
     pub fn unit() -> Self {
-        Type::con("()")
+        Type::local_con("()")
     }
     pub fn bool_() -> Self {
-        Type::con("Bool")
+        Type::local_con("Bool")
     }
     pub fn int() -> Self {
-        Type::con("Int")
+        Type::local_con("Int")
     }
     pub fn var(id: TypeVarId) -> Self {
         Type::Var(id)
     }
-    pub fn con<S: Into<String>>(s: S) -> Self {
-        Type::Con(s.into())
+    pub fn unresolved_con<S: Into<String>>(s: S) -> Self {
+        Type::Con(Symbol::Unresolved(Path::Relative(vec![s.into()])))
+    }
+    pub fn local_con<S: Into<String>>(s: S) -> Self {
+        Type::Con(Symbol::Local(s.into()))
     }
     pub fn app(f: Type, x: Type) -> Self {
         Type::App(Box::new(f), Box::new(x))
@@ -129,7 +132,7 @@ impl Repr for Type {
             }
             Type::Fun(a, b) => Type::fun(a.repr(ctx), b.repr(ctx)),
             Type::App(f, x) => Type::app(f.repr(ctx), x.repr(ctx)),
-            Type::Con(c) => Type::con(c.clone()),
+            Type::Con(c) => Type::Con(c.clone()),
 
             Type::Tuple(ts) => {
                 Type::Tuple(
@@ -208,6 +211,38 @@ impl fmt::Display for Type {
             }
             Type::Overloaded(_name, _) => {
                 write!(f, "<overloaded>")
+            }
+        }
+    }
+}
+
+impl SchemePretty for Type {
+    fn rename_type_var(&self, map: &HashMap<TypeVarId, String>) -> Self {
+        match self {
+            Type::Var(v) => {
+                if let Some(name) = map.get(v) {
+                    Type::local_con(name) // ここでは Var を Con に置き換えてもよい
+                } else {
+                    Type::Var(*v) // 自由変数はそのまま
+                }
+            }
+            Type::Con(name) => Type::Con(name.clone()),
+            Type::Fun(t1, t2) => {
+                Type::fun(t1.rename_type_var(map), t2.rename_type_var(map))
+            }
+            Type::App(t1, t2) => {
+                Type::app(t1.rename_type_var(map), t2.rename_type_var(map))
+            }
+            Type::Tuple(ts) => {
+                Type::Tuple(ts.iter().map(|t| t.rename_type_var(map)).collect())
+            }
+            Type::Record(fields) => {
+                Type::Record(
+                    fields.iter().map(|(f, t)| (f.clone(), t.rename_type_var(map))).collect()
+                )
+            }
+            Type::Overloaded(_name, _cands) => {
+                unreachable!()
             }
         }
     }

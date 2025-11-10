@@ -18,23 +18,35 @@ pub fn repl() {
         }
         buffer.push_str(&line);
 
-        if buffer.starts_with(':') {
-            let res = handle_command(&buffer);
-            buffer.clear();
-            if let Some(src) = res {
-                buffer.push_str(&src);
-            }
-            else {
-                continue;
+        if buffer.starts_with(':') && !buffer.starts_with("::") {
+            match handle_command(&mut phox, &buffer) {
+                CommandResult::Exit => {
+                    println!();
+                    std::process::exit(0);
+                }
+                CommandResult::Continue => {
+                    buffer.clear();
+                    println!();
+                    continue;
+                }
+                CommandResult::Load(src) => {
+                    buffer.clear();
+                    buffer.push_str(&src);
+                }
             }
         }
         match api::parse(&buffer) {
-            Ok(items) => {
+            Ok(mut items) => {
                 let mut module = phox.roots.get(api::DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
-                for mut item in items {
-                    match phox.eval_item(&mut module, &mut item) {
-                        Err(e)         => println!("{}", e),
-                        Ok((val, sch)) => println!("=> {}: {}", val, sch.pretty()),
+                if let Err(e) = phox.resolve_items(&mut module, &mut items) {
+                    println!("{}", e)
+                }
+                else {
+                    for mut item in items {
+                        match phox.eval_item(&mut module, &mut item) {
+                            Err(e)         => println!("{}", e),
+                            Ok((val, sch)) => println!("=> {}: {}", val, sch.pretty()),
+                        }
                     }
                 }
                 println!();
@@ -46,8 +58,8 @@ pub fn repl() {
                 prompt = "| ";
             }
             Err(e) => {
-                println!();
                 println!("parse error: {:?}", e);
+                println!();
                 buffer.clear();
                 prompt = "> ";
             }
@@ -55,34 +67,10 @@ pub fn repl() {
     }
 }
 
-fn handle_command(input: &str) -> Option<String> {
-    let tokens: Vec<&str> = input.trim_start_matches(':').split_whitespace().collect();
-    match tokens.as_slice() {
-        ["quit"] | ["q"]  => {
-            exit();
-            None
-        }
-        ["help"] | ["h"] | ["?"] => {
-            help();
-            None
-        }
-        ["load", path] | ["l", path] => {
-            load_file(path)
-        }
-        ["load"] | ["l"] => {
-            println!("Required an argument: {}", input);
-            None
-        }
-        _ => {
-            println!("Unknown command: {}", input);
-            None
-        }
-    }
-}
-
-fn exit() {
-    println!();
-    std::process::exit(0)
+enum CommandResult {
+    Continue,
+    Exit,
+    Load(String),
 }
 
 fn help() {
@@ -96,24 +84,93 @@ fn help() {
 :load <path>, :l <path>
     load and evaluate Phox source file specified by <path>.
 
+:modules
+    print list of root modules.
+
+:symbols
+    print list of symbols for each modules.
+
+:impls, or :impls [options]
+    print list of `impl`s.
+    options:
+        -v, or --verbose
+            print also the `impl`s' implementation.
 "#
     );
 }
 
-fn load_file(path: &str) -> Option<String> {
-    match std::fs::read_to_string(path) {
-        Err(e) => {
-            println!("failed to read {}: {}", path, e);
-            println!("");
-            None
+fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
+    let tokens: Vec<&str> = input.trim_start_matches(':').split_whitespace().collect();
+    match tokens.as_slice() {
+        ["quit"] | ["q"] => CommandResult::Exit,
+
+        ["help"] | ["h"] | ["?"] => {
+            help();
+            CommandResult::Continue
         }
-        Ok(src) => {
-            Some(src)
+
+        ["load"] | ["l"] => {
+            println!("Required an argument: {}", input);
+            CommandResult::Continue
+        }
+        ["load", path] | ["l", path] => {
+            match std::fs::read_to_string(path) {
+                Ok(src) => CommandResult::Load(src),
+                Err(e) => {
+                    println!("failed to read {}: {}", path, e);
+                    CommandResult::Continue
+                }
+            }
+        }
+
+        ["modules"] => {
+            for name in phox.roots.keys() {
+                println!("{}", name);
+            }
+            CommandResult::Continue
+        }
+
+        ["symbols"] => {
+            api::MODULE_SYMBOL_ENVS.with(|envs| {
+                let envs = envs.borrow();
+                for (path, symbol_env) in envs.iter() {
+                    println!("mod {};", path);
+                    let mut syms = symbol_env.iter().collect::<Vec<_>>();
+                    syms.sort_by_key(|(path, _)| path.pretty());
+                    for (path, symbol) in syms.iter() {
+                        println!("  {:<20} {:?}", path.pretty(), symbol);
+                    }
+                    println!();
+                }
+            });
+            CommandResult::Continue
+        }
+
+        ["impls"] => {
+            for (impl_head, _members) in phox.impl_env.iter() {
+                println!("impl {}", impl_head.pretty());
+            }
+            CommandResult::Continue
+        }
+        ["impls", "--verbose"] | ["impls", "-v"] => {
+            for (impl_head, members) in phox.impl_env.iter() {
+                println!("impl {} {{", impl_head.pretty());
+                for (sym, expr) in members.iter() {
+                    println!("  {} = {};", sym.pretty(), expr);
+                }
+                println!("}};");
+                println!();
+            }
+            CommandResult::Continue
+        }
+        ["impls", _unknown] => {
+            println!("Unknown option: {}", input);
+            CommandResult::Continue
+        }
+
+        _ => {
+            println!("Unknown command: {}", input);
+            CommandResult::Continue
         }
     }
-}
-
-fn _repl_todo() {
-    println!("Command not implemented yet.");
-    println!()
 }

@@ -1,12 +1,13 @@
 use std::rc::Rc;
-use crate::syntax::ast::{Expr, Pat, Lit};
+use crate::syntax::ast::*;
+use crate::module::*;
 use super::Env;
 
 #[derive(Clone)]
 pub enum Value {
     Lit(Lit),
     Closure { pat: Pat, body: Box<Expr>, env: Env },
-    Con(String, Vec<Value>),
+    Con(Symbol, Vec<Value>),
     Builtin(Rc<dyn Fn(Value) -> Value>), // ← Rust 側の関数をラップ
 
     Tuple(Vec<Value>),

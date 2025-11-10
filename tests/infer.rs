@@ -1,34 +1,34 @@
-use phox::api::{check_expr_type, check_expr_scheme};
+use phox::api::*;
 use phox::typesys::Type;
 
 #[test]
 fn test_lit_unit() {
-    assert_eq!(check_expr_type("()"), Ok(Type::con("()")));
+    assert_eq!(check_expr_type("()"), Ok(Type::local_con("()")));
 }
 
 #[test]
 fn test_lit_true() {
-    assert_eq!(check_expr_type("true"), Ok(Type::con("Bool")));
+    assert_eq!(check_expr_type("true"), Ok(Type::local_con("Bool")));
 }
 
 #[test]
 fn test_lit_false() {
-    assert_eq!(check_expr_type("false"), Ok(Type::con("Bool")));
+    assert_eq!(check_expr_type("false"), Ok(Type::local_con("Bool")));
 }
 
 #[test]
 fn test_lit_int() {
-    assert_eq!(check_expr_type("123"), Ok(Type::con("Int")));
+    assert_eq!(check_expr_type("123"), Ok(Type::local_con("Int")));
 }
 
 #[test]
 fn test_simple_let() {
-    assert_eq!(check_expr_type("{ let x = 5 ; x + 1 }"), Ok(Type::con("Int")));
+    assert_eq!(check_expr_type("{ let x = 5 ; x + 1 }"), Ok(Type::local_con("Int")));
 }
 
 #[test]
 fn test_var() {
-    assert_eq!(check_expr_type("foo"), Err("infer error: UnboundVariable(\"foo\")".into()));
+    assert_eq!(check_expr_type("foo"), Err("infer error: UnboundVariable(Local(\"foo\"))".into()));
 }
 
 #[test]
