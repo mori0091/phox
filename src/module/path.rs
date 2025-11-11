@@ -88,45 +88,56 @@ impl fmt::Display for Path {
     }
 }
 
-pub fn resolve_path(path: &Path, current: RefModule, roots: &RootModules) -> Option<RefModule> {
-    match path {
-        Path::Absolute(segments) => {
-            match &segments[0] {
-                PathComponent::Wildcard => todo!(), // unreachable!() ?
-                PathComponent::Name(name) => {
-                    let mut m = roots.get(&name)?;
-                    for seg in &segments[1..] {
-                        match seg {
-                            PathComponent::Wildcard => todo!(),
-                            PathComponent::Name(name) => {
-                                let sub = m.borrow().get_submod(name)?;
-                                m = sub;
+impl Path {
+    pub fn resolve(&self, current: RefModule, roots: &RootModules) -> Option<(RefModule, Option<Path>)> {
+        match self {
+            Path::Absolute(segments) => {
+                match &segments[0] {
+                    PathComponent::Wildcard => unreachable!(),
+                    PathComponent::Name(name) => {
+                        let mut m = roots.get(name)?;
+                        for (i, seg) in segments.iter().enumerate().skip(1) {
+                            match seg {
+                                PathComponent::Name(name) => {
+                                    let tmp = m.borrow().get_submod(name);
+                                    if let Some(sub) = tmp {
+                                        m = sub;
+                                    } else {
+                                        let rem = Path::Relative(segments[i..].to_vec());
+                                        return Some((m.clone(), Some(rem)));
+                                    }
+                                }
+                                PathComponent::Wildcard => {
+                                    let rem = Path::Relative(segments[i..].to_vec());
+                                    return Some((m.clone(), Some(rem)));
+                                }
                             }
                         }
-                    }
-                    Some(m)
-                }
-            }
-        }
-        Path::Relative(segments) => {
-            let mut m = current.clone();
-            for seg in segments {
-                match seg {
-                    PathComponent::Wildcard => todo!(),
-                    PathComponent::Name(name) => {
-                        let sub = m.borrow().get_submod(name)?;
-                        m = sub;
-                        // if seg == ".." {
-                        //     let p = m.borrow().parent()?;
-                        //     m = p;
-                        // } else {
-                        //     let sub = m.borrow().get_submod(seg)?;
-                        //     m = sub;
-                        // }
+                        Some((m, None))
                     }
                 }
             }
-            Some(m)
+            Path::Relative(segments) => {
+                let mut m = current.clone();
+                for (i, seg) in segments.iter().enumerate() {
+                    match seg {
+                        PathComponent::Name(name) => {
+                            let tmp = m.borrow().get_submod(name);
+                            if let Some(sub) = tmp {
+                                m = sub;
+                            } else {
+                                let rem = Path::Relative(segments[i..].to_vec());
+                                return Some((m.clone(), Some(rem)));
+                            }
+                        }
+                        PathComponent::Wildcard => {
+                            let rem = Path::Relative(segments[i..].to_vec());
+                            return Some((m.clone(), Some(rem)));
+                        }
+                    }
+                }
+                Some((m, None))
+            }
         }
     }
 }
