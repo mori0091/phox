@@ -42,7 +42,7 @@ impl Expr {
         Expr::lit(Lit::Bool(b))
     }
     pub fn unresolved_var<S: Into<String>>(s: S) -> Self {
-        Expr { body: ExprBody::Var(Symbol::Unresolved(Path::Relative(vec![s.into()]))), ty: None }
+        Expr { body: ExprBody::Var(Symbol::Unresolved(Path::relative(vec![s.into()]))), ty: None }
     }
     pub fn local_var<S: Into<String>>(s: S) -> Self {
         Expr { body: ExprBody::Var(Symbol::Local(s.into())), ty: None }

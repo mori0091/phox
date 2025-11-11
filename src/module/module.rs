@@ -56,18 +56,32 @@ impl Module {
 
     pub fn path(&self) -> Path {
         if let Some(parent) = self.parent() {
-            parent.borrow().path().concat(&[self.name.clone()])
+            parent.borrow().path().concat(&[PathComponent::Name(self.name.clone())])
         }
         else {
-            Path::Absolute(vec![self.name.clone()])
+            Path::absolute(vec![self.name.clone()])
         }
     }
+}
 
+impl Module {
+    pub fn add_alias(&mut self, name: &str, path: &Path) -> Result<(), String> {
+        if let Some(other) = self.using.get(name) {
+            Err(format!("name `{}` is already used as `{}`", name, other))
+        }
+        else {
+            self.using.insert(name.to_string(), path.clone());
+            Ok(())
+        }
+    }
+}
+
+impl Module {
     pub fn resolve_alias(&self, path: &Path) -> Option<Path> {
         match path {
             Path::Absolute(_) => Some(path.clone()),
             Path::Relative(xs) => {
-                if let Some(alias) = self.using.get(&xs[0]) {
+                if let Some(alias) = self.using.get(&xs[0].to_string()) {
                     Some(alias.concat(&xs[1..]))
                 }
                 else {
@@ -76,7 +90,9 @@ impl Module {
             }
         }
     }
+}
 
+impl Module {
     pub fn put_var(&mut self, name: Symbol, value: Value) {
         self.env.insert(name, value);
     }
