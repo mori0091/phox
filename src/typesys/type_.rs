@@ -30,7 +30,7 @@ impl Type {
         Type::Var(id)
     }
     pub fn unresolved_con<S: Into<String>>(s: S) -> Self {
-        Type::Con(Symbol::Unresolved(Path::Relative(vec![s.into()])))
+        Type::Con(Symbol::Unresolved(Path::relative(vec![s.into()])))
     }
     pub fn local_con<S: Into<String>>(s: S) -> Self {
         Type::Con(Symbol::Local(s.into()))

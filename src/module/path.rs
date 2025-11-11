@@ -1,13 +1,29 @@
 use super::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PathComponent {
+    Name(String),
+    Wildcard,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Path {
-    Absolute(Vec<String>), // ::foo::bar
-    Relative(Vec<String>), // foo::bar, super::baz
+    Absolute(Vec<PathComponent>), // ::foo::bar
+    Relative(Vec<PathComponent>), // foo::bar, super::baz
 }
 
 impl Path {
-    pub fn concat(&self, child: &[String]) -> Path {
+    pub fn absolute(xs: Vec<String>) -> Path {
+        Path::Absolute(xs.into_iter().map(PathComponent::Name).collect())
+    }
+
+    pub fn relative(xs: Vec<String>) -> Path {
+        Path::Relative(xs.into_iter().map(PathComponent::Name).collect())
+    }
+}
+
+impl Path {
+    pub fn concat(&self, child: &[PathComponent]) -> Path {
         match self {
             Path::Absolute(xs) => {
                 let mut ys = xs.clone();
@@ -23,21 +39,19 @@ impl Path {
     }
 }
 
-use std::fmt;
-
-impl fmt::Display for Path {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl PathComponent {
+    pub fn pretty(&self) -> String {
         match self {
-            Path::Absolute(xs) => write!(f, "::{}", xs.join("::")),
-            Path::Relative(xs) => write!(f, "{}", xs.join("::")),
+            PathComponent::Name(name) => Symbol::Local(name.clone()).pretty(),
+            PathComponent::Wildcard => format!("{}", self),
         }
     }
 }
 
 impl Path {
     pub fn pretty(&self) -> String {
-        fn normalize(xs: &Vec<String>) -> String {
-            xs.iter().map(|x| Symbol::Local(x.to_string()).pretty()).collect::<Vec<_>>().join("::")
+        fn normalize(xs: &Vec<PathComponent>) -> String {
+            xs.iter().map(|x| x.pretty()).collect::<Vec<_>>().join("::")
         }
         match self {
             Path::Absolute(xs) => format!("::{}", normalize(xs)),
@@ -46,28 +60,84 @@ impl Path {
     }
 }
 
-pub fn resolve_path(path: &Path, current: RefModule, roots: &RootModules) -> Option<RefModule> {
-    match path {
-        Path::Absolute(segments) => {
-            let mut m = roots.get(&segments[0])?;
-            for seg in &segments[1..] {
-                let sub = m.borrow().get_submod(seg)?;
-                m = sub;
-            }
-            Some(m)
+use std::fmt;
+
+impl fmt::Display for PathComponent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            // PathComponent::Name(name) => write!(f, "{}", Symbol::Local(name.clone()).pretty()),
+            PathComponent::Name(name) => write!(f, "{}", name),
+            PathComponent::Wildcard => write!(f, "<wildcard>"),
         }
-        Path::Relative(segments) => {
-            let mut m = current.clone();
-            for seg in segments {
-                if seg == ".." {
-                    let p = m.borrow().parent()?;
-                    m = p;
-                } else {
-                    let sub = m.borrow().get_submod(seg)?;
-                    m = sub;
+    }
+}
+
+impl fmt::Display for Path {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn normalize(xs: &Vec<PathComponent>) -> String {
+            xs.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("::")
+        }
+        match self {
+            Path::Absolute(xs) => {
+                write!(f, "::{}", normalize(xs))
+            }
+            Path::Relative(xs) => {
+                write!(f, "{}", normalize(xs))
+            }
+        }
+    }
+}
+
+impl Path {
+    pub fn resolve(&self, current: RefModule, roots: &RootModules) -> Option<(RefModule, Option<Path>)> {
+        match self {
+            Path::Absolute(segments) => {
+                match &segments[0] {
+                    PathComponent::Wildcard => unreachable!(),
+                    PathComponent::Name(name) => {
+                        let mut m = roots.get(name)?;
+                        for (i, seg) in segments.iter().enumerate().skip(1) {
+                            match seg {
+                                PathComponent::Name(name) => {
+                                    let tmp = m.borrow().get_submod(name);
+                                    if let Some(sub) = tmp {
+                                        m = sub;
+                                    } else {
+                                        let rem = Path::Relative(segments[i..].to_vec());
+                                        return Some((m.clone(), Some(rem)));
+                                    }
+                                }
+                                PathComponent::Wildcard => {
+                                    let rem = Path::Relative(segments[i..].to_vec());
+                                    return Some((m.clone(), Some(rem)));
+                                }
+                            }
+                        }
+                        Some((m, None))
+                    }
                 }
             }
-            Some(m)
+            Path::Relative(segments) => {
+                let mut m = current.clone();
+                for (i, seg) in segments.iter().enumerate() {
+                    match seg {
+                        PathComponent::Name(name) => {
+                            let tmp = m.borrow().get_submod(name);
+                            if let Some(sub) = tmp {
+                                m = sub;
+                            } else {
+                                let rem = Path::Relative(segments[i..].to_vec());
+                                return Some((m.clone(), Some(rem)));
+                            }
+                        }
+                        PathComponent::Wildcard => {
+                            let rem = Path::Relative(segments[i..].to_vec());
+                            return Some((m.clone(), Some(rem)));
+                        }
+                    }
+                }
+                Some((m, None))
+            }
         }
     }
 }

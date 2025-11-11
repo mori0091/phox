@@ -1,8 +1,5 @@
-use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType, RawTraitHead};
-use crate::syntax::ast::{RawTraitDecl, RawTraitMemberDecl};
-use crate::syntax::ast::{RawImplDecl, RawImplMemberDecl};
-use crate::syntax::ast::{Item, Stmt, Expr, Lit, Pat};
-
+use crate::module::*;
+use crate::syntax::ast::*;
 use crate::syntax::token::{Token, LexicalError};
 
 grammar;
@@ -13,6 +10,9 @@ extern {
 
     enum Token {
         // --- キーワード ---
+        "mod"   => Token::Mod,
+        "use"   => Token::Use,
+        "as"    => Token::As,
         "type"  => Token::Type,
         "trait" => Token::Trait,
         "impl"  => Token::Impl,
@@ -26,6 +26,8 @@ extern {
         "()"    => Token::Unit,
 
         // --- 演算子・記号 ---
+        "::" =>  Token::ColonColon,
+
         "*"  =>  Token::Star,
         "/"  =>  Token::Slash,
 
@@ -230,8 +232,50 @@ lambda: Token = {
 
 // ----------------------------------------------
 Stmt: Stmt = {
+    StmtMod,
+    StmtUse,
     StmtLet,
     StmtLetRec,
+};
+
+StmtMod: Stmt = {
+    "mod" <m:ModIdent> => Stmt::Mod(m),
+};
+
+StmtUse: Stmt = {
+    "use" <ps:PathGlob> => Stmt::Use(ps),
+};
+
+PathGlob: PathGlob = {
+    "::" <ps:PathGlobNode> => PathGlob::Absolute(ps),
+    <ps:PathGlobNode>      => PathGlob::Relative(ps),
+};
+
+PathGlobNode: PathGlobNode = {
+    <ps:(<ModIdent> "::")*> <leaf:PathGlobLeaf> => {
+        PathGlobNode::List(ps, leaf)
+    },
+    <ps:(<ModIdent> "::")+> "{" <tree:SepByComma<PathGlobNode>> "}" => {
+        PathGlobNode::Tree(ps, tree)
+    },
+};
+
+ModIdent: String = {
+    <"identifier">,
+};
+
+PathGlobLeaf: PathGlobLeaf = {
+    // baz as quax
+    <p:Ident> <alias:("as" <Ident>)?> => {
+        PathGlobLeaf::Elem(p, alias)
+    },
+    // Baz as Quax
+    <p:ConIdent> <alias:("as" <ConIdent>)?> => {
+        PathGlobLeaf::Elem(p, alias)
+    },
+    "*" => {
+        PathGlobLeaf::Wildcard
+    },
 };
 
 StmtLet: Stmt = {

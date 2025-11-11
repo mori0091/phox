@@ -162,8 +162,19 @@ pub fn resolve_stmt(
     stmt: &mut Stmt,
 ) -> Result<(), TypeError> {
     match stmt {
-        Stmt::Mod(_m) => todo!(),
-        Stmt::Use(_p) => todo!(),
+        Stmt::Mod(_m) => {
+            // todo!()
+            eprintln!(">> mod {}", _m);
+            Ok(())
+        }
+        Stmt::Use(pathglob) => {
+            // todo!()
+            eprintln!(">> use {}", pathglob);
+            for (alias, path) in pathglob.flatten().iter() {
+                eprintln!(">>  {} -> {}", Symbol::Local(alias.to_string()).pretty(), path.pretty());
+            }
+            Ok(())
+        }
         Stmt::Let(pat, expr) => {
             resolve_expr(phox, module, symbol_env, expr)?;
             resolve_pat(phox, module, symbol_env, pat)
