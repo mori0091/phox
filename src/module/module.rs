@@ -14,7 +14,7 @@ pub type WeakRefModule = Weak<RefCell<Module>>;
 pub struct Module {
     pub name: String,
     pub icx: InferCtx,
-    pub env: Env,
+    pub value_env: ValueEnv,
     submods: HashMap<String, RefModule>,
     _exports: HashSet<String>,     // for `pub ...`
     using: HashMap<String, Path>, // for `use ... [as ...]`
@@ -30,7 +30,7 @@ impl ModuleExt for RefModule {
         let child = Rc::new(RefCell::new(Module {
             name: name.to_string(),
             icx: InferCtx::new(),
-            env: Env::new(),
+            value_env: ValueEnv::new(),
             submods: HashMap::new(),
             _exports: HashSet::new(),
             using: HashMap::new(),
@@ -46,7 +46,7 @@ impl Module {
         Rc::new(RefCell::new(Module {
             name: name.to_string(),
             icx: InferCtx::initial(),
-            env: initial_env(),
+            value_env: initial_env(),
             submods: HashMap::new(),
             _exports: HashSet::new(),
             using: HashMap::new(),
@@ -94,11 +94,11 @@ impl Module {
 
 impl Module {
     pub fn put_var(&mut self, name: Symbol, value: Value) {
-        self.env.insert(name, value);
+        self.value_env.insert(name, value);
     }
 
     pub fn get_var(&self, name: &Symbol) -> Option<Value> {
-        self.env.get(name)
+        self.value_env.get(name)
     }
 
     pub fn put_type_var(&mut self, name: Symbol, scheme: TypeScheme) {
