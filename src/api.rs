@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::cell::RefCell;
 
 use lalrpop_util::ParseError;
 use crate::grammar::*;
@@ -17,14 +16,11 @@ use crate::prelude::*;
 
 pub const DEFAULT_USER_ROOT_MODULE_NAME: &str = "__main__";
 
-thread_local! {
-    pub static MODULE_SYMBOL_ENVS: RefCell<HashMap<Path, SymbolEnv>> = RefCell::new(HashMap::new());
-}
-
 pub struct PhoxEngine {
     pub ctx: TypeContext,
     pub roots: RootModules,
     pub global_symbol_env: SymbolEnv,
+    pub module_symbol_envs: HashMap<Path, SymbolEnv>,
     pub impl_member_env: TraitMemberEnv, // implメンバの型スキーム集合 (ex. "f": { ∀ Int. Foo Int => Int -> Int, ∀ Bool. Foo Bool => Bool -> Bool })
     pub impl_env: ImplEnv,
 }
@@ -35,6 +31,7 @@ impl PhoxEngine {
             ctx: TypeContext::new(),
             roots: RootModules::new(),
             global_symbol_env: SymbolEnv::new(),
+            module_symbol_envs: HashMap::new(),
             impl_member_env: TraitMemberEnv::new(),
             impl_env: ImplEnv::new(),
         };
@@ -72,17 +69,22 @@ pub fn eval(src: &str) -> Result<(Value, TypeScheme), String> {
 }
 
 impl PhoxEngine {
-    /// Resolve list of items.
-    pub fn resolve_items(&mut self, module: &mut RefModule, items: &mut Vec<Item>) -> Result<(), String> {
+    /// Get top-level SymbolEnv of the module.
+    pub fn get_symbol_env(&mut self, module: &RefModule) -> SymbolEnv {
         let path = module.borrow().path();
-        MODULE_SYMBOL_ENVS.with(|envs| -> Result<(), String> {
-            let mut envs = envs.borrow_mut();
-            let symbol_env = envs.entry(path).or_insert_with(SymbolEnv::new);
-            for mut item in items.iter_mut() {
-                self.resolve_item(module, symbol_env, &mut item)?;
-            };
-            Ok(())
-        })
+        self.module_symbol_envs
+            .entry(path)
+            .or_insert_with(SymbolEnv::new)
+            .clone()
+    }
+
+    /// Resolve list of items.
+    pub fn resolve_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(), String> {
+        let mut symbol_env = self.get_symbol_env(module);
+        for mut item in items.iter_mut() {
+            self.resolve_item(module, &mut symbol_env, &mut item)?;
+        };
+        Ok(())
     }
 
     /// Resolve an item.

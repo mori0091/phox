@@ -11,4 +11,7 @@ mod path_glob;
 pub use path_glob::{PathGlob, PathGlobNode, PathGlobLeaf};
 
 mod symbol;
-pub use symbol::*;
+pub use symbol::{GlobalId, Symbol};
+
+mod symbol_env;
+pub use symbol_env::SymbolEnv;

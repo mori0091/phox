@@ -83,5 +83,3 @@ impl Symbol {
         }
     }
 }
-
-pub type SymbolEnv = HashMap<Path, Symbol>;

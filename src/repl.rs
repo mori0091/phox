@@ -131,18 +131,26 @@ fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
         }
 
         ["symbols"] => {
-            api::MODULE_SYMBOL_ENVS.with(|envs| {
-                let envs = envs.borrow();
-                for (path, symbol_env) in envs.iter() {
-                    println!("mod {};", path);
-                    let mut syms = symbol_env.iter().collect::<Vec<_>>();
-                    syms.sort_by_key(|(path, _)| path.pretty());
-                    for (path, symbol) in syms.iter() {
-                        println!("  {:<20} {:?}", path.pretty(), symbol);
-                    }
-                    println!();
+            for (path, symbol_env) in phox.module_symbol_envs.iter() {
+                println!("mod {};", path);
+                let map = symbol_env.clone_map();
+                let mut syms = map.iter().collect::<Vec<_>>();
+                syms.sort_by_key(|(path, _)| path.pretty());
+                for (path, symbol) in syms.iter() {
+                    println!("  {:<20} {:?}", path.pretty(), symbol);
                 }
-            });
+                println!();
+            }
+            {
+                println!("GLOBAL");
+                let map = phox.global_symbol_env.clone_map();
+                let mut syms = map.iter().collect::<Vec<_>>();
+                syms.sort_by_key(|(path, _)| path.pretty());
+                for (path, symbol) in syms.iter() {
+                    println!("  {:<20} {:?}", path.pretty(), symbol);
+                }
+                println!();
+            }
             CommandResult::Continue
         }
 
