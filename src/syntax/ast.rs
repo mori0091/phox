@@ -5,8 +5,7 @@ mod pat;
 pub use pat::Pat;
 
 mod expr;
-pub use expr::Expr;
-pub use expr::ExprBody;
+pub use expr::*;
 
 mod stmt;
 pub use stmt::Stmt;
@@ -15,13 +14,10 @@ mod item;
 pub use item::Item;
 
 mod rawdecl;
-pub use rawdecl::{RawTypeDecl, RawVariant, RawType};
-pub use rawdecl::{RawTraitDecl, RawTraitMemberDecl};
-pub use rawdecl::{RawImplDecl, RawImplMemberDecl};
-pub use rawdecl::RawTraitHead;
+pub use rawdecl::*;
 
 mod decl;
-pub use decl::{TypeDecl, Variant};
+pub use decl::*;
 
 mod top;
 pub use top::Program;

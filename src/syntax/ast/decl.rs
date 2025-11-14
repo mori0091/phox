@@ -64,7 +64,7 @@ impl Variant {
 }
 
 impl Variant {
-    pub fn as_scheme(&self, type_name: &Symbol, params: &[TypeVarId]) -> (String, TypeScheme) {
+    pub fn as_scheme(&self, type_name: &Symbol, params: &[TypeVarId]) -> (Symbol, TypeScheme) {
         // 型コンストラクタ適用: Option a, Result a b, ...
         let mut applied = Type::Con(type_name.clone());
         for &p in params {
@@ -87,6 +87,6 @@ impl Variant {
         let scheme = TypeScheme::poly(params.to_vec(), ctor_type);
 
         // コンストラクタ名と Scheme を返す
-        (self.name().to_string(), scheme)
+        (self.name().clone(), scheme)
     }
 }

@@ -1,10 +1,8 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 
 use super::Path;
 
 thread_local! {
-    static SYMBOL_TABLE: RefCell<HashMap<Symbol, Path>> = RefCell::new(HashMap::new());
     static NEXT_GLOBAL_ID: RefCell<usize> = RefCell::new(0);
 }
 
@@ -34,37 +32,25 @@ pub enum Symbol {
     Local(String),              // `map`, `foo`, `bar`
 }
 
-impl Symbol {
-    pub fn register(&self, path: &Path) {
-        SYMBOL_TABLE.with(|tbl| {
-            tbl.borrow_mut().insert(self.clone(), path.clone());
-        });
-    }
-
-    pub fn lookup(&self) -> Option<Path> {
-        SYMBOL_TABLE.with(|tbl| {
-            tbl.borrow().get(self).cloned()
-        })
+impl std::fmt::Display for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Symbol::Unresolved(path) => {
+                write!(f, "<unresolved {}>", path)
+            }
+            Symbol::Local(name) => {
+                write!(f, "{}", name)
+            }
+            Symbol::Extern(id) => {
+                write!(f, "<extern {}>", id)
+            }
+        }
     }
 }
 
-impl std::fmt::Display for Symbol {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(path) = self.lookup() {
-            write!(f, "{}", path)
-        } else {
-            match self {
-                Symbol::Unresolved(path) => {
-                    write!(f, "<unresolved {}>", path)
-                }
-                Symbol::Local(name) => {
-                    write!(f, "{}", name)
-                }
-                Symbol::Extern(id) => {
-                    write!(f, "<extern {}>", id)
-                }
-            }
-        }
+impl Symbol {
+    pub fn unresolved(name: &str) -> Self {
+        Symbol::Unresolved(Path::relative(vec![name.to_string()]))
     }
 }
 

@@ -26,6 +26,15 @@ pub struct RawImplDecl {
     pub members: Vec<RawImplMemberDecl>,
 }
 
+impl RawImplDecl {
+    pub fn head(&self) -> RawTraitHead {
+        RawTraitHead {
+            name: self.name.clone(),
+            params: self.params.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RawImplMemberDecl {
     pub name: String,

@@ -13,11 +13,12 @@ pub type WeakRefModule = Weak<RefCell<Module>>;
 
 pub struct Module {
     pub name: String,
+    pub trait_members: HashMap<String, Vec<String>>, // ex. `{"Eq": ["==", "!="]}`
     pub icx: InferCtx,
     pub value_env: ValueEnv,
     submods: HashMap<String, RefModule>,
     _exports: HashSet<String>,     // for `pub ...`
-    using: HashMap<String, Path>, // for `use ... [as ...]`
+    pub using: HashMap<String, Path>, // for `use ... [as ...]`
     parent: Option<WeakRefModule>,
 }
 
@@ -29,6 +30,7 @@ impl ModuleExt for RefModule {
     fn add_submod(&self, name: &str) -> RefModule {
         let child = Rc::new(RefCell::new(Module {
             name: name.to_string(),
+            trait_members: HashMap::new(),
             icx: InferCtx::new(),
             value_env: ValueEnv::new(),
             submods: HashMap::new(),
@@ -45,6 +47,7 @@ impl Module {
     pub fn new_root(name: &str) -> RefModule {
         Rc::new(RefCell::new(Module {
             name: name.to_string(),
+            trait_members: HashMap::new(),
             icx: InferCtx::initial(),
             value_env: initial_env(),
             submods: HashMap::new(),
@@ -65,9 +68,9 @@ impl Module {
 }
 
 impl Module {
-    pub fn add_alias(&mut self, name: &str, path: &Path) -> Result<(), String> {
+    pub fn add_alias(&mut self, name: &str, path: &Path) -> Result<(), TypeError> {
         if let Some(other) = self.using.get(name) {
-            Err(format!("name `{}` is already used as `{}`", name, other))
+            Err(TypeError::ConflictAlias { name: name.to_string(), other: other.clone() })
         }
         else {
             self.using.insert(name.to_string(), path.clone());

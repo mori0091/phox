@@ -1,4 +1,5 @@
-use crate::{module::Symbol, syntax::ast::Pat};
+use crate::module::*;
+use crate::syntax::ast::*;
 use super::*;
 
 // ===== Type error =====
@@ -6,8 +7,11 @@ use super::*;
 pub enum TypeError {
     // ---- from `resole_*`
 
+    UnknownPath(Path),
     UnknownTrait(String),
     UnknownTraitMember(String),
+    ConflictImpl { it: TraitHead, other: TraitHead },
+    ConflictAlias { name: String, other: Path },
     ArityMismatch { trait_name: Symbol, member: String, expected: usize, actual: usize },
     UnificationFail { expected: TraitHead, actual: TraitHead },
 
@@ -52,6 +56,12 @@ impl fmt::Display for TypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             // ---- resolve errors
+            TypeError::UnknownPath(path) => {
+                write!(f, "couldn't resolve path `{}`", path.pretty())
+            }
+            TypeError::ConflictAlias { name, other } => {
+                write!(f, "name `{}` is already used as `{}`", name, other.pretty())
+            }
             TypeError::MissingTraitImpl(constraint) => {
                 write!(f, "no implementation for {}", constraint)
             }

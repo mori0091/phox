@@ -88,14 +88,14 @@ impl PhoxEngine {
     }
 
     /// Resolve an item.
-    pub fn resolve_item(&mut self, module: &mut RefModule, symbol_env: &mut SymbolEnv, item: &mut Item) -> Result<(), String> {
-        resolve_item(self, &mut module.borrow_mut(), symbol_env, item)
+    pub fn resolve_item(&mut self, module: &RefModule, symbol_env: &mut SymbolEnv, item: &mut Item) -> Result<(), String> {
+        resolve_item(self, module, symbol_env, item)
             .map_err(|e| format!("resolve error: {e}"))
     }
 
     /// Infer type scheme of an item.
     /// \note `item` must be resolved before.
-    pub fn infer_item(&mut self, module: &mut RefModule, item: &mut Item) -> Result<TypeScheme, String> {
+    pub fn infer_item(&mut self, module: &RefModule, item: &mut Item) -> Result<TypeScheme, String> {
         // self.resolve_item(module, symbol_env, item)?;
         let ty = infer_item(self, &mut module.borrow_mut().icx, item)
             .map_err(|e| format!("infer error: {e}"))?;
@@ -108,14 +108,14 @@ impl PhoxEngine {
 
     /// Infer type scheme, and evaluate an item.
     /// \note `item` must be resolved before.
-    pub fn eval_item(&mut self, module: &mut RefModule, item: &mut Item) -> Result<(Value, TypeScheme), String> {
+    pub fn eval_item(&mut self, module: &RefModule, item: &mut Item) -> Result<(Value, TypeScheme), String> {
         let sch = self.infer_item(module, item)?;
-        let val = eval_item(&item, &mut module.borrow_mut().env);
+        let val = eval_item(&item, &mut module.borrow_mut().value_env);
         Ok((val, sch))
     }
 
     /// Parse, resolve, infer type scheme, and evaluate a program source code.
-    pub fn eval_mod(&mut self, module: &mut RefModule, src: &str) -> Result<(Value, TypeScheme), String> {
+    pub fn eval_mod(&mut self, module: &RefModule, src: &str) -> Result<(Value, TypeScheme), String> {
         let mut items = parse(src).map_err(|e| format!("parse error: {e:?}"))?;
         self.resolve_items(module, &mut items)?;
         let mut last = None;
@@ -127,8 +127,8 @@ impl PhoxEngine {
     }
 
     pub fn eval(&mut self, src: &str) -> Result<(Value, TypeScheme), String> {
-        let mut module = self.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
-        self.eval_mod(&mut module, src)
+        let module = self.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
+        self.eval_mod(&module, src)
     }
 }
 

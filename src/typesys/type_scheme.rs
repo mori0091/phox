@@ -17,7 +17,7 @@ impl TypeScheme {
         let constraints = raw
             .constraints
             .iter()
-            .map(|c| resolve_raw_trait_head(ctx, c, &var_map))
+            .map(|c| resolve_raw_trait_head_local(ctx, c, &var_map))
             .collect();
 
         let target = resolve_raw_type(ctx, &raw.target, &var_map);
