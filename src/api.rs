@@ -40,11 +40,12 @@ impl PhoxEngine {
         let mut prelude = phox.roots.get("prelude").unwrap();
         phox.eval_mod(&mut prelude, PRELUDE).unwrap();
 
-        // *** temporal implementation ***
-        // currently user-root-module is just a clone of `prelude`.
-        let usermod = phox.roots.get("prelude").unwrap().clone();
-        usermod.borrow_mut().name = DEFAULT_USER_ROOT_MODULE_NAME.to_string();
+        let usermod = Module::new_root(DEFAULT_USER_ROOT_MODULE_NAME);
         phox.roots.add(usermod);
+
+        // import `prelude` automatically.
+        let mut usermod = phox.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
+        phox.eval_mod(&mut usermod, "use ::prelude::*;").unwrap();
 
         phox
     }
