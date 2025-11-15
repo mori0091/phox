@@ -72,6 +72,11 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
         ExprBody::App(f, a) => {
             let ta = infer_expr(phox, icx, a)?;
             if let Type::Overloaded(name, candidates) = ta {
+                let mut ctx = phox.ctx.clone();
+                let candidates: Vec<_> = candidates
+                    .into_iter()
+                    .map(|tmpl| tmpl.fresh_copy(&mut ctx))
+                    .collect();
                 return Err(TypeError::AmbiguousVariable { name, candidates })
             }
 
@@ -81,19 +86,19 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
             match tf {
                 Type::Overloaded(name, cands) => {
                     let mut filtered = Vec::new();
-                    for raw_cand in cands {
+                    for cand_tmpl in cands {
                         // 1) ctx を複製して試行用の try_ctx を作る
                         let mut try_ctx = phox.ctx.clone();
 
                         // 2) 候補は try_ctx で fresh 化
-                        let cand = TypeScheme::from(&raw_cand, &mut try_ctx);
+                        let cand = cand_tmpl.fresh_copy(&mut try_ctx);
                         let (_, ty_inst) = &cand.instantiate(&mut try_ctx); // 制約の型引数のみ instantiate
 
                         // 3) フィルタ判定は「引数のみ」
                         if let Type::Fun(param, _) = &ty_inst {
                             if try_ctx.unify(&ta, param).is_ok() {
                                 // eprintln!("try_ta vs param: {} vs {}", try_ta.repr(&mut try_ctx), param.repr(&mut try_ctx));
-                                filtered.push((cand.target.score(), raw_cand));
+                                filtered.push((cand.target.score(), cand_tmpl));
                             }
                         }
                     }
@@ -102,16 +107,20 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
                         return Err(TypeError::NoMatchingOverload);
                     }
 
-                    let (best_score, raw_winner) = filtered.iter().max_by_key(|(score, _)| score).unwrap();
+                    let (best_score, winner_tmpl) = filtered.iter().max_by_key(|(score, _)| score).unwrap();
                     {
                         let candidates: Vec<_> = filtered.iter().filter(|(score, _)| score == best_score).cloned().collect();
                         if candidates.len() > 1 {
-                            let candidates: Vec<_> = candidates.into_iter().map(|(_, raw)| raw).collect();
+                            let mut ctx = phox.ctx.clone();
+                            let candidates: Vec<_> = candidates
+                                .into_iter()
+                                .map(|(_, tmpl)| tmpl.fresh_copy(&mut ctx))
+                                .collect();
                             return Err(TypeError::AmbiguousVariable { name, candidates })
                         }
                     }
 
-                    let winner = TypeScheme::from(raw_winner, &mut phox.ctx);
+                    let winner = winner_tmpl.fresh_copy(&mut phox.ctx);
                     let (_, ty_inst) = winner.instantiate(&mut phox.ctx);
                     if let Type::Fun(param, ret) = ty_inst.clone() {
                         // eprintln!("ta vs param: {} vs {}", ta.repr(ctx), param.repr(ctx));
@@ -232,11 +241,13 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
                 }
                 other => {
                     if let Some(con) = is_tycon(&other) {
-                        let pat = Pat::Con(con, vec![Pat::local_var("r")]);
+                        // let pat = Pat::Con(con, vec![Pat::local_var("r")]);
+                        let pat = Pat::Con(con, vec![Pat::unresolved_var("r")]);
                         let p = base.clone();
                         let mut expr = Expr::block(vec![
                             Item::Stmt(Stmt::Let(pat, p)),
-                            Item::Expr(Expr::field_access(Expr::local_var("r"), field.clone()))
+                            // Item::Expr(Expr::field_access(Expr::local_var("r"), field.clone()))
+                            Item::Expr(Expr::field_access(Expr::unresolved_var("r"), field.clone()))
                         ]);
                         let ty = infer_expr(phox, icx, &mut expr).map_err(|_| TypeError::ExpectedRecord(other))?;
                         ty
@@ -260,11 +271,13 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
                 }
                 other => {
                     if let Some(con) = is_tycon(&other) {
-                        let pat = Pat::Con(con, vec![Pat::local_var("t")]);
+                        // let pat = Pat::Con(con, vec![Pat::local_var("t")]);
+                        let pat = Pat::Con(con, vec![Pat::unresolved_var("t")]);
                         let p = base.clone();
                         let mut expr = Expr::block(vec![
                             Item::Stmt(Stmt::Let(pat, p)),
-                            Item::Expr(Expr::tuple_access(Expr::local_var("t"), *index))
+                            // Item::Expr(Expr::tuple_access(Expr::local_var("t"), *index))
+                            Item::Expr(Expr::tuple_access(Expr::unresolved_var("t"), *index))
                         ]);
                         let ty = infer_expr(phox, icx, &mut expr).map_err(|_| TypeError::ExpectedTuple(other))?;
                         ty

@@ -54,6 +54,24 @@ impl <T: ApplySubst> ApplySubst for Scheme<T> {
 use super::TypeContext;
 
 impl <T: ApplySubst> Scheme<T> {
+    pub fn fresh_copy(&self, ctx: &mut TypeContext) -> Self {
+        let mut vars = Vec::new();
+        let mut subst: HashMap<TypeVarId, Type> = HashMap::new();
+        for &v in self.vars.iter() {
+            let new_var = ctx.fresh_type_var_id();
+            vars.push(new_var.clone());
+            subst.insert(v, Type::var(new_var));
+        }
+
+        let target = self.target.apply_subst(&subst);
+
+        let constraints = self.constraints.iter().map(|c| c.apply_subst(&subst)).collect();
+
+        Scheme::new(vars, constraints, target)
+    }
+}
+
+impl <T: ApplySubst> Scheme<T> {
     pub fn instantiate(&self, ctx: &mut TypeContext) -> (Vec<TraitHead>, T) {
         let mut subst: HashMap<TypeVarId, Type> = HashMap::new();
         for &v in self.vars.iter() {
@@ -90,12 +108,12 @@ impl <T: SchemePretty + fmt::Display> Scheme<T> {
             map.insert(*v, ch.to_string());
         }
 
-        let mut renamed = self.target.rename_type_var(&map).to_string();
+        let mut renamed = self.target.rename_type_var(&mut map).to_string();
 
         if !self.constraints.is_empty() {
             let cs = self.constraints
                          .iter()
-                         .map(|c| c.rename_type_var(&map).to_string())
+                         .map(|c| c.rename_type_var(&mut map).to_string())
                          .collect::<Vec<_>>();
             if cs.len() == 1 {
                 renamed = format!("{} => {}", cs[0], renamed);
@@ -105,12 +123,11 @@ impl <T: SchemePretty + fmt::Display> Scheme<T> {
             }
         }
 
-        if self.vars.is_empty() {
+        let mut vars: Vec<String> = map.into_values().collect();
+        vars.sort();
+        if vars.is_empty() {
             format!("{}", renamed)
         } else {
-            let vars: Vec<String> = (0..self.vars.len())
-                .map(|i| ((b'a' + i as u8) as char).to_string())
-                .collect();
             format!("∀ {}. {}", vars.join(" "), renamed)
         }
     }

@@ -23,6 +23,9 @@ mod scheme;
 pub use scheme::Scheme;
 pub use scheme::generalize;
 
+mod scheme_template;
+pub use scheme_template::SchemeTemplate;
+
 mod type_scheme;
 pub use type_scheme::TypeScheme;
 

@@ -40,6 +40,12 @@ impl Path {
             }
         }
     }
+
+    pub fn components(&self) -> Vec<PathComponent> {
+        match self {
+            Path::Absolute(xs) | Path::Relative(xs) => xs.clone()
+        }
+    }
 }
 
 impl Path {
@@ -55,6 +61,13 @@ impl Path {
                 ys.extend(child.iter().cloned());
                 Path::Relative(ys)
             }
+        }
+    }
+
+    pub fn concat_path(&self, other: &Path) -> Path {
+        match other {
+            Path::Absolute(_)  => other.clone(),
+            Path::Relative(ys) => self.concat(&ys),
         }
     }
 }

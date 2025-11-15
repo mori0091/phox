@@ -38,7 +38,7 @@ pub type TypeEnv = HashMap<Symbol, TypeScheme>;
 //   },
 // }
 //
-pub type TraitMemberEnv = HashMap<Symbol, HashSet<RawTypeScheme>>;
+pub type TraitMemberEnv = HashMap<Symbol, HashSet<SchemeTemplate<Type>>>;
 
 // ===== Infer Context =====
 #[derive(Clone)]

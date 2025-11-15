@@ -13,7 +13,7 @@ pub enum Type {
     Tuple(Vec<Type>),
     Record(Vec<(String, Type)>),
 
-    Overloaded(Symbol, Vec<RawTypeScheme>),
+    Overloaded(Symbol, Vec<SchemeTemplate<Type>>),
 }
 
 impl Type {
@@ -217,13 +217,16 @@ impl fmt::Display for Type {
 }
 
 impl SchemePretty for Type {
-    fn rename_type_var(&self, map: &HashMap<TypeVarId, String>) -> Self {
+    fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self {
         match self {
             Type::Var(v) => {
                 if let Some(name) = map.get(v) {
                     Type::local_con(name) // ここでは Var を Con に置き換えてもよい
                 } else {
-                    Type::Var(*v) // 自由変数はそのまま
+                    let ch = (b'a' + map.len() as u8) as char;
+                    let name = ch.to_string();
+                    map.insert(v.clone(), name.clone());
+                    Type::local_con(name)
                 }
             }
             Type::Con(name) => Type::Con(name.clone()),
@@ -245,6 +248,12 @@ impl SchemePretty for Type {
                 unreachable!()
             }
         }
+    }
+}
+
+impl Type {
+    pub fn pretty(&self) -> String {
+        self.rename_type_var(&mut HashMap::new()).to_string()
     }
 }
 

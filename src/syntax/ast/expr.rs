@@ -41,47 +41,48 @@ impl Expr {
     pub fn bool_(b: bool) -> Self {
         Expr::lit(Lit::Bool(b))
     }
-    pub fn unresolved_var<S: Into<String>>(s: S) -> Self {
-        Expr { body: ExprBody::Var(Symbol::Unresolved(Path::relative(vec![s.into()]))), ty: None }
+
+    fn expr(e: ExprBody) -> Self {
+        Expr { body: e, ty: None }
     }
-    pub fn local_var<S: Into<String>>(s: S) -> Self {
-        Expr { body: ExprBody::Var(Symbol::Local(s.into())), ty: None }
+    pub fn unresolved_var<S: Into<String>>(s: S) -> Self {
+        Expr::expr(ExprBody::Var(Symbol::unresolved(s)))
     }
     pub fn app(f: Expr, x: Expr) -> Self {
-        Expr { body: ExprBody::App(Box::new(f), Box::new(x)), ty: None }
+        Expr::expr(ExprBody::App(Box::new(f), Box::new(x)))
     }
     pub fn abs(pat: Pat, e: Expr) -> Self {
-        Expr { body: ExprBody::Abs(pat, Box::new(e)), ty: None }
+        Expr::expr(ExprBody::Abs(pat, Box::new(e)))
     }
     pub fn if_(e1: Expr, e2: Expr, e3: Expr) -> Self {
-        Expr { body: ExprBody::If(Box::new(e1), Box::new(e2), Box::new(e3)), ty: None }
+        Expr::expr(ExprBody::If(Box::new(e1), Box::new(e2), Box::new(e3)))
     }
     pub fn match_(e: Expr, arms: Vec<(Pat, Expr)>) -> Self {
-        Expr { body: ExprBody::Match(Box::new(e), arms), ty: None }
+        Expr::expr(ExprBody::Match(Box::new(e), arms))
     }
 
     pub fn record(fields: Vec<(String, Expr)>) -> Self {
-        Expr { body: ExprBody::Record(fields), ty: None }
+        Expr::expr(ExprBody::Record(fields))
     }
 
     pub fn tuple(elems: Vec<Expr>) -> Self {
-        Expr { body: ExprBody::Tuple(elems), ty: None }
+        Expr::expr(ExprBody::Tuple(elems))
     }
 
     pub fn raw_trait_record(raw: RawTraitHead) -> Self {
-        Expr { body: ExprBody::RawTraitRecord(raw), ty: None }
+        Expr::expr(ExprBody::RawTraitRecord(raw))
     }
 
     pub fn field_access<S: Into<String>>(e: Expr, s: S) -> Self {
-        Expr { body: ExprBody::FieldAccess(Box::new(e), s.into()), ty: None }
+        Expr::expr(ExprBody::FieldAccess(Box::new(e), s.into()))
     }
 
     pub fn tuple_access(e: Expr, index: usize) -> Self {
-        Expr { body: ExprBody::TupleAccess(Box::new(e), index), ty: None }
+        Expr::expr(ExprBody::TupleAccess(Box::new(e), index))
     }
 
     pub fn block(items: Vec<Item>) -> Self {
-        Expr { body: ExprBody::Block(items), ty: None }
+        Expr::expr(ExprBody::Block(items))
     }
 }
 

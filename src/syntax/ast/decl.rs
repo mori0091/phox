@@ -1,4 +1,3 @@
-use std::fmt;
 use crate::module::*;
 use crate::typesys::*;
 
@@ -15,44 +14,6 @@ pub enum TypeDecl {
 pub enum Variant {
     Unit(Symbol),               // ex. `None, `Nil`,
     Tuple(Symbol, Vec<Type>),   // ex. `Some a`, `Result a e`,
-}
-
-impl fmt::Display for TypeDecl {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TypeDecl::SumType {name, params, variants} => {
-                assert!(!variants.is_empty());
-                let s = if params.is_empty() {
-                    name.to_string()
-                } else {
-                    format!("{} {}", name.to_string(), params.iter()
-                            .map(|id| format!("{}", id))
-                            .collect::<Vec<_>>().join(" "))
-                };
-                let vs: Vec<_> = variants.iter().map(|v| v.to_string()).collect();
-                write!(f, "type {} = {}", s, vs.join(" | "))
-            }
-        }
-    }
-}
-
-impl fmt::Display for Variant {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Variant::Unit(name) => write!(f, "{}", name),
-            Variant::Tuple(name, ts) => {
-                assert!(!ts.is_empty());
-                let s: Vec<_> = ts
-                    .iter()
-                    .map(|t| match t {
-                        Type::Fun(_, _) | Type::App(_, _) => format!("({})", t),
-                        _ => format!("{}", t)
-                    })
-                    .collect();
-                write!(f, "{} {}", name, s.join(" "))
-            }
-        }
-    }
 }
 
 impl Variant {
@@ -90,3 +51,43 @@ impl Variant {
         (self.name().clone(), scheme)
     }
 }
+
+// use std::fmt;
+
+// impl fmt::Display for TypeDecl {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             TypeDecl::SumType {name, params, variants} => {
+//                 assert!(!variants.is_empty());
+//                 let s = if params.is_empty() {
+//                     name.to_string()
+//                 } else {
+//                     format!("{} {}", name.to_string(), params.iter()
+//                             .map(|id| format!("{}", id))
+//                             .collect::<Vec<_>>().join(" "))
+//                 };
+//                 let vs: Vec<_> = variants.iter().map(|v| v.to_string()).collect();
+//                 write!(f, "type {} = {}", s, vs.join(" | "))
+//             }
+//         }
+//     }
+// }
+
+// impl fmt::Display for Variant {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             Variant::Unit(name) => write!(f, "{}", name),
+//             Variant::Tuple(name, ts) => {
+//                 assert!(!ts.is_empty());
+//                 let s: Vec<_> = ts
+//                     .iter()
+//                     .map(|t| match t {
+//                         Type::Fun(_, _) | Type::App(_, _) => format!("({})", t),
+//                         _ => format!("{}", t)
+//                     })
+//                     .collect();
+//                 write!(f, "{} {}", name, s.join(" "))
+//             }
+//         }
+//     }
+// }

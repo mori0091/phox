@@ -26,6 +26,12 @@ pub struct RawImplDecl {
     pub members: Vec<RawImplMemberDecl>,
 }
 
+#[derive(Debug, Clone)]
+pub struct RawImplMemberDecl {
+    pub name: String,
+    pub expr: Box<Expr>,
+}
+
 impl RawImplDecl {
     pub fn head(&self) -> RawTraitHead {
         RawTraitHead {
@@ -33,12 +39,6 @@ impl RawImplDecl {
             params: self.params.clone(),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct RawImplMemberDecl {
-    pub name: String,
-    pub expr: Box<Expr>,
 }
 
 /// パース直後の型定義（まだ型変数は名前のまま）

@@ -1,35 +1,18 @@
-use std::cell::RefCell;
-
 use super::Path;
-
-thread_local! {
-    static NEXT_GLOBAL_ID: RefCell<usize> = RefCell::new(0);
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct GlobalId(usize);
-
-impl GlobalId {
-    pub fn new() -> Self {
-        NEXT_GLOBAL_ID.with(|next| {
-            let id = GlobalId(*next.borrow());
-            *next.borrow_mut() += 1;
-            id
-        })
-    }
-}
-
-impl std::fmt::Display for GlobalId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "#{}", self.0)
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Symbol {
     Unresolved(Path),           // `foo`, `foo::Foo`
-    Extern(GlobalId),           // `::prelude::map` (extern only)
     Local(String),              // `map`, `foo`, `bar`
+}
+
+impl Symbol {
+    pub fn unresolved<S: Into<String>>(name: S) -> Self {
+        Symbol::Unresolved(Path::relative(vec![name.into()]))
+    }
+    pub fn local<S: Into<String>>(name: S) -> Self {
+        Symbol::Local(name.into())
+    }
 }
 
 impl std::fmt::Display for Symbol {
@@ -41,16 +24,7 @@ impl std::fmt::Display for Symbol {
             Symbol::Local(name) => {
                 write!(f, "{}", name)
             }
-            Symbol::Extern(id) => {
-                write!(f, "<extern {}>", id)
-            }
         }
-    }
-}
-
-impl Symbol {
-    pub fn unresolved(name: &str) -> Self {
-        Symbol::Unresolved(Path::relative(vec![name.to_string()]))
     }
 }
 

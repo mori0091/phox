@@ -7,6 +7,8 @@ use super::*;
 pub enum TypeError {
     // ---- from `resole_*`
 
+    Expeted { expected: String, actual: String },
+
     UnknownPath(Path),
     UnknownTrait(String),
     UnknownTraitMember(String),
@@ -32,7 +34,7 @@ pub enum TypeError {
     NoMatchingOverload,
     RecursiveType,
     UnboundVariable(Symbol),
-    AmbiguousVariable { name: Symbol, candidates: Vec<RawTypeScheme> },
+    AmbiguousVariable { name: Symbol, candidates: Vec<TypeScheme> },
 
     UnknownConstructor(Symbol),
     ConstructorArityMismatch(Symbol, usize, Type),
@@ -72,7 +74,7 @@ impl fmt::Display for TypeError {
                 cands.sort();
                 let mut hints: Vec<_> = candidates
                     .iter()
-                    .map(|sch| format!("@{{{}}}.{}", sch.constraints[0], name.pretty()))
+                    .map(|sch| format!("@{{{}}}.{}", sch.constraints[0].pretty(), name.pretty()))
                     .collect();
                 hints.sort();
                 writeln!(f, "ambiguous variable `{}`", name.pretty())?;
