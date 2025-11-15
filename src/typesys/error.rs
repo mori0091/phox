@@ -1,4 +1,5 @@
-use crate::{module::Symbol, syntax::ast::Pat};
+use crate::module::*;
+use crate::syntax::ast::*;
 use super::*;
 
 // ===== Type error =====
@@ -6,8 +7,13 @@ use super::*;
 pub enum TypeError {
     // ---- from `resole_*`
 
+    Expeted { expected: String, actual: String },
+
+    UnknownPath(Path),
     UnknownTrait(String),
     UnknownTraitMember(String),
+    ConflictImpl { it: TraitHead, other: TraitHead },
+    ConflictAlias { name: String, other: Path },
     ArityMismatch { trait_name: Symbol, member: String, expected: usize, actual: usize },
     UnificationFail { expected: TraitHead, actual: TraitHead },
 
@@ -28,7 +34,7 @@ pub enum TypeError {
     NoMatchingOverload,
     RecursiveType,
     UnboundVariable(Symbol),
-    AmbiguousVariable { name: Symbol, candidates: Vec<RawTypeScheme> },
+    AmbiguousVariable { name: Symbol, candidates: Vec<TypeScheme> },
 
     UnknownConstructor(Symbol),
     ConstructorArityMismatch(Symbol, usize, Type),
@@ -52,6 +58,12 @@ impl fmt::Display for TypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             // ---- resolve errors
+            TypeError::UnknownPath(path) => {
+                write!(f, "couldn't resolve path `{}`", path.pretty())
+            }
+            TypeError::ConflictAlias { name, other } => {
+                write!(f, "name `{}` is already used as `{}`", name, other.pretty())
+            }
             TypeError::MissingTraitImpl(constraint) => {
                 write!(f, "no implementation for {}", constraint)
             }
@@ -62,7 +74,7 @@ impl fmt::Display for TypeError {
                 cands.sort();
                 let mut hints: Vec<_> = candidates
                     .iter()
-                    .map(|sch| format!("@{{{}}}.{}", sch.constraints[0], name.pretty()))
+                    .map(|sch| format!("@{{{}}}.{}", sch.constraints[0].pretty(), name.pretty()))
                     .collect();
                 hints.sort();
                 writeln!(f, "ambiguous variable `{}`", name.pretty())?;

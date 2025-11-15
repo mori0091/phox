@@ -23,6 +23,32 @@ impl Path {
 }
 
 impl Path {
+    pub fn len(&self) -> usize {
+        match self {
+            Path::Absolute(ps) | Path::Relative(ps) => ps.len()
+        }
+    }
+
+    pub fn head(&self) -> Option<PathComponent> {
+        match self {
+            Path::Absolute(ps) | Path::Relative(ps) => {
+                if ps.is_empty() {
+                    None
+                } else {
+                    Some(ps[0].clone())
+                }
+            }
+        }
+    }
+
+    pub fn components(&self) -> Vec<PathComponent> {
+        match self {
+            Path::Absolute(xs) | Path::Relative(xs) => xs.clone()
+        }
+    }
+}
+
+impl Path {
     pub fn concat(&self, child: &[PathComponent]) -> Path {
         match self {
             Path::Absolute(xs) => {
@@ -35,6 +61,13 @@ impl Path {
                 ys.extend(child.iter().cloned());
                 Path::Relative(ys)
             }
+        }
+    }
+
+    pub fn concat_path(&self, other: &Path) -> Path {
+        match other {
+            Path::Absolute(_)  => other.clone(),
+            Path::Relative(ys) => self.concat(&ys),
         }
     }
 }
@@ -89,7 +122,7 @@ impl fmt::Display for Path {
 }
 
 impl Path {
-    pub fn resolve(&self, current: RefModule, roots: &RootModules) -> Option<(RefModule, Option<Path>)> {
+    pub fn resolve(&self, current: &RefModule, roots: &RootModules) -> Option<(RefModule, Option<Path>)> {
         match self {
             Path::Absolute(segments) => {
                 match &segments[0] {

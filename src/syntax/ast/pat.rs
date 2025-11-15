@@ -14,16 +14,10 @@ pub enum Pat {
 
 impl Pat {
     pub fn unresolved_var<S: Into<String>>(s: S) -> Self {
-        Pat::Var(Symbol::Unresolved(Path::relative(vec![s.into()])))
-    }
-    pub fn local_var<S: Into<String>>(s: S) -> Self {
-        Pat::Var(Symbol::Local(s.into()))
-    }
-    pub fn local_con<S: Into<String>>(s: S, args: Vec<Pat>) -> Self {
-        Pat::Con(Symbol::Local(s.into()), args) // TODO
+        Pat::Var(Symbol::unresolved(s))
     }
     pub fn unresolved_con<S: Into<String>>(s: S, args: Vec<Pat>) -> Self {
-        Pat::Con(Symbol::Unresolved(Path::relative(vec![s.into()])), args)
+        Pat::Con(Symbol::unresolved(s), args)
     }
 }
 

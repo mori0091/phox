@@ -1,4 +1,3 @@
-use std::fmt;
 use crate::module::*;
 use crate::typesys::*;
 
@@ -17,44 +16,6 @@ pub enum Variant {
     Tuple(Symbol, Vec<Type>),   // ex. `Some a`, `Result a e`,
 }
 
-impl fmt::Display for TypeDecl {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TypeDecl::SumType {name, params, variants} => {
-                assert!(!variants.is_empty());
-                let s = if params.is_empty() {
-                    name.to_string()
-                } else {
-                    format!("{} {}", name.to_string(), params.iter()
-                            .map(|id| format!("{}", id))
-                            .collect::<Vec<_>>().join(" "))
-                };
-                let vs: Vec<_> = variants.iter().map(|v| v.to_string()).collect();
-                write!(f, "type {} = {}", s, vs.join(" | "))
-            }
-        }
-    }
-}
-
-impl fmt::Display for Variant {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Variant::Unit(name) => write!(f, "{}", name),
-            Variant::Tuple(name, ts) => {
-                assert!(!ts.is_empty());
-                let s: Vec<_> = ts
-                    .iter()
-                    .map(|t| match t {
-                        Type::Fun(_, _) | Type::App(_, _) => format!("({})", t),
-                        _ => format!("{}", t)
-                    })
-                    .collect();
-                write!(f, "{} {}", name, s.join(" "))
-            }
-        }
-    }
-}
-
 impl Variant {
     pub fn name(&self) -> Symbol {
         match self {
@@ -64,7 +25,7 @@ impl Variant {
 }
 
 impl Variant {
-    pub fn as_scheme(&self, type_name: &Symbol, params: &[TypeVarId]) -> (String, TypeScheme) {
+    pub fn as_scheme(&self, type_name: &Symbol, params: &[TypeVarId]) -> (Symbol, TypeScheme) {
         // 型コンストラクタ適用: Option a, Result a b, ...
         let mut applied = Type::Con(type_name.clone());
         for &p in params {
@@ -87,6 +48,46 @@ impl Variant {
         let scheme = TypeScheme::poly(params.to_vec(), ctor_type);
 
         // コンストラクタ名と Scheme を返す
-        (self.name().to_string(), scheme)
+        (self.name().clone(), scheme)
     }
 }
+
+// use std::fmt;
+
+// impl fmt::Display for TypeDecl {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             TypeDecl::SumType {name, params, variants} => {
+//                 assert!(!variants.is_empty());
+//                 let s = if params.is_empty() {
+//                     name.to_string()
+//                 } else {
+//                     format!("{} {}", name.to_string(), params.iter()
+//                             .map(|id| format!("{}", id))
+//                             .collect::<Vec<_>>().join(" "))
+//                 };
+//                 let vs: Vec<_> = variants.iter().map(|v| v.to_string()).collect();
+//                 write!(f, "type {} = {}", s, vs.join(" | "))
+//             }
+//         }
+//     }
+// }
+
+// impl fmt::Display for Variant {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             Variant::Unit(name) => write!(f, "{}", name),
+//             Variant::Tuple(name, ts) => {
+//                 assert!(!ts.is_empty());
+//                 let s: Vec<_> = ts
+//                     .iter()
+//                     .map(|t| match t {
+//                         Type::Fun(_, _) | Type::App(_, _) => format!("({})", t),
+//                         _ => format!("{}", t)
+//                     })
+//                     .collect();
+//                 write!(f, "{} {}", name, s.join(" "))
+//             }
+//         }
+//     }
+// }

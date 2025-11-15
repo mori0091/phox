@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::syntax::ast::*;
 use super::*;
 
-pub fn eval_item(item: &Item, env: &mut Env) -> Value {
+pub fn eval_item(item: &Item, env: &mut ValueEnv) -> Value {
     match item {
         Item::Stmt(stmt) => {
             eval_stmt(stmt, env);
@@ -19,7 +19,7 @@ pub fn eval_item(item: &Item, env: &mut Env) -> Value {
     }
 }
 
-pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
+pub fn eval_stmt(stmt: &Stmt, env: &mut ValueEnv) {
     match stmt {
         Stmt::Mod(_) => {},
         Stmt::Use(_) => {},
@@ -47,7 +47,7 @@ pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
 }
 
 /// 評価関数
-pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
+pub fn eval_expr(expr: &Expr, env: &ValueEnv) -> Value {
     match &expr.body {
         // リテラル
         ExprBody::Lit(lit) => Value::Lit(lit.clone()),
@@ -201,8 +201,8 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
 use crate::syntax::ast::Pat;
 // use super::value::{Value, Env};
 
-fn match_pat(pat: &Pat, val: &Value) -> Option<Binding> {
-    let mut env = Binding::new();
+fn match_pat(pat: &Pat, val: &Value) -> Option<env::Binding> {
+    let mut env = env::Binding::new();
     match (pat, val) {
         // ワイルドカード
         (Pat::Wildcard, _) => Some(env),

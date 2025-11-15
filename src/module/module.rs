@@ -13,11 +13,12 @@ pub type WeakRefModule = Weak<RefCell<Module>>;
 
 pub struct Module {
     pub name: String,
+    pub trait_members: HashMap<String, Vec<String>>, // ex. `{"Eq": ["==", "!="]}`
     pub icx: InferCtx,
-    pub env: Env,
+    pub value_env: ValueEnv,
     submods: HashMap<String, RefModule>,
     _exports: HashSet<String>,     // for `pub ...`
-    using: HashMap<String, Path>, // for `use ... [as ...]`
+    pub using: HashMap<String, Path>, // for `use ... [as ...]`
     parent: Option<WeakRefModule>,
 }
 
@@ -29,8 +30,9 @@ impl ModuleExt for RefModule {
     fn add_submod(&self, name: &str) -> RefModule {
         let child = Rc::new(RefCell::new(Module {
             name: name.to_string(),
+            trait_members: HashMap::new(),
             icx: InferCtx::new(),
-            env: Env::new(),
+            value_env: ValueEnv::new(),
             submods: HashMap::new(),
             _exports: HashSet::new(),
             using: HashMap::new(),
@@ -45,8 +47,9 @@ impl Module {
     pub fn new_root(name: &str) -> RefModule {
         Rc::new(RefCell::new(Module {
             name: name.to_string(),
+            trait_members: HashMap::new(),
             icx: InferCtx::initial(),
-            env: initial_env(),
+            value_env: initial_env(),
             submods: HashMap::new(),
             _exports: HashSet::new(),
             using: HashMap::new(),
@@ -65,9 +68,9 @@ impl Module {
 }
 
 impl Module {
-    pub fn add_alias(&mut self, name: &str, path: &Path) -> Result<(), String> {
+    pub fn add_alias(&mut self, name: &str, path: &Path) -> Result<(), TypeError> {
         if let Some(other) = self.using.get(name) {
-            Err(format!("name `{}` is already used as `{}`", name, other))
+            Err(TypeError::ConflictAlias { name: name.to_string(), other: other.clone() })
         }
         else {
             self.using.insert(name.to_string(), path.clone());
@@ -94,11 +97,11 @@ impl Module {
 
 impl Module {
     pub fn put_var(&mut self, name: Symbol, value: Value) {
-        self.env.insert(name, value);
+        self.value_env.insert(name, value);
     }
 
     pub fn get_var(&self, name: &Symbol) -> Option<Value> {
-        self.env.get(name)
+        self.value_env.get(name)
     }
 
     pub fn put_type_var(&mut self, name: Symbol, scheme: TypeScheme) {

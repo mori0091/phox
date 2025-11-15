@@ -81,9 +81,14 @@ pub fn apply_trait_impls_expr(
 
             // 推論器で解決しきれなかったエラーをここで拾う
             if let Type::Overloaded(name, cands) = ty {
+                let mut ctx = phox.ctx.clone();
+                let candidates: Vec<_> = cands
+                    .into_iter()
+                    .map(|tmpl| tmpl.fresh_copy(&mut ctx))
+                    .collect();
                 return Err(TypeError::AmbiguousVariable {
                     name: name.clone(), // 元の変数名
-                    candidates: cands.clone(),
+                    candidates,
                 });
             }
 

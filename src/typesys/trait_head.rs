@@ -21,8 +21,8 @@ impl TraitHead {
             .ok_or_else(|| TypeError::UnknownTraitMember(member_name.to_string()))?;
 
         let mut out = Vec::new();
-        for raw_scheme in entries {
-            let scheme = TypeScheme::from(raw_scheme, ctx);
+        for scheme_tmpl in entries {
+            let scheme = scheme_tmpl.fresh_copy(ctx);
             let (constraints, trait_ty) = scheme.instantiate(ctx);
             if ctx.unify(&trait_ty, member_ty).is_ok() {
                 let resolved = constraints.into_iter().map(|mut c| {
@@ -36,7 +36,7 @@ impl TraitHead {
     }
 }
 
-use super::{FreeTypeVars, TypeScheme};
+use super::FreeTypeVars;
 
 impl FreeTypeVars for TraitHead {
     fn free_type_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<TypeVarId>) {
@@ -100,9 +100,15 @@ impl fmt::Display for TraitHead {
 }
 
 impl SchemePretty for TraitHead {
-    fn rename_type_var(&self, map: &HashMap<TypeVarId, String>) -> Self {
+    fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self {
         let ts = self.params.iter().map(|t| t.rename_type_var(map)).collect();
         TraitHead {name: self.name.clone(), params: ts}
+    }
+}
+
+impl TraitHead {
+    pub fn pretty(&self) -> String {
+        self.rename_type_var(&mut HashMap::new()).to_string()
     }
 }
 

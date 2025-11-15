@@ -9,13 +9,13 @@ pub type Binding = HashMap<Symbol, Value>;
 
 /// 評価時の環境
 #[derive(Clone)]
-pub struct Env {
+pub struct ValueEnv {
     map: Rc<RefCell<Binding>>,
 }
 
-impl Env {
+impl ValueEnv {
     pub fn new() -> Self {
-        Env { map: Rc::new(RefCell::new(HashMap::new())) }
+        ValueEnv { map: Rc::new(RefCell::new(HashMap::new())) }
     }
 
     pub fn insert(&self, k: Symbol, v: Value) {
@@ -34,14 +34,14 @@ impl Env {
         self.map.borrow().clone()
     }
 
-    pub fn duplicate(&self) -> Env {
-        Env { map: Rc::new(RefCell::new(self.clone_map())) }
+    pub fn duplicate(&self) -> ValueEnv {
+        ValueEnv { map: Rc::new(RefCell::new(self.clone_map())) }
     }
 }
 
 /// 評価時の初期環境
-pub fn initial_env() -> Env {
-    let env = Env::new();
+pub fn initial_env() -> ValueEnv {
+    let env = ValueEnv::new();
 
     // 比較演算子
     env.insert(Symbol::Local("__i64_eq__".into()), make_i64_cmp_op(|a, b| a == b));

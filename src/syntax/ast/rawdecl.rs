@@ -32,6 +32,15 @@ pub struct RawImplMemberDecl {
     pub expr: Box<Expr>,
 }
 
+impl RawImplDecl {
+    pub fn head(&self) -> RawTraitHead {
+        RawTraitHead {
+            name: self.name.clone(),
+            params: self.params.clone(),
+        }
+    }
+}
+
 /// パース直後の型定義（まだ型変数は名前のまま）
 #[derive(Debug, Clone)]
 pub enum RawTypeDecl {

@@ -1,5 +1,5 @@
 mod env;
-pub use env::{Env, Binding};
+pub use env::ValueEnv;
 pub use env::{
     initial_env,
     make_i64_arith_op,
