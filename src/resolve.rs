@@ -49,7 +49,6 @@ pub fn register_trait(
               .insert(name, member_names);
     }
 
-    // let trait_name = global_symbol(phox, module, &raw.name);
     let trait_name = Symbol::local(&raw.name);
     let mut vars = Vec::new();          // [id]
     let mut param_map = HashMap::new(); // {"a": id}
@@ -177,17 +176,6 @@ pub fn register_impl(
             constraints,
             target,
         };
-
-        // let mut subst = HashMap::new();
-        // for (t1, t2) in trait_head.params.iter().zip(impl_head.params.iter()) {
-        //     match t1 {
-        //         Type::Var(id) => {
-        //             subst.entry(*id).or_insert(t2.clone());
-        //         }
-        //         _ => {}
-        //     }
-        // }
-        // let impl_member_sch = trait_scheme_tmpl.scheme_ref().apply_subst(&subst);
 
         phox.impl_member_env
             .entry(sym)
@@ -687,8 +675,9 @@ pub fn resolve_raw_trait_head(
         params.push(ty);
     }
     let mut symbol = Symbol::unresolved(&raw.name.clone());
-    // eprintln!("before >> {:?}", symbol);
     resolve_symbol(phox, module, symbol_env, &mut symbol)?;
-    // eprintln!("after  >> {:?}", symbol);
-    Ok(TraitHead { name: symbol, params })
+    Ok(TraitHead {
+        name: symbol,
+        params,
+    })
 }
