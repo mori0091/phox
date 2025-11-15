@@ -22,4 +22,12 @@ impl RootModules {
     pub fn keys(&self) -> std::collections::hash_map::Keys<'_, String, RefModule> {
         self.map.keys()
     }
+
+    pub fn values(&self) -> std::collections::hash_map::Values<'_, String, RefModule> {
+        self.map.values()
+    }
+
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, String, RefModule> {
+        self.map.iter()
+    }
 }

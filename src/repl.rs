@@ -84,10 +84,13 @@ fn help() {
 :load <path>, :l <path>
     load and evaluate Phox source file specified by <path>.
 
-:modules
+:modules, :m
     print list of root modules.
 
-:symbols
+:using, :u
+    print list of using aliases for each modules.
+
+:symbols, :s
     print list of symbols for each modules.
 
 :impls, or :impls [options]
@@ -123,21 +126,34 @@ fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
             }
         }
 
-        ["modules"] => {
+        ["modules"] | ["m"] => {
             for name in phox.roots.keys() {
                 println!("{}", name);
             }
             CommandResult::Continue
         }
-
-        ["symbols"] => {
+        ["using"] | ["u"] => {
+            use crate::module::Symbol;
+            for module in phox.roots.values() {
+                println!("mod {};", module.borrow().path().pretty());
+                let mut aliases = module.borrow().using.clone().into_iter().collect::<Vec<_>>();
+                aliases.sort_by_key(|(_alias, path)| path.pretty());
+                for (alias, path) in aliases.iter() {
+                    let tmp = Symbol::Local(alias.to_string());
+                    println!("  use {:<30} as {}", path.pretty(), tmp.pretty());
+                }
+                println!();
+            }
+            CommandResult::Continue
+        }
+        ["symbols"] | ["s"] => {
             for (path, symbol_env) in phox.module_symbol_envs.iter() {
-                println!("mod {};", path);
+                println!("mod {};", path.pretty());
                 let map = symbol_env.clone_map();
                 let mut syms = map.iter().collect::<Vec<_>>();
                 syms.sort_by_key(|(path, _)| path.pretty());
                 for (path, symbol) in syms.iter() {
-                    println!("  {:<20} {:?}", path.pretty(), symbol);
+                    println!("  {:<30} {:?}", path.pretty(), symbol);
                 }
                 println!();
             }
@@ -147,7 +163,7 @@ fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
                 let mut syms = map.iter().collect::<Vec<_>>();
                 syms.sort_by_key(|(path, _)| path.pretty());
                 for (path, symbol) in syms.iter() {
-                    println!("  {:<20} {:?}", path.pretty(), symbol);
+                    println!("  {:<30} {:?}", path.pretty(), symbol);
                 }
                 println!();
             }
