@@ -1,7 +1,7 @@
 use super::Expr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RawConstraint {
+pub struct RawTraitHead {
     pub name: String,           // trait name (ex. Eq)
     pub params: Vec<RawType>,   // instance type params (ex. [Int])
 }
@@ -30,6 +30,15 @@ pub struct RawImplDecl {
 pub struct RawImplMemberDecl {
     pub name: String,
     pub expr: Box<Expr>,
+}
+
+impl RawImplDecl {
+    pub fn head(&self) -> RawTraitHead {
+        RawTraitHead {
+            name: self.name.clone(),
+            params: self.params.clone(),
+        }
+    }
 }
 
 /// パース直後の型定義（まだ型変数は名前のまま）

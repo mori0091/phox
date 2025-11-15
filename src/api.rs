@@ -1,42 +1,53 @@
+use std::collections::HashMap;
+
 use lalrpop_util::ParseError;
-use crate::grammar::{ItemListParser, ExprParser};
+use crate::grammar::*;
 
-use crate::syntax::ast::{Program, Item, Expr};
-use crate::syntax::lexer::Lexer;
-use crate::syntax::token::{Token, LexicalError};
+use crate::syntax::ast::*;
+use crate::syntax::lexer::*;
+use crate::syntax::token::*;
 
-use crate::resolve::resolve_item;
-
-use crate::typesys::{Type, TypeScheme};
-use crate::typesys::{TypeContext, InferCtx, ImplEnv};
-use crate::typesys::{infer_item, apply_trait_impls_item, generalize};
-
-use crate::interpreter::{Value, Env};
-use crate::interpreter::{initial_env, eval_item};
+use crate::module::*;
+use crate::resolve::*;
+use crate::typesys::*;
+use crate::interpreter::*;
 
 use crate::prelude::*;
 
-pub struct Bootstrap {
+pub const DEFAULT_USER_ROOT_MODULE_NAME: &str = "__main__";
+
+pub struct PhoxEngine {
     pub ctx: TypeContext,
-    pub icx: InferCtx,
+    pub roots: RootModules,
+    pub global_symbol_env: SymbolEnv,
+    pub module_symbol_envs: HashMap<Path, SymbolEnv>,
+    pub impl_member_env: TraitMemberEnv, // implメンバの型スキーム集合 (ex. "f": { ∀ Int. Foo Int => Int -> Int, ∀ Bool. Foo Bool => Bool -> Bool })
     pub impl_env: ImplEnv,
-    pub env: Env,
 }
 
-impl Bootstrap {
+impl PhoxEngine {
     pub fn new() -> Self {
-        let mut ctx = TypeContext::new();
-        let icx = InferCtx::initial(&mut ctx);
-        let impl_env = ImplEnv::new();
-        let env = initial_env();
-        let mut boot = Bootstrap {
-            ctx,
-            icx,
-            impl_env,
-            env,
+        let mut phox = PhoxEngine {
+            ctx: TypeContext::new(),
+            roots: RootModules::new(),
+            global_symbol_env: SymbolEnv::new(),
+            module_symbol_envs: HashMap::new(),
+            impl_member_env: TraitMemberEnv::new(),
+            impl_env: ImplEnv::new(),
         };
-        boot.eval(PRELUDE).unwrap();
-        boot
+        let prelude = Module::new_root("prelude");
+        phox.roots.add(prelude);
+        let mut prelude = phox.roots.get("prelude").unwrap();
+        phox.eval_mod(&mut prelude, PRELUDE).unwrap();
+
+        let usermod = Module::new_root(DEFAULT_USER_ROOT_MODULE_NAME);
+        phox.roots.add(usermod);
+
+        // import `prelude` automatically.
+        let mut usermod = phox.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
+        phox.eval_mod(&mut usermod, "use ::prelude::*;").unwrap();
+
+        phox
     }
 }
 
@@ -54,44 +65,71 @@ pub fn parse(src: &str) -> Result<Program, ParseError<usize, Token, LexicalError
 
 /// Parse, infer type scheme, and evaluate of a program.
 pub fn eval(src: &str) -> Result<(Value, TypeScheme), String> {
-    Bootstrap::new().eval(src)
+    let mut phox = PhoxEngine::new();
+    phox.eval(src)
 }
 
-impl Bootstrap {
+impl PhoxEngine {
+    /// Get top-level SymbolEnv of the module.
+    pub fn get_symbol_env(&mut self, module: &RefModule) -> SymbolEnv {
+        let path = module.borrow().path();
+        self.module_symbol_envs
+            .entry(path)
+            .or_insert_with(SymbolEnv::new)
+            .clone()
+    }
+
+    /// Resolve list of items.
+    pub fn resolve_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(), String> {
+        let mut symbol_env = self.get_symbol_env(module);
+        for mut item in items.iter_mut() {
+            self.resolve_item(module, &mut symbol_env, &mut item)?;
+        };
+        Ok(())
+    }
+
     /// Resolve an item.
-    fn resolve_item(&mut self, item: &mut Item) -> Result<(), String> {
-        resolve_item(&mut self.ctx, &mut self.icx, &mut self.impl_env, &mut self.env, item)
+    pub fn resolve_item(&mut self, module: &RefModule, symbol_env: &mut SymbolEnv, item: &mut Item) -> Result<(), String> {
+        resolve_item(self, module, symbol_env, item)
             .map_err(|e| format!("resolve error: {e}"))
     }
 
-    /// Resolve and infer type scheme of an item.
-    fn infer_item(&mut self, item: &mut Item) -> Result<TypeScheme, String> {
-        self.resolve_item(item)?;
-        let ty = infer_item(&mut self.ctx, &mut self.icx, item)
+    /// Infer type scheme of an item.
+    /// \note `item` must be resolved before.
+    pub fn infer_item(&mut self, module: &RefModule, item: &mut Item) -> Result<TypeScheme, String> {
+        // self.resolve_item(module, symbol_env, item)?;
+        let ty = infer_item(self, &mut module.borrow_mut().icx, item)
             .map_err(|e| format!("infer error: {e}"))?;
 
-        apply_trait_impls_item(item, &mut self.ctx, &self.icx, &self.impl_env)
+        apply_trait_impls_item(self, &mut module.borrow_mut(), item)
             .map_err(|e| format!("infer error: {e}"))?;
 
-        Ok(generalize(&mut self.ctx, &self.icx, &ty))
+        Ok(generalize(&mut self.ctx, &module.borrow_mut().icx, &ty))
     }
 
-    /// Resolve, infer type scheme, and evaluate an item.
-    pub fn eval_item(&mut self, item: &mut Item) -> Result<(Value, TypeScheme), String> {
-        let sch = self.infer_item(item)?;
-        let val = eval_item(&item, &mut self.env);
+    /// Infer type scheme, and evaluate an item.
+    /// \note `item` must be resolved before.
+    pub fn eval_item(&mut self, module: &RefModule, item: &mut Item) -> Result<(Value, TypeScheme), String> {
+        let sch = self.infer_item(module, item)?;
+        let val = eval_item(&item, &mut module.borrow_mut().value_env);
         Ok((val, sch))
     }
 
     /// Parse, resolve, infer type scheme, and evaluate a program source code.
-    pub fn eval(&mut self, src: &str) -> Result<(Value, TypeScheme), String> {
-        let tops = parse(src).map_err(|e| format!("parse error: {e:?}"))?;
+    pub fn eval_mod(&mut self, module: &RefModule, src: &str) -> Result<(Value, TypeScheme), String> {
+        let mut items = parse(src).map_err(|e| format!("parse error: {e:?}"))?;
+        self.resolve_items(module, &mut items)?;
         let mut last = None;
-        for mut item in tops {
-            let res = self.eval_item(&mut item)?;
+        for mut item in items {
+            let res = self.eval_item(module, &mut item)?;
             last = Some(res);
         }
         last.ok_or_else(|| "program contained no expression".to_string())
+    }
+
+    pub fn eval(&mut self, src: &str) -> Result<(Value, TypeScheme), String> {
+        let module = self.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
+        self.eval_mod(&module, src)
     }
 }
 
@@ -107,8 +145,12 @@ pub fn parse_expr(src: &str) -> Result<Expr, String> {
 // -------------------------------------------------------------
 /// Infer type scheme of Expr AST. (for test)
 pub fn infer_expr_scheme(ast: &mut Expr) -> Result<TypeScheme, String> {
-    let mut boot = Bootstrap::new();
-    boot.infer_item(&mut Item::Expr(ast.clone()))
+    let mut phox = PhoxEngine::new();
+    let mut module = phox.roots.get("prelude").unwrap();
+    let mut symbol_env = SymbolEnv::new();
+    let mut item = Item::Expr(ast.clone());
+    phox.resolve_item(&mut module, &mut symbol_env, &mut item)?;
+    phox.infer_item(&mut module, &mut item)
 }
 
 /// Infer type of Expr AST. (for test)

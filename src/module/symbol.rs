@@ -1,0 +1,45 @@
+use super::Path;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Symbol {
+    Unresolved(Path),           // `foo`, `foo::Foo`
+    Local(String),              // `map`, `foo`, `bar`
+}
+
+impl Symbol {
+    pub fn unresolved<S: Into<String>>(name: S) -> Self {
+        Symbol::Unresolved(Path::relative(vec![name.into()]))
+    }
+    pub fn local<S: Into<String>>(name: S) -> Self {
+        Symbol::Local(name.into())
+    }
+}
+
+impl std::fmt::Display for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Symbol::Unresolved(path) => {
+                write!(f, "<unresolved {}>", path)
+            }
+            Symbol::Local(name) => {
+                write!(f, "{}", name)
+            }
+        }
+    }
+}
+
+impl Symbol {
+    pub fn pretty(&self) -> String {
+        match self {
+            Symbol::Local(name) => {
+                if name == "()" || name.starts_with('_') || name.starts_with(|c:char| c.is_ascii_alphabetic()) {
+                    format!("{}", name)
+                }
+                else {
+                    format!("({})", name)
+                }
+            }
+            other => other.to_string()
+        }
+    }
+}
