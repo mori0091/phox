@@ -97,8 +97,8 @@ impl <T: fmt::Display> fmt::Display for Scheme<T> {
     }
 }
 
-impl <T: SchemePretty + fmt::Display> Scheme<T> {
-    pub fn pretty(&self) -> String {
+impl <T: SchemePretty + Pretty + fmt::Display> Pretty for Scheme<T> {
+    fn pretty(&self) -> String {
         use std::collections::HashMap;
 
         // 量化変数に a, b, c... を割り当てる
@@ -108,12 +108,14 @@ impl <T: SchemePretty + fmt::Display> Scheme<T> {
             map.insert(*v, ch.to_string());
         }
 
-        let mut renamed = self.target.rename_type_var(&mut map).to_string();
+        // let mut renamed = self.target.rename_type_var(&mut map).to_string();
+        let mut renamed = self.target.rename_type_var(&mut map).pretty();
 
         if !self.constraints.is_empty() {
             let cs = self.constraints
                          .iter()
-                         .map(|c| c.rename_type_var(&mut map).to_string())
+                         // .map(|c| c.rename_type_var(&mut map).to_string())
+                         .map(|c| c.rename_type_var(&mut map).pretty())
                          .collect::<Vec<_>>();
             if cs.len() == 1 {
                 renamed = format!("{} => {}", cs[0], renamed);

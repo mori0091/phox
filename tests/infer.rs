@@ -3,32 +3,33 @@ use phox::typesys::Type;
 
 #[test]
 fn test_lit_unit() {
-    assert_eq!(check_expr_type("()"), Ok(Type::local_con("()")));
+    assert_eq!(check_expr_type("()"), Ok(Type::unit()));
 }
 
 #[test]
 fn test_lit_true() {
-    assert_eq!(check_expr_type("true"), Ok(Type::local_con("Bool")));
+    assert_eq!(check_expr_type("true"), Ok(Type::bool_()));
 }
 
 #[test]
 fn test_lit_false() {
-    assert_eq!(check_expr_type("false"), Ok(Type::local_con("Bool")));
+    assert_eq!(check_expr_type("false"), Ok(Type::bool_()));
 }
 
 #[test]
 fn test_lit_int() {
-    assert_eq!(check_expr_type("123"), Ok(Type::local_con("Int")));
+    assert_eq!(check_expr_type("123"), Ok(Type::int()));
 }
 
 #[test]
 fn test_simple_let() {
-    assert_eq!(check_expr_type("{ let x = 5 ; x + 1 }"), Ok(Type::local_con("Int")));
+    assert_eq!(check_expr_type("{ let x = 5 ; x + 1 }"), Ok(Type::int()));
 }
 
 #[test]
 fn test_var() {
-    assert_eq!(check_expr_type("foo"), Err("infer error: UnboundVariable(Local(\"foo\"))".into()));
+    let err = check_expr_type("foo").unwrap_err();
+    assert!(format!("{}", err).contains("infer error: UnboundVariable"));
 }
 
 #[test]

@@ -1,11 +1,6 @@
 mod env;
 pub use env::ValueEnv;
-pub use env::{
-    initial_env,
-    make_i64_arith_op,
-    make_i64_cmp_op,
-    make_constructor,
-};
+pub use env::make_constructor;
 
 mod value;
 pub use value::Value;

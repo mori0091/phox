@@ -106,8 +106,8 @@ impl SchemePretty for TraitHead {
     }
 }
 
-impl TraitHead {
-    pub fn pretty(&self) -> String {
+impl Pretty for TraitHead {
+    fn pretty(&self) -> String {
         self.rename_type_var(&mut HashMap::new()).to_string()
     }
 }

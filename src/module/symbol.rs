@@ -2,8 +2,8 @@ use super::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Symbol {
-    Unresolved(Path),           // `foo`, `foo::Foo`
-    Local(String),              // `map`, `foo`, `bar`
+    Unresolved(Path),   // `foo`, `foo::Foo`
+    Local(String),      // `map`, `foo`, `bar`
 }
 
 impl Symbol {
@@ -22,6 +22,7 @@ impl std::fmt::Display for Symbol {
                 write!(f, "<unresolved {}>", path)
             }
             Symbol::Local(name) => {
+                let name = name.split("::").last().unwrap().to_string();
                 write!(f, "{}", name)
             }
         }
@@ -32,6 +33,7 @@ impl Symbol {
     pub fn pretty(&self) -> String {
         match self {
             Symbol::Local(name) => {
+                let name = name.split("::").last().unwrap().to_string();
                 if name == "()" || name.starts_with('_') || name.starts_with(|c:char| c.is_ascii_alphabetic()) {
                     format!("{}", name)
                 }

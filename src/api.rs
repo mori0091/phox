@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
 use lalrpop_util::ParseError;
+
+mod bootstrap;
+use bootstrap::*;
+
 use crate::grammar::*;
 
 use crate::syntax::ast::*;
@@ -10,6 +14,8 @@ use crate::syntax::token::*;
 use crate::module::*;
 use crate::resolve::*;
 use crate::typesys::*;
+pub use crate::typesys::Pretty;
+
 use crate::interpreter::*;
 
 use crate::prelude::*;
@@ -19,8 +25,8 @@ pub const DEFAULT_USER_ROOT_MODULE_NAME: &str = "__main__";
 pub struct PhoxEngine {
     pub ctx: TypeContext,
     pub roots: RootModules,
-    pub global_symbol_env: SymbolEnv,
-    pub module_symbol_envs: HashMap<Path, SymbolEnv>,
+    pub extern_symbol_envs: HashMap<Path, SymbolEnv>, // extern symbol table for each modules
+    pub module_symbol_envs: HashMap<Path, SymbolEnv>, // local symbol table for each modules
     pub impl_member_env: TraitMemberEnv, // implメンバの型スキーム集合 (ex. "f": { ∀ Int. Foo Int => Int -> Int, ∀ Bool. Foo Bool => Bool -> Bool })
     pub impl_env: ImplEnv,
 }
@@ -30,22 +36,26 @@ impl PhoxEngine {
         let mut phox = PhoxEngine {
             ctx: TypeContext::new(),
             roots: RootModules::new(),
-            global_symbol_env: SymbolEnv::new(),
+            extern_symbol_envs: HashMap::new(),
             module_symbol_envs: HashMap::new(),
             impl_member_env: TraitMemberEnv::new(),
             impl_env: ImplEnv::new(),
         };
         let prelude = Module::new_root("prelude");
+        bootstrap(&mut phox, &prelude).expect("fatal error");
         phox.roots.add(prelude);
-        let mut prelude = phox.roots.get("prelude").unwrap();
-        phox.eval_mod(&mut prelude, PRELUDE).unwrap();
+        {
+            let mut prelude = phox.roots.get("prelude").unwrap();
+            phox.eval_mod(&mut prelude, PRELUDE).unwrap();
+        }
 
         let usermod = Module::new_root(DEFAULT_USER_ROOT_MODULE_NAME);
         phox.roots.add(usermod);
-
-        // import `prelude` automatically.
-        let mut usermod = phox.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
-        phox.eval_mod(&mut usermod, "use ::prelude::*;").unwrap();
+        {
+            // import `prelude` automatically.
+            let mut usermod = phox.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
+            phox.eval_mod(&mut usermod, "use ::prelude::*;").unwrap();
+        }
 
         phox
     }
@@ -74,6 +84,14 @@ impl PhoxEngine {
     pub fn get_symbol_env(&mut self, module: &RefModule) -> SymbolEnv {
         let path = module.borrow().path();
         self.module_symbol_envs
+            .entry(path)
+            .or_insert_with(SymbolEnv::new)
+            .clone()
+    }
+    /// Get "extern" SymbolEnv of the module.
+    pub fn get_extern_symbol_env(&mut self, module: &RefModule) -> SymbolEnv {
+        let path = module.borrow().path();
+        self.extern_symbol_envs
             .entry(path)
             .or_insert_with(SymbolEnv::new)
             .clone()
@@ -146,8 +164,8 @@ pub fn parse_expr(src: &str) -> Result<Expr, String> {
 /// Infer type scheme of Expr AST. (for test)
 pub fn infer_expr_scheme(ast: &mut Expr) -> Result<TypeScheme, String> {
     let mut phox = PhoxEngine::new();
-    let mut module = phox.roots.get("prelude").unwrap();
-    let mut symbol_env = SymbolEnv::new();
+    let mut module = phox.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
+    let mut symbol_env = phox.get_symbol_env(&module);
     let mut item = Item::Expr(ast.clone());
     phox.resolve_item(&mut module, &mut symbol_env, &mut item)?;
     phox.infer_item(&mut module, &mut item)

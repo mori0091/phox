@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use crate::typesys::*;
 use crate::syntax::ast::*;
 use super::*;
 
@@ -59,9 +60,9 @@ pub fn eval_expr(expr: &Expr, env: &ValueEnv) -> Value {
                    if let Some(ty) = &expr.ty {
                        use crate::typesys::TypeScheme;
                        let sch = TypeScheme::mono(ty.clone());
-                       panic!("unbound variable: {}: {}", name, sch.pretty())
+                       panic!("unbound variable: {}: {}", name.pretty(), sch.pretty())
                    } else {
-                       panic!("unbound variable: {}", name)
+                       panic!("unbound variable: {}", name.pretty())
                    }
                })
         }

@@ -184,9 +184,9 @@ impl TypeContext {
         match pat {
             Pat::Var(_) | Pat::Wildcard => Type::Var(self.fresh_type_var_id()),
             Pat::Lit(lit) => match lit {
-                Lit::Unit => Type::local_con("()"),
-                Lit::Bool(_) => Type::local_con("Bool"),
-                Lit::Int(_) => Type::local_con("Int"),
+                Lit::Unit => Type::unit(),
+                Lit::Bool(_) => Type::bool_(),
+                Lit::Int(_) => Type::int(),
             },
             Pat::Tuple(ps) => {
                 let ts = ps.iter().map(|p| self.fresh_type_for_pattern(p)).collect();

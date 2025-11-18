@@ -1,4 +1,5 @@
 use crate::api;
+use crate::typesys::*;
 
 use lalrpop_util::ParseError;
 
@@ -157,9 +158,10 @@ fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
                 }
                 println!();
             }
-            {
-                println!("GLOBAL");
-                let map = phox.global_symbol_env.clone_map();
+            println!("EXTERN");
+            for (path, symbol_env) in phox.extern_symbol_envs.iter() {
+                println!("mod {};", path.pretty());
+                let map = symbol_env.clone_map();
                 let mut syms = map.iter().collect::<Vec<_>>();
                 syms.sort_by_key(|(path, _)| path.pretty());
                 for (path, symbol) in syms.iter() {

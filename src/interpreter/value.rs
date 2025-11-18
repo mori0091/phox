@@ -68,8 +68,7 @@ impl fmt::Display for Value {
                     // 引数が複雑なら括弧を付ける
                     let inner: Vec<String> = args.iter().map(|v| {
                         match v {
-                            Value::Lit(_)  => v.to_string(),
-                            Value::Record(_)  => v.to_string(),
+                            Value::Lit(_) | Value::Tuple(_) | Value::Record(_)  => v.to_string(),
                             Value::Con(_, ref a) if a.is_empty() => v.to_string(),
                             _ => format!("({})", v),
                         }

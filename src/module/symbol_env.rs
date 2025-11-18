@@ -9,11 +9,12 @@ pub type Binding = HashMap<Path, Symbol>;
 #[derive(Clone)]
 pub struct SymbolEnv {
     map: Rc<RefCell<Binding>>,
+    local: bool,
 }
 
 impl SymbolEnv {
     pub fn new() -> Self {
-        SymbolEnv { map: Rc::new(RefCell::new(HashMap::new())) }
+        SymbolEnv { map: Rc::new(RefCell::new(HashMap::new())), local: false, }
     }
 
     pub fn insert(&self, k: Path, v: Symbol) {
@@ -33,6 +34,10 @@ impl SymbolEnv {
     }
 
     pub fn duplicate(&self) -> SymbolEnv {
-        SymbolEnv { map: Rc::new(RefCell::new(self.clone_map())) }
+        SymbolEnv { map: Rc::new(RefCell::new(self.clone_map())), local: true, }
+    }
+
+    pub fn is_local(&self) -> bool {
+        self.local
     }
 }

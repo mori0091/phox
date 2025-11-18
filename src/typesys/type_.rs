@@ -18,13 +18,13 @@ pub enum Type {
 
 impl Type {
     pub fn unit() -> Self {
-        Type::local_con("()")
+        Type::local_con("::prelude::()")
     }
     pub fn bool_() -> Self {
-        Type::local_con("Bool")
+        Type::local_con("::prelude::Bool")
     }
     pub fn int() -> Self {
-        Type::local_con("Int")
+        Type::local_con("::prelude::Int")
     }
     pub fn var(id: TypeVarId) -> Self {
         Type::Var(id)
@@ -173,7 +173,10 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Type::Var(v) => write!(f, "{}", v),
-            Type::Con(name) => write!(f, "{}", name),
+            Type::Con(name) => {
+                let name = name.to_string().split("::").last().unwrap().to_string();
+                write!(f, "{}", name)
+            }
             Type::Fun(a, b) => {
                 // 左側は必要なら括弧
                 match **a {
@@ -251,10 +254,10 @@ impl SchemePretty for Type {
     }
 }
 
-impl Type {
-    pub fn pretty(&self) -> String {
+impl Pretty for Type {
+    fn pretty(&self) -> String {
         self.rename_type_var(&mut HashMap::new()).to_string()
-    }
+   }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
