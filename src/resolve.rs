@@ -30,7 +30,7 @@ pub fn resolve_item(
     }
 }
 
-pub fn register_trait(
+fn register_trait(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
@@ -49,8 +49,8 @@ pub fn register_trait(
               .insert(name, member_names);
     }
 
-    // let trait_name = global_symbol(phox, module, &raw.name);
-    let trait_name = Symbol::local(&raw.name);
+    let trait_name = make_symbol(phox, module, symbol_env, &raw.name)?;
+
     let mut vars = Vec::new();          // [id]
     let mut param_map = HashMap::new(); // {"a": id}
     let mut params = Vec::new();        // [Type::Var(id)]
@@ -73,7 +73,7 @@ pub fn register_trait(
             constraints: vec![head.clone()],
             target,
         };
-        let symbol = Symbol::local(&member.name);
+        let symbol = Symbol::local(&member.name); // <- \NOTE This must NOT be a unique symbol.
         module.borrow_mut().icx.trait_member_env
             .entry(symbol)
             .or_default()
@@ -107,7 +107,7 @@ fn check_impl_comflict(
     Ok(())
 }
 
-pub fn register_impl(
+fn register_impl(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
@@ -178,17 +178,6 @@ pub fn register_impl(
             target,
         };
 
-        // let mut subst = HashMap::new();
-        // for (t1, t2) in trait_head.params.iter().zip(impl_head.params.iter()) {
-        //     match t1 {
-        //         Type::Var(id) => {
-        //             subst.entry(*id).or_insert(t2.clone());
-        //         }
-        //         _ => {}
-        //     }
-        // }
-        // let impl_member_sch = trait_scheme_tmpl.scheme_ref().apply_subst(&subst);
-
         phox.impl_member_env
             .entry(sym)
             .or_default()
@@ -242,20 +231,14 @@ pub fn resolve_stmt(
                                     let alias = &name;
                                     let path = &m.borrow().path().concat(&[elem]);
                                     module.borrow_mut().add_alias(alias, path)?;
-                                    {
-                                        let mut symbol = Symbol::unresolved(alias);
-                                        resolve_symbol(phox, module, symbol_env, &mut symbol)?;
-                                    }
+                                    make_symbol(phox, module, symbol_env, &alias)?;
                                 }
                             }
                             PathComponent::Name(_name) => {
                                 let other_symbol_env = phox.get_symbol_env(&m);
                                 if let Some(_sym) = other_symbol_env.get(&rem) {
                                     module.borrow_mut().add_alias(&alias, path)?;
-                                    {
-                                        let mut symbol = Symbol::unresolved(alias);
-                                        resolve_symbol(phox, module, symbol_env, &mut symbol)?;
-                                    }
+                                    make_symbol(phox, module, symbol_env, &alias)?;
                                 } else {
                                     return Err(TypeError::UnknownPath(rem.clone()))
                                 }
@@ -277,7 +260,7 @@ pub fn resolve_stmt(
     }
 }
 
-pub fn resolve_pat(
+fn resolve_pat(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
@@ -311,6 +294,26 @@ pub fn resolve_pat(
     }
 }
 
+pub fn make_top_level_symbol(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    name: &str,
+) -> Result<Symbol, TypeError> {
+    let symbol_env = &mut phox.get_symbol_env(module);
+    make_symbol(phox, module, symbol_env, name)
+}
+
+pub fn make_symbol(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    symbol_env: &mut SymbolEnv,
+    name: &str,
+) -> Result<Symbol, TypeError> {
+    let mut symbol = Symbol::unresolved(name);
+    resolve_symbol(phox, module, symbol_env, &mut symbol)?;
+    Ok(symbol)
+}
+
 pub fn resolve_symbol(
     phox: &mut PhoxEngine,
     module: &RefModule,
@@ -323,22 +326,40 @@ pub fn resolve_symbol(
             Path::Relative(_) => {
                 if let Some(s) = symbol_env.get(&path) {
                     *symbol = s.clone();
-                } else {
+                }
+                else {
+                    // Is an alias contained in the path?
                     let tmp_absolute_path = module.borrow().resolve_alias(&path);
                     if let Some(alias_path) = tmp_absolute_path {
                         let mut sym = Symbol::Unresolved(alias_path);
                         resolve_symbol(phox, module, symbol_env, &mut sym)?;
                         *symbol = sym;
                     }
+                    // Otherwise, module top-level symbol, trait member, or local symbol
                     else {
-                        let local = Symbol::Local(path.to_string());
-                        symbol_env.insert(path.clone(), local.clone());
-                        *symbol = local;
+                        let name = path.to_string();
+                        // Is a known trait member's name?
+                        if module.borrow().trait_members.values().any(|v| v.contains(&name)) {
+                            let sym = Symbol::local(&name);
+                            *symbol = sym;
+                        }
+                        // Is local?
+                        else if symbol_env.is_local() {
+                            let sym = Symbol::local(&name);
+                            symbol_env.insert(path.clone(), sym.clone());
+                            *symbol = sym;
+                        }
+                        // module top-level symbol
+                        else {
+                            let sym = Symbol::Local(module.borrow().path().concat_path(&path).pretty());
+                            symbol_env.insert(path.clone(), sym.clone());
+                            *symbol = sym;
+                        }
                     }
                 }
             }
             Path::Absolute(ref _xs) => {
-                if let Some(global_sym) = phox.global_symbol_env.get(&path) {
+                if let Some(global_sym) = phox.get_extern_symbol_env(module).get(&path) {
                     *symbol = global_sym.clone();
                 }
                 else {
@@ -360,21 +381,21 @@ pub fn resolve_symbol(
                             });
                         }
                         Some((m, Some(rem))) if rem.len() == 1 => {
-                            let name = rem.to_string();
-                            let target_sym = Symbol::local(&name);
-                            let local_sym = target_sym.clone();
+                            let target_sym = phox.get_symbol_env(&m).get(&rem).unwrap();
+                            let extern_sym = target_sym.clone(); // <- \NOTE may be an "extern" symbol?
 
+                            // is Type constructor ?
                             if let Some(k) = m.borrow().icx.kind_env.get(&target_sym) {
-                                module.borrow_mut().icx.kind_env.insert(local_sym.clone(), k.clone());
+                                module.borrow_mut().icx.kind_env.insert(extern_sym.clone(), k.clone());
 
-                                *symbol = local_sym.clone();
-                                phox.global_symbol_env.insert(path, local_sym);
+                                *symbol = extern_sym.clone();
+                                phox.get_extern_symbol_env(module).insert(path, extern_sym);
                             }
                             // is Trait name ?
-                            else if let Some(xs) = m.borrow().trait_members.get(&name) {
-                                module.borrow_mut().trait_members.insert(name.clone(), xs.clone());
+                            else if let Some(xs) = m.borrow().trait_members.get(&rem.to_string()) {
+                                module.borrow_mut().trait_members.insert(rem.to_string(), xs.clone());
                                 for member_name in xs.iter() {
-                                    let member_sym = Symbol::local(member_name);
+                                    let member_sym = Symbol::local(member_name); // <- \NOTE This must NOT be a unique symbol
                                     if let Some(member_schemes) = m.borrow().icx.trait_member_env.get(&member_sym) {
                                         module.borrow_mut()
                                               .icx
@@ -386,18 +407,18 @@ pub fn resolve_symbol(
                                     // \TODO import `impl_member_env`
                                 }
 
-                                *symbol = local_sym.clone();
-                                phox.global_symbol_env.insert(path, local_sym);
+                                *symbol = extern_sym.clone();
+                                phox.get_extern_symbol_env(module).insert(path, extern_sym);
                             }
                             // is Data constructor or Variable ?
                             else if let Some(ty_sch) = m.borrow().icx.type_env.get(&target_sym).cloned() {
-                                module.borrow_mut().icx.type_env.insert(local_sym.clone(), ty_sch);
+                                module.borrow_mut().icx.type_env.insert(extern_sym.clone(), ty_sch);
                                 if let Some(val) = m.borrow().value_env.get(&target_sym) {
-                                    module.borrow_mut().value_env.insert(local_sym.clone(), val);
+                                    module.borrow_mut().value_env.insert(extern_sym.clone(), val);
                                 }
 
-                                *symbol = local_sym.clone();
-                                phox.global_symbol_env.insert(path, local_sym);
+                                *symbol = extern_sym.clone();
+                                phox.get_extern_symbol_env(module).insert(path, extern_sym);
                             }
                             else {
                                 return Err(TypeError::UnknownPath(path.clone()));
@@ -516,7 +537,7 @@ pub fn resolve_expr(
     }
 }
 
-pub fn resolve_raw_type_decl(
+fn resolve_raw_type_decl(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
@@ -537,8 +558,7 @@ pub fn resolve_raw_type_decl(
                 let rv = resolve_raw_variant(phox, module, symbol_env, v, &param_map)?;
                 resolved_variants.push(rv);
             }
-            let mut symbol = Symbol::unresolved(name);
-            resolve_symbol(phox, module, symbol_env, &mut symbol)?;
+            let symbol = make_symbol(phox, module, symbol_env, &name)?;
             Ok(TypeDecl::SumType {
                 name: symbol,
                 params: param_ids,
@@ -549,7 +569,7 @@ pub fn resolve_raw_type_decl(
 }
 
 /// RawVariant を解決して Variant に変換する
-pub fn resolve_raw_variant(
+fn resolve_raw_variant(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
@@ -558,18 +578,16 @@ pub fn resolve_raw_variant(
 ) -> Result<Variant, TypeError> {
     let v = match raw {
         RawVariant::Unit(name) => {
-            let mut symbol = Symbol::unresolved(name);
-            resolve_symbol(phox, module, symbol_env, &mut symbol)?;
+            let symbol = make_symbol(phox, module, symbol_env, &name)?;
             Variant::Unit(symbol)
         }
         RawVariant::Tuple(name, elems) => {
+            let symbol = make_symbol(phox, module, symbol_env, &name)?;
             let mut elems2 = Vec::new();
             for t in elems.iter() {
                 let ty = resolve_raw_type(phox, module, symbol_env, t, &mut param_map.clone())?;
                 elems2.push(ty);
             }
-            let mut symbol = Symbol::unresolved(name);
-            resolve_symbol(phox, module, symbol_env, &mut symbol)?;
             Variant::Tuple(symbol, elems2)
         }
     };
@@ -577,7 +595,7 @@ pub fn resolve_raw_variant(
 }
 
 /// RawType を解決して Type に変換する
-pub fn resolve_raw_type(
+fn resolve_raw_type(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
@@ -592,8 +610,7 @@ pub fn resolve_raw_type(
             Type::Var(*id)
         }
         RawType::ConName(name) => {
-            let mut symbol = Symbol::unresolved(name);
-            resolve_symbol(phox, module, symbol_env, &mut symbol)?;
+            let symbol = make_symbol(phox, module, symbol_env, &name)?;
             Type::Con(symbol)
         }
         RawType::App(f, x) => {
@@ -628,7 +645,7 @@ pub fn resolve_raw_type(
 
 use crate::interpreter::*;
 
-pub fn register_type_decl(
+fn register_type_decl(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
@@ -640,7 +657,7 @@ pub fn register_type_decl(
     Ok(())
 }
 
-pub fn register_type(decl: &TypeDecl, icx: &mut InferCtx) {
+fn register_type(decl: &TypeDecl, icx: &mut InferCtx) {
     match decl {
         TypeDecl::SumType { name, params, variants } => {
             // kind を構築
@@ -658,7 +675,7 @@ pub fn register_type(decl: &TypeDecl, icx: &mut InferCtx) {
     }
 }
 
-pub fn register_variants(decl: &TypeDecl, env: &mut ValueEnv) {
+fn register_variants(decl: &TypeDecl, env: &mut ValueEnv) {
     match decl {
         TypeDecl::SumType { name:_, params:_, variants } => {
             // 各コンストラクタを登録
@@ -674,21 +691,21 @@ pub fn register_variants(decl: &TypeDecl, env: &mut ValueEnv) {
     }
 }
 
-pub fn resolve_raw_trait_head(
+fn resolve_raw_trait_head(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawTraitHead,
     param_map: &HashMap<String, TypeVarId>,
 ) -> Result<TraitHead, TypeError> {
+    let symbol = make_symbol(phox, module, symbol_env, &raw.name)?;
     let mut params = Vec::new();
     for t in raw.params.iter() {
         let ty = resolve_raw_type(phox, module, symbol_env, t, &mut param_map.clone())?;
         params.push(ty);
     }
-    let mut symbol = Symbol::unresolved(&raw.name.clone());
-    // eprintln!("before >> {:?}", symbol);
-    resolve_symbol(phox, module, symbol_env, &mut symbol)?;
-    // eprintln!("after  >> {:?}", symbol);
-    Ok(TraitHead { name: symbol, params })
+    Ok(TraitHead {
+        name: symbol,
+        params,
+    })
 }

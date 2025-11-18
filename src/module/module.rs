@@ -48,8 +48,8 @@ impl Module {
         Rc::new(RefCell::new(Module {
             name: name.to_string(),
             trait_members: HashMap::new(),
-            icx: InferCtx::initial(),
-            value_env: initial_env(),
+            icx: InferCtx::new(),
+            value_env: ValueEnv::new(),
             submods: HashMap::new(),
             _exports: HashSet::new(),
             using: HashMap::new(),

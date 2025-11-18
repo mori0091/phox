@@ -12,6 +12,7 @@ pub use repr::Repr;
 
 mod scheme_pretty;
 pub use scheme_pretty::SchemePretty;
+pub use scheme_pretty::Pretty;
 
 mod type_;
 pub use type_::{Type, TypeVarId};

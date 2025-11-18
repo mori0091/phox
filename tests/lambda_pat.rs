@@ -1,4 +1,4 @@
-use phox::api::eval;
+use phox::api::*;
 
 #[test]
 fn test_lambda_var_pattern_identity() {

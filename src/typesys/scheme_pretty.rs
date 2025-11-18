@@ -4,3 +4,7 @@ use super::TypeVarId;
 pub trait SchemePretty {
     fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self;
 }
+
+pub trait Pretty {
+    fn pretty(&self) -> String;
+}
