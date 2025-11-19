@@ -1,8 +1,10 @@
+use crate::module::Symbol;
+
 use super::Expr;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RawTraitHead {
-    pub name: String,           // trait name (ex. Eq)
+    pub name: Symbol,           // trait name (ex. Eq)
     pub params: Vec<RawType>,   // instance type params (ex. [Int])
 }
 
@@ -21,7 +23,7 @@ pub struct RawTraitMemberDecl{
 
 #[derive(Debug, Clone)]
 pub struct RawImplDecl {
-    pub name: String,
+    pub name: Symbol,
     pub params: Vec<RawType>,
     pub members: Vec<RawImplMemberDecl>,
 }
@@ -69,7 +71,7 @@ pub enum RawType {
     VarName(String),
 
     /// 型コンストラクタ (例: "Int", "Option")
-    ConName(String),
+    ConName(Symbol),
 
     /// 型適用 (例: "Option a", "Result a b")
     App(Box<RawType>, Box<RawType>),

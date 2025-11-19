@@ -13,6 +13,16 @@ impl Symbol {
     pub fn local<S: Into<String>>(name: S) -> Self {
         Symbol::Local(name.into())
     }
+    // === for premitive type ===
+    pub fn unit() -> Symbol {
+        Symbol::local("::prelude::()")
+    }
+    pub fn bool_() -> Symbol {
+        Symbol::local("::prelude::Bool")
+    }
+    pub fn int() -> Symbol {
+        Symbol::local("::prelude::Int")
+    }
 }
 
 impl std::fmt::Display for Symbol {

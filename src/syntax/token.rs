@@ -84,6 +84,9 @@ pub enum Token {
     #[token("!"    , priority = 3)]  ExclamationMark,
 
     // --- 識別子・リテラル ---
+    #[regex(r"[a-z_][a-zA-Z0-9_]*::", |lex| lex.slice().trim_end_matches("::").to_string())]
+    ModIdent(String),
+
     #[regex(r"[a-z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
     Ident(String),
 

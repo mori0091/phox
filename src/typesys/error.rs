@@ -10,7 +10,7 @@ pub enum TypeError {
     Expeted { expected: String, actual: String },
 
     UnknownPath(Path),
-    UnknownTrait(String),
+    UnknownTrait(Symbol),
     UnknownTraitMember(String),
     ConflictImpl { it: TraitHead, other: TraitHead },
     ConflictAlias { name: String, other: Path },

@@ -19,6 +19,9 @@ impl Pat {
     pub fn unresolved_con<S: Into<String>>(s: S, args: Vec<Pat>) -> Self {
         Pat::Con(Symbol::unresolved(s), args)
     }
+    pub fn unresolved_qcon(path: Path, args: Vec<Pat>) -> Self {
+        Pat::Con(Symbol::Unresolved(path), args)
+    }
 }
 
 impl fmt::Display for Pat {
