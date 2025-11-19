@@ -17,23 +17,23 @@ pub enum Type {
 }
 
 impl Type {
+    fn local_con<S: Into<String>>(s: S) -> Self {
+        Type::Con(Symbol::Local(s.into()))
+    }
     pub fn unit() -> Self {
-        Type::local_con("::prelude::()")
+        Type::Con(Symbol::unit())
     }
     pub fn bool_() -> Self {
-        Type::local_con("::prelude::Bool")
+        Type::Con(Symbol::bool_())
     }
     pub fn int() -> Self {
-        Type::local_con("::prelude::Int")
+        Type::Con(Symbol::int())
     }
     pub fn var(id: TypeVarId) -> Self {
         Type::Var(id)
     }
     pub fn unresolved_con<S: Into<String>>(s: S) -> Self {
         Type::Con(Symbol::Unresolved(Path::relative(vec![s.into()])))
-    }
-    pub fn local_con<S: Into<String>>(s: S) -> Self {
-        Type::Con(Symbol::Local(s.into()))
     }
     pub fn app(f: Type, x: Type) -> Self {
         Type::App(Box::new(f), Box::new(x))
@@ -173,10 +173,7 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Type::Var(v) => write!(f, "{}", v),
-            Type::Con(name) => {
-                let name = name.to_string().split("::").last().unwrap().to_string();
-                write!(f, "{}", name)
-            }
+            Type::Con(name) => write!(f, "{}", name),
             Type::Fun(a, b) => {
                 // 左側は必要なら括弧
                 match **a {

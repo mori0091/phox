@@ -48,6 +48,9 @@ impl Expr {
     pub fn unresolved_var<S: Into<String>>(s: S) -> Self {
         Expr::expr(ExprBody::Var(Symbol::unresolved(s)))
     }
+    pub fn unresolved_qvar(path: Path) -> Self {
+        Expr::expr(ExprBody::Var(Symbol::Unresolved(path)))
+    }
     pub fn app(f: Expr, x: Expr) -> Self {
         Expr::expr(ExprBody::App(Box::new(f), Box::new(x)))
     }

@@ -72,6 +72,7 @@ extern {
         "!"  =>  Token::ExclamationMark,
 
         // --- 識別子・リテラル ---
+        "mod_ident"   => Token::ModIdent(<String>),
         "identifier" => Token::Ident(<String>),
         "Identifier" => Token::ConIdent(<String>),
         "int"        => Token::Int(<i64>),
@@ -81,11 +82,20 @@ extern {
     }
 }
 
+// ----------------------------------------------
+lambda: Token = {
+    "\\",
+    "λ",
+};
+
+
+// ----------------------------------------------
 pub Program: Vec<Item> = {
     ItemList,
 };
 
 // ----------------------------------------------
+// === items ===
 pub ItemList: Vec<Item> = {
     <mut v:(<Item> ";")*> <tail:Expr> => {
         v.push(Item::Expr(tail));
@@ -106,6 +116,7 @@ pub Item: Item = {
 };
 
 // ----------------------------------------------
+// === trait declarations ===
 TraitDecl: RawTraitDecl = {
     "trait" <name:ConIdent> <params:TypeParams> "{" <members:TraitMemberDecl+> "}"
         => RawTraitDecl { name: name, params: params, members: members, },
@@ -117,9 +128,10 @@ TraitMemberDecl: RawTraitMemberDecl = {
 };
 
 // ----------------------------------------------
+// === impl declarations ===
 ImplDecl: RawImplDecl = {
-    "impl" <name:ConIdent> <params:TypeAtom+> "{" <members:ImplMemberDecl+> "}"
-        => RawImplDecl { name: name, params: params, members: members, },
+    "impl" <name:PathCon> <params:TypeAtom+> "{" <members:ImplMemberDecl+> "}"
+        => RawImplDecl { name: Symbol::Unresolved(name), params: params, members: members, },
 };
 
 ImplMemberDecl: RawImplMemberDecl = {
@@ -128,6 +140,7 @@ ImplMemberDecl: RawImplMemberDecl = {
 };
 
 // ----------------------------------------------
+// === ADT type declarations ===
 TypeDecl: RawTypeDecl = {
     "type" <name:ConIdent> <params:TypeParams> "=" <variants:VariantList>
         => RawTypeDecl::SumType {
@@ -153,6 +166,8 @@ TypeParams: Vec<String> = {
     <vars:Ident*> => vars
 };
 
+// ----------------------------------------------
+// === data constructors ===
 VariantList: Vec<RawVariant> = {
     <mut vs:(<Variant> "|")*> <v:Variant> => {
         vs.push(v);
@@ -161,11 +176,6 @@ VariantList: Vec<RawVariant> = {
 };
 
 Variant: RawVariant = {
-    // VariantRecord,
-    VariantSimple,
-};
-
-VariantSimple: RawVariant = {
     <name:ConIdent> <ts:TypeAtom*> => {
         if ts.is_empty() {
             RawVariant::Unit(name)
@@ -176,6 +186,8 @@ VariantSimple: RawVariant = {
     }
 };
 
+// ----------------------------------------------
+// === types ===
 Type: RawType = {
     TypeFun,
 };
@@ -203,8 +215,8 @@ TypeVar: RawType = {
 };
 
 TypeCon: RawType = {
-    ConIdent => RawType::ConName(<>),
-    <"()"> => RawType::ConName("()".to_string()),
+    PathCon => RawType::ConName(Symbol::Unresolved(<>)),
+    <"()"> => RawType::ConName(Symbol::unit()), // Hmm..
 };
 
 TypeParen: RawType = {
@@ -225,43 +237,19 @@ TypeRecordField: (String, RawType) = {
 };
 
 // ----------------------------------------------
-lambda: Token = {
-    "\\",
-    "λ",
-};
-
-// ----------------------------------------------
-Stmt: Stmt = {
-    StmtMod,
-    StmtUse,
-    StmtLet,
-    StmtLetRec,
-};
-
-StmtMod: Stmt = {
-    "mod" <m:ModIdent> => Stmt::Mod(m),
-};
-
-StmtUse: Stmt = {
-    "use" <ps:PathGlob> => Stmt::Use(ps),
-};
-
+// === path-glob pattern for `use` statements. ===
 PathGlob: PathGlob = {
     "::" <ps:PathGlobNode> => PathGlob::Absolute(ps),
     <ps:PathGlobNode>      => PathGlob::Relative(ps),
 };
 
 PathGlobNode: PathGlobNode = {
-    <ps:(<ModIdent> "::")*> <leaf:PathGlobLeaf> => {
+    <ps:"mod_ident"*> <leaf:PathGlobLeaf> => {
         PathGlobNode::List(ps, leaf)
     },
-    <ps:(<ModIdent> "::")+> "{" <tree:SepByComma<PathGlobNode>> "}" => {
+    <ps:"mod_ident"+> "{" <tree:SepByComma<PathGlobNode>> "}" => {
         PathGlobNode::Tree(ps, tree)
     },
-};
-
-ModIdent: String = {
-    <"identifier">,
 };
 
 PathGlobLeaf: PathGlobLeaf = {
@@ -278,6 +266,54 @@ PathGlobLeaf: PathGlobLeaf = {
     },
 };
 
+// ----------------------------------------------
+// === path ===
+Path: Path = {
+    "::" <ps:PathList> => Path::absolute(ps),
+    <ps:PathList> => Path::relative(ps),
+};
+
+PathList: Vec<String> = {
+    <mut ps:"mod_ident"*> <leaf:PathLeaf> => {
+        ps.push(leaf);
+        ps
+    },
+};
+
+PathLeaf: String = {
+    ConIdent,
+    IdentOps,
+    <"identifier">,
+};
+
+PathCon: Path = {
+    <mut ps:"mod_ident"*> <leaf:ConIdent> => {
+        ps.push(leaf);
+        Path::relative(ps)
+    },
+    "::" <mut ps:"mod_ident"*> <leaf:ConIdent> => {
+        ps.push(leaf);
+        Path::absolute(ps)
+    },
+};
+
+// ----------------------------------------------
+// === statements ===
+Stmt: Stmt = {
+    StmtMod,
+    StmtUse,
+    StmtLet,
+    StmtLetRec,
+};
+
+StmtMod: Stmt = {
+    "mod" <m:"identifier"> => Stmt::Mod(m),
+};
+
+StmtUse: Stmt = {
+    "use" <ps:PathGlob> => Stmt::Use(ps),
+};
+
 StmtLet: Stmt = {
     "let" <p:Pat> "=" <e:Expr> => Stmt::Let(p, Box::new(e)),
 };
@@ -287,6 +323,7 @@ StmtLetRec: Stmt = {
 };
 
 // ----------------------------------------------
+// === expressions ===
 pub Expr: Expr = {
     Expr0,
 };
@@ -438,10 +475,9 @@ ExprApp: Expr = {
 
 // 原子的な式
 Atom: Expr = {
-    Lit => Expr::lit(<>),
-    Ident => Expr::unresolved_var(<>),
-    ConIdent => Expr::unresolved_var(<>),
     ExprParen,
+    ExprVar,
+    Lit => Expr::lit(<>),
     ExprTuple,
     ExprRecord,
     ExprTraitRecord,
@@ -452,6 +488,10 @@ Atom: Expr = {
 
 ExprParen: Expr = {
     "(" <e:Expr> ")" => e,
+};
+
+ExprVar: Expr = {
+    Path => Expr::unresolved_qvar(<>),
 };
 
 ExprTuple: Expr = {
@@ -470,8 +510,8 @@ ExprTraitRecord: Expr = {
 };
 
 TraitHead: RawTraitHead = {
-    <name:ConIdent> <params:TypeAtom+> => {
-        RawTraitHead { name, params }
+    <name:PathCon> <params:TypeAtom+> => {
+        RawTraitHead { name: Symbol::Unresolved(name), params }
     },
 };
 
@@ -496,6 +536,7 @@ ExprBlock: Expr = {
     },
 };
 
+// ----------------------------------------------
 // === pattern ===
 Pat: Pat = {
     Pat0,
@@ -507,7 +548,7 @@ Pat0: Pat = {
 };
 
 PatCon: Pat = {
-    <name:ConIdent> <args:PatAtom*> => Pat::unresolved_con(name, args),
+    <name:PathCon> <args:PatAtom*> => Pat::unresolved_qcon(name, args),
 };
 
 PatAtom: Pat = {
@@ -563,7 +604,11 @@ Int: i64 = {
 
 // === identifier ===
 Ident: String = {
+    IdentOps,
     <"identifier">,
+};
+
+IdentOps: String = {
     "(" <"infixOp"> ")",
     "(" "==" ")" => "==".to_string(),
     "(" "!=" ")" => "!=".to_string(),

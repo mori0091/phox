@@ -381,7 +381,7 @@ pub fn resolve_symbol(
                             });
                         }
                         Some((m, Some(rem))) if rem.len() == 1 => {
-                            let target_sym = phox.get_symbol_env(&m).get(&rem).unwrap();
+                            let target_sym = phox.get_symbol_env(&m).get(&rem).ok_or(TypeError::UnknownPath(path.clone()))?;
                             let extern_sym = target_sym.clone(); // <- \NOTE may be an "extern" symbol?
 
                             // is Type constructor ?
@@ -609,8 +609,9 @@ fn resolve_raw_type(
                 .or_insert_with(|| phox.ctx.fresh_type_var_id());
             Type::Var(*id)
         }
-        RawType::ConName(name) => {
-            let symbol = make_symbol(phox, module, symbol_env, &name)?;
+        RawType::ConName(symbol) => {
+            let mut symbol = symbol.clone();
+            resolve_symbol(phox, module, symbol_env, &mut symbol)?;
             Type::Con(symbol)
         }
         RawType::App(f, x) => {
@@ -698,7 +699,8 @@ fn resolve_raw_trait_head(
     raw: &RawTraitHead,
     param_map: &HashMap<String, TypeVarId>,
 ) -> Result<TraitHead, TypeError> {
-    let symbol = make_symbol(phox, module, symbol_env, &raw.name)?;
+    let mut symbol = raw.name.clone();
+    resolve_symbol(phox, module, symbol_env, &mut symbol)?;
     let mut params = Vec::new();
     for t in raw.params.iter() {
         let ty = resolve_raw_type(phox, module, symbol_env, t, &mut param_map.clone())?;
