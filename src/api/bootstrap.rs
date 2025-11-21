@@ -8,76 +8,86 @@ use crate::typesys::*;
 use crate::interpreter::*;
 
 pub fn bootstrap(phox: &mut PhoxEngine, module: &RefModule) -> Result<(), TypeError> {
-    add_primitive_type(module, make_top_level_symbol(phox, module, "()")?);
-    add_primitive_type(module, make_top_level_symbol(phox, module, "Bool")?);
-    add_primitive_type(module, make_top_level_symbol(phox, module, "Int")?);
+    add_primitive_type(phox, module, "()")?;
+    add_primitive_type(phox, module, "Bool")?;
+    add_primitive_type(phox, module, "Int")?;
 
     add_primitive_func(
+        phox,
         module,
-        make_top_level_symbol(phox, module, "__i64_eq__")?,
+        "__i64_eq__",
         make_i64_cmp_op(|a, b| a == b),
         Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
-    );
+    )?;
 
     add_primitive_func(
+        phox,
         module,
-        make_top_level_symbol(phox, module, "__i64_ne__")?,
+        "__i64_ne__",
         make_i64_cmp_op(|a, b| a != b),
         Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
-    );
+    )?;
 
     add_primitive_func(
+        phox,
         module,
-        make_top_level_symbol(phox, module, "__i64_le__")?,
+        "__i64_le__",
         make_i64_cmp_op(|a, b| a <= b),
         Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
-    );
+    )?;
 
     add_primitive_func(
+        phox,
         module,
-        make_top_level_symbol(phox, module, "__i64_lt__")?,
+        "__i64_lt__",
         make_i64_cmp_op(|a, b| a < b),
         Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
-    );
+    )?;
 
     add_primitive_func(
+        phox,
         module,
-        make_top_level_symbol(phox, module, "__i64_ge__")?,
+        "__i64_ge__",
         make_i64_cmp_op(|a, b| a >= b),
         Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
-    );
+    )?;
 
     add_primitive_func(
+        phox,
         module,
-        make_top_level_symbol(phox, module, "__i64_gt__")?,
+        "__i64_gt__",
         make_i64_cmp_op(|a, b| a > b),
         Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::bool_()), // (Int, Int) -> Bool
-    );
+    )?;
 
     add_primitive_func(
+        phox,
         module,
-        make_top_level_symbol(phox, module, "__i64_add__")?,
+        "__i64_add__",
         make_i64_arith_op(|a, b| a + b),
         Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::int()), // (Int, Int) -> Int
-    );
+    )?;
 
     add_primitive_func(
+        phox,
         module,
-        make_top_level_symbol(phox, module, "__i64_sub__")?,
+        "__i64_sub__",
         make_i64_arith_op(|a, b| a - b),
         Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::int()), // (Int, Int) -> Int
-    );
+    )?;
 
     add_primitive_func(
+        phox,
         module,
-        make_top_level_symbol(phox, module, "__i64_mul__")?,
+        "__i64_mul__",
         make_i64_arith_op(|a, b| a * b),
         Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::int()), // (Int, Int) -> Int
-    );
+    )?;
 
     add_primitive_func(
+        phox,
         module,
-        make_top_level_symbol(phox, module, "__i64_div__")?,
+        "__i64_div__",
         make_i64_arith_op(|a, b| {
             if b == 0 {
                 panic!("division by zero");
@@ -85,28 +95,32 @@ pub fn bootstrap(phox: &mut PhoxEngine, module: &RefModule) -> Result<(), TypeEr
             a / b
         }),
         Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::int()), // (Int, Int) -> Int
-    );
+    )?;
 
     add_primitive_func(
+        phox,
         module,
-        make_top_level_symbol(phox, module, "__i64_neg__")?,
+        "__i64_neg__",
         make_i64_unary_op(|x| -x),
         Type::fun(Type::int(), Type::int()),
-    );
+    )?;
 
     Ok(())
 }
 
-fn add_primitive_type(module: &RefModule, symbol: Symbol) {
-    module.borrow_mut().icx.kind_env.insert(symbol, Kind::Star);
+fn add_primitive_type(phox: &mut PhoxEngine, module: &RefModule, name: &str) -> Result<(), TypeError> {
+    let symbol = make_top_level_symbol(phox, module, name)?;
+    phox.get_infer_ctx(module).put_kind(symbol, Kind::Star);
+    Ok(())
 }
 
-fn add_primitive_func(module: &RefModule, symbol: Symbol, val: Value, ty: Type) {
-    module.borrow_mut().value_env.insert(
+fn add_primitive_func(phox: &mut PhoxEngine, module: &RefModule, name: &str, val: Value, ty: Type) -> Result<(), TypeError> {
+    let symbol = make_top_level_symbol(phox, module, name)?;
+    phox.get_value_env(module).insert(
         symbol.clone(),
         val
     );
-    module.borrow_mut().icx.type_env.insert(
+    phox.get_infer_ctx(module).put_type_scheme(
         symbol,
         TypeScheme {
             vars: vec![],
@@ -114,6 +128,7 @@ fn add_primitive_func(module: &RefModule, symbol: Symbol, val: Value, ty: Type) 
             target: ty,
         }
     );
+    Ok(())
 }
 
 /// 単項の整数演算子をBuiltinとして作る

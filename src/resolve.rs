@@ -74,10 +74,8 @@ fn register_trait(
             target,
         };
         let symbol = Symbol::local(&member.name); // <- \NOTE This must NOT be a unique symbol.
-        module.borrow_mut().icx.trait_member_env
-            .entry(symbol)
-            .or_default()
-            .insert(SchemeTemplate::new(sch));
+        phox.get_infer_ctx(module)
+            .put_trait_member_scheme(symbol, SchemeTemplate::new(sch));
     }
     Ok(())
 }
@@ -113,86 +111,83 @@ fn register_impl(
     symbol_env: &mut SymbolEnv,
     raw: &RawImplDecl,
 ) -> Result<(), TypeError> {
-    let mut param_map = HashMap::new();
-    for p in raw.params.iter() {
-        match p {
-            RawType::VarName(name) => {
+    let impl_head = {
+        let mut param_map = HashMap::new();
+        for p in raw.params.iter() {
+            if let RawType::VarName(name) = p {
                 param_map
                     .entry(name.clone())
                     .or_insert_with(|| {
                         phox.ctx.fresh_type_var_id()
                     });
             }
-            _ => {}
         }
-    }
-    let impl_head = resolve_raw_trait_head(phox, module, symbol_env, &raw.head(), &param_map)?;
-    let impl_head_sch = generalize(&mut phox.ctx, &module.borrow().icx, &impl_head);
+        resolve_raw_trait_head(phox, module, symbol_env, &raw.head(), &param_map)
+    }?;
+
+    let icx = &phox.get_infer_ctx(module);
+    let impl_head_sch = generalize(&mut phox.ctx, icx, &impl_head);
 
     // ----------------------------------------------------
     check_impl_comflict(phox, &impl_head_sch)?;
 
     // ----------------------------------------------------
+    let mut impls = HashMap::new();
+
     for raw_member in raw.members.iter() {
         let sym = Symbol::local(&raw_member.name);
+        let ty = {
+            let trait_scheme_tmpls = phox
+                .get_infer_ctx(module)
+                .get_trait_member_schemes(&sym)
+                .ok_or(TypeError::UnknownTraitMember(raw_member.name.clone()))?;
 
-        let trait_scheme_tmpls = module
-            .borrow()
-            .icx
-            .trait_member_env
-            .get(&sym)
-            .cloned()
-            .ok_or(TypeError::UnknownTraitMember(raw_member.name.clone()))?;
-        if trait_scheme_tmpls.is_empty() {
-            return Err(TypeError::UnknownTraitMember(raw_member.name.clone()));
-        }
-
-        let trait_scheme_tmpl = trait_scheme_tmpls
-            .iter()
-            .find(|tmpl| tmpl.scheme_ref().constraints[0].name == impl_head.name)
-            .ok_or(TypeError::UnknownTrait(raw.name.clone()))?;
-
-        let trait_head = &trait_scheme_tmpl.scheme_ref().constraints[0];
-        if impl_head.params.len() != trait_head.params.len() {
-            return Err(TypeError::ArityMismatch {
-                trait_name: trait_head.name.clone(),
-                member: raw_member.name.clone(),
-                expected: trait_head.params.len(),
-                actual: impl_head.params.len()
-            });
-        }
-
-        let mut subst: HashMap<TypeVarId, Type> = HashMap::new();
-        for (t1, t2) in trait_head.params.iter().zip(impl_head.params.iter()) {
-            if let Type::Var(id) = t1 {
-                subst.insert(*id, t2.clone());
+            if trait_scheme_tmpls.is_empty() {
+                return Err(TypeError::UnknownTraitMember(raw_member.name.clone()));
             }
-        }
 
-        let target = trait_scheme_tmpl.scheme_ref().target.apply_subst(&subst);
-        let constraints = vec![impl_head.clone()];
+            let trait_scheme_tmpl = trait_scheme_tmpls
+                .iter()
+                .find(|tmpl| tmpl.scheme_ref().constraints[0].name == impl_head.name)
+                .ok_or(TypeError::UnknownTrait(raw.name.clone()))?;
 
+            let trait_head = &trait_scheme_tmpl.scheme_ref().constraints[0];
+            if impl_head.params.len() != trait_head.params.len() {
+                return Err(TypeError::ArityMismatch {
+                    trait_name: trait_head.name.clone(),
+                    member: raw_member.name.clone(),
+                    expected: trait_head.params.len(),
+                    actual: impl_head.params.len()
+                });
+            }
+
+            let mut subst: HashMap<TypeVarId, Type> = HashMap::new();
+            for (t1, t2) in trait_head.params.iter().zip(impl_head.params.iter()) {
+                if let Type::Var(id) = t1 {
+                    subst.insert(*id, t2.clone());
+                }
+            }
+            trait_scheme_tmpl
+                .scheme_ref()
+                .target.apply_subst(&subst)
+        };
+        // ----------------------------------------------------
         let impl_member_sch = TypeScheme {
             vars: impl_head_sch.vars.clone(),
-            constraints,
-            target,
+            constraints: vec![impl_head.clone()],
+            target: ty,
         };
 
         phox.impl_member_env
-            .entry(sym)
+            .entry(sym.clone())
             .or_default()
             .insert(SchemeTemplate::new(impl_member_sch));
-    };
 
-    let mut member_map = HashMap::new();
-    for member in raw.members.iter() {
-        let mut expr = member.expr.clone();
+        let mut expr = raw_member.expr.as_ref().clone();
         resolve_expr(phox, module, symbol_env, &mut expr)?;
-        let sym = Symbol::local(&member.name);
-        member_map.insert(sym, *expr);
-    }
-
-    phox.impl_env.insert(impl_head_sch, member_map);
+        impls.insert(sym, expr);
+    };
+    phox.impl_env.insert(impl_head_sch, impls);
 
     Ok(())
 }
@@ -204,9 +199,13 @@ pub fn resolve_stmt(
     stmt: &mut Stmt,
 ) -> Result<(), TypeError> {
     match stmt {
-        Stmt::Mod(_m) => {
-            // todo!()
-            eprintln!(">> mod {}", _m);
+        Stmt::Mod(name, items) => {
+            let sub = &module.add_submod(name);
+            phox.eval_mod(sub, "use ::prelude::*;").unwrap();
+            if let Some(items) = items {
+                phox.resolve_items(sub, items)?;
+            }
+            phox.eval_mod(module, &format!("use {name};")).unwrap();
             Ok(())
         }
         Stmt::Use(pathglob) => {
@@ -216,7 +215,8 @@ pub fn resolve_stmt(
                         return Err(TypeError::UnknownPath(path.clone()))
                     }
                     Some((m, None)) => {
-                        module.borrow_mut().add_alias(&alias, &m.borrow().path())?;
+                        let p = m.borrow().path();
+                        module.borrow_mut().add_alias(&alias, &p)?;
                     }
                     Some((m, Some(rem))) => {
                         if rem.len() > 1 {
@@ -384,25 +384,13 @@ pub fn resolve_symbol(
                             let target_sym = phox.get_symbol_env(&m).get(&rem).ok_or(TypeError::UnknownPath(path.clone()))?;
                             let extern_sym = target_sym.clone(); // <- \NOTE may be an "extern" symbol?
 
-                            // is Type constructor ?
-                            if let Some(k) = m.borrow().icx.kind_env.get(&target_sym) {
-                                module.borrow_mut().icx.kind_env.insert(extern_sym.clone(), k.clone());
-
-                                *symbol = extern_sym.clone();
-                                phox.get_extern_symbol_env(module).insert(path, extern_sym);
-                            }
                             // is Trait name ?
-                            else if let Some(xs) = m.borrow().trait_members.get(&rem.to_string()) {
+                            if let Some(xs) = m.borrow().trait_members.get(&rem.to_string()) {
                                 module.borrow_mut().trait_members.insert(rem.to_string(), xs.clone());
                                 for member_name in xs.iter() {
                                     let member_sym = Symbol::local(member_name); // <- \NOTE This must NOT be a unique symbol
-                                    if let Some(member_schemes) = m.borrow().icx.trait_member_env.get(&member_sym) {
-                                        module.borrow_mut()
-                                              .icx
-                                              .trait_member_env
-                                              .entry(member_sym)
-                                              .or_default()
-                                              .extend(member_schemes.clone());
+                                    if let Some(member_schemes) = phox.get_infer_ctx(&m).get_trait_member_schemes(&member_sym) {
+                                        phox.get_infer_ctx(module).extend_trait_member_schemes(&member_sym, member_schemes);
                                     }
                                     // \TODO import `impl_member_env`
                                 }
@@ -411,11 +399,18 @@ pub fn resolve_symbol(
                                 phox.get_extern_symbol_env(module).insert(path, extern_sym);
                             }
                             // is Data constructor or Variable ?
-                            else if let Some(ty_sch) = m.borrow().icx.type_env.get(&target_sym).cloned() {
-                                module.borrow_mut().icx.type_env.insert(extern_sym.clone(), ty_sch);
-                                if let Some(val) = m.borrow().value_env.get(&target_sym) {
-                                    module.borrow_mut().value_env.insert(extern_sym.clone(), val);
+                            else if let Some(ty_sch) = phox.get_infer_ctx(&m).get_type_scheme(&target_sym) {
+                                phox.get_infer_ctx(module).put_type_scheme(extern_sym.clone(), ty_sch);
+                                if let Some(val) = phox.get_value_env(&m).get(&target_sym) {
+                                    phox.get_value_env(module).insert(extern_sym.clone(), val);
                                 }
+
+                                *symbol = extern_sym.clone();
+                                phox.get_extern_symbol_env(module).insert(path, extern_sym);
+                            }
+                            // is Type constructor ?
+                            else if let Some(k) = phox.get_infer_ctx(&m).get_kind(&target_sym) {
+                                phox.get_infer_ctx(module).put_kind(extern_sym.clone(), k.clone());
 
                                 *symbol = extern_sym.clone();
                                 phox.get_extern_symbol_env(module).insert(path, extern_sym);
@@ -653,8 +648,8 @@ fn register_type_decl(
     raw: &RawTypeDecl,
 ) -> Result<(), TypeError> {
     let decl = resolve_raw_type_decl(phox, module, symbol_env, raw)?;
-    register_type(&decl, &mut module.borrow_mut().icx);
-    register_variants(&decl, &mut module.borrow_mut().value_env);
+    register_type(&decl, &mut phox.get_infer_ctx(module));
+    register_variants(&decl, &mut phox.get_value_env(module));
     Ok(())
 }
 
@@ -666,11 +661,11 @@ fn register_type(decl: &TypeDecl, icx: &mut InferCtx) {
             for _ in params.iter().rev() {
                 kind = Kind::Fun(Box::new(Kind::Star), Box::new(kind));
             }
-            icx.kind_env.insert(name.clone(), kind);
+            icx.put_kind(name.clone(), kind);
             // 各コンストラクタを登録
             for v in variants {
                 let (ctor_name, ctor_scheme) = v.as_scheme(name, params);
-                icx.type_env.insert(ctor_name.clone(), ctor_scheme.clone());
+                icx.put_type_scheme(ctor_name.clone(), ctor_scheme.clone());
             }
         }
     }

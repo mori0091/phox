@@ -64,6 +64,14 @@ impl Path {
         }
     }
 
+    pub fn concat_str(&self, child: &[&str]) -> Path {
+        let ps = child
+            .iter()
+            .map(|s| PathComponent::Name(s.to_string()))
+            .collect::<Vec<_>>();
+        self.concat(&ps)
+    }
+
     pub fn concat_path(&self, other: &Path) -> Path {
         match other {
             Path::Absolute(_)  => other.clone(),
@@ -132,7 +140,7 @@ impl Path {
                         for (i, seg) in segments.iter().enumerate().skip(1) {
                             match seg {
                                 PathComponent::Name(name) => {
-                                    let tmp = m.borrow().get_submod(name);
+                                    let tmp = m.get_submod(name);
                                     if let Some(sub) = tmp {
                                         m = sub;
                                     } else {
@@ -155,7 +163,7 @@ impl Path {
                 for (i, seg) in segments.iter().enumerate() {
                     match seg {
                         PathComponent::Name(name) => {
-                            let tmp = m.borrow().get_submod(name);
+                            let tmp = m.get_submod(name);
                             if let Some(sub) = tmp {
                                 m = sub;
                             } else {

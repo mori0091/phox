@@ -27,6 +27,8 @@ pub struct PhoxEngine {
     pub roots: RootModules,
     pub extern_symbol_envs: HashMap<Path, SymbolEnv>, // extern symbol table for each modules
     pub module_symbol_envs: HashMap<Path, SymbolEnv>, // local symbol table for each modules
+    pub module_infer_ctxs: HashMap<Path, InferCtx>,   // kind_env, type_env, and trait_member_env for each modules
+    pub module_value_envs: HashMap<Path, ValueEnv>,   // value_env for each modules
     pub impl_member_env: TraitMemberEnv, // implメンバの型スキーム集合 (ex. "f": { ∀ Int. Foo Int => Int -> Int, ∀ Bool. Foo Bool => Bool -> Bool })
     pub impl_env: ImplEnv,
 }
@@ -38,6 +40,8 @@ impl PhoxEngine {
             roots: RootModules::new(),
             extern_symbol_envs: HashMap::new(),
             module_symbol_envs: HashMap::new(),
+            module_infer_ctxs: HashMap::new(),
+            module_value_envs: HashMap::new(),
             impl_member_env: TraitMemberEnv::new(),
             impl_env: ImplEnv::new(),
         };
@@ -80,14 +84,6 @@ pub fn eval(src: &str) -> Result<(Value, TypeScheme), String> {
 }
 
 impl PhoxEngine {
-    /// Get top-level SymbolEnv of the module.
-    pub fn get_symbol_env(&mut self, module: &RefModule) -> SymbolEnv {
-        let path = module.borrow().path();
-        self.module_symbol_envs
-            .entry(path)
-            .or_insert_with(SymbolEnv::new)
-            .clone()
-    }
     /// Get "extern" SymbolEnv of the module.
     pub fn get_extern_symbol_env(&mut self, module: &RefModule) -> SymbolEnv {
         let path = module.borrow().path();
@@ -96,9 +92,33 @@ impl PhoxEngine {
             .or_insert_with(SymbolEnv::new)
             .clone()
     }
+    /// Get top-level SymbolEnv of the module.
+    pub fn get_symbol_env(&mut self, module: &RefModule) -> SymbolEnv {
+        let path = module.borrow().path();
+        self.module_symbol_envs
+            .entry(path)
+            .or_insert_with(SymbolEnv::new)
+            .clone()
+    }
+    /// Get top-level InferCtx of the module.
+    pub fn get_infer_ctx(&mut self, module: &RefModule) -> InferCtx {
+        let path = module.borrow().path();
+        self.module_infer_ctxs
+            .entry(path)
+            .or_insert_with(InferCtx::new)
+            .clone()
+    }
+    /// Get top-level ValueEnv of the module.
+    pub fn get_value_env(&mut self, module: &RefModule) -> ValueEnv {
+        let path = module.borrow().path();
+        self.module_value_envs
+            .entry(path)
+            .or_insert_with(ValueEnv::new)
+            .clone()
+    }
 
     /// Resolve list of items.
-    pub fn resolve_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(), String> {
+    pub fn resolve_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(), TypeError> {
         let mut symbol_env = self.get_symbol_env(module);
         for mut item in items.iter_mut() {
             self.resolve_item(module, &mut symbol_env, &mut item)?;
@@ -107,36 +127,35 @@ impl PhoxEngine {
     }
 
     /// Resolve an item.
-    pub fn resolve_item(&mut self, module: &RefModule, symbol_env: &mut SymbolEnv, item: &mut Item) -> Result<(), String> {
+    pub fn resolve_item(&mut self, module: &RefModule, symbol_env: &mut SymbolEnv, item: &mut Item) -> Result<(), TypeError> {
         resolve_item(self, module, symbol_env, item)
-            .map_err(|e| format!("resolve error: {e}"))
     }
 
     /// Infer type scheme of an item.
     /// \note `item` must be resolved before.
-    pub fn infer_item(&mut self, module: &RefModule, item: &mut Item) -> Result<TypeScheme, String> {
-        // self.resolve_item(module, symbol_env, item)?;
-        let ty = infer_item(self, &mut module.borrow_mut().icx, item)
-            .map_err(|e| format!("infer error: {e}"))?;
-
-        apply_trait_impls_item(self, &mut module.borrow_mut(), item)
-            .map_err(|e| format!("infer error: {e}"))?;
-
-        Ok(generalize(&mut self.ctx, &module.borrow_mut().icx, &ty))
+    pub fn infer_item(&mut self, module: &RefModule, item: &mut Item) -> Result<TypeScheme, TypeError> {
+        let icx = &mut self.get_infer_ctx(module);
+        let ty = infer_item(self, module, icx, item)?;
+        apply_trait_impls_item(self, module, item)?;
+        Ok(generalize(&mut self.ctx, icx, &ty))
     }
 
     /// Infer type scheme, and evaluate an item.
     /// \note `item` must be resolved before.
     pub fn eval_item(&mut self, module: &RefModule, item: &mut Item) -> Result<(Value, TypeScheme), String> {
-        let sch = self.infer_item(module, item)?;
-        let val = eval_item(&item, &mut module.borrow_mut().value_env);
+        let sch = self.infer_item(module, item)
+                      .map_err(|e| format!("infer error: {e}"))?;
+        let env = &mut self.get_value_env(module);
+        let val = eval_item(self, module, env, &item);
         Ok((val, sch))
     }
 
     /// Parse, resolve, infer type scheme, and evaluate a program source code.
     pub fn eval_mod(&mut self, module: &RefModule, src: &str) -> Result<(Value, TypeScheme), String> {
-        let mut items = parse(src).map_err(|e| format!("parse error: {e:?}"))?;
-        self.resolve_items(module, &mut items)?;
+        let mut items = parse(src)
+            .map_err(|e| format!("parse error: {e:?}"))?;
+        self.resolve_items(module, &mut items)
+            .map_err(|e| format!("resolve error: {e}"))?;
         let mut last = None;
         for mut item in items {
             let res = self.eval_item(module, &mut item)?;
@@ -167,8 +186,10 @@ pub fn infer_expr_scheme(ast: &mut Expr) -> Result<TypeScheme, String> {
     let mut module = phox.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
     let mut symbol_env = phox.get_symbol_env(&module);
     let mut item = Item::Expr(ast.clone());
-    phox.resolve_item(&mut module, &mut symbol_env, &mut item)?;
+    phox.resolve_item(&mut module, &mut symbol_env, &mut item)
+        .map_err(|e| format!("resolve error: {e}"))?;
     phox.infer_item(&mut module, &mut item)
+        .map_err(|e| format!("infer error: {e}"))
 }
 
 /// Infer type of Expr AST. (for test)

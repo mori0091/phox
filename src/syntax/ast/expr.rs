@@ -108,7 +108,7 @@ impl fmt::Display for Expr {
             ExprBody::Match(expr, arms) => {
                 let s: Vec<String>
                     = arms.iter()
-                          .map(|(p, e)| format!("{} => {},", p, e))
+                          .map(|(p, e)| format!("  {} => {},", p, e))
                           .collect();
                 write!(f, "match ({}) {{\n{}\n}}", *expr, s.join("\n"))
             }

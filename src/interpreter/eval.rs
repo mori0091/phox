@@ -1,17 +1,24 @@
 use std::rc::Rc;
 
+use crate::api::PhoxEngine;
+use crate::module::*;
 use crate::typesys::*;
 use crate::syntax::ast::*;
 use super::*;
 
-pub fn eval_item(item: &Item, env: &mut ValueEnv) -> Value {
+pub fn eval_item(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    env: &mut ValueEnv,
+    item: &Item,
+) -> Value {
     match item {
         Item::Stmt(stmt) => {
-            eval_stmt(stmt, env);
+            eval_stmt(phox, module, env, stmt);
             Value::Lit(Lit::Unit)
         }
         Item::Expr(expr) => {
-            eval_expr(expr, env)
+            eval_expr(phox, module, env, expr)
         }
         _ => {
             // ignore
@@ -20,12 +27,31 @@ pub fn eval_item(item: &Item, env: &mut ValueEnv) -> Value {
     }
 }
 
-pub fn eval_stmt(stmt: &Stmt, env: &mut ValueEnv) {
+pub fn eval_stmt(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    env: &mut ValueEnv,
+    stmt: &Stmt,
+) {
     match stmt {
-        Stmt::Mod(_) => {},
         Stmt::Use(_) => {},
+        Stmt::Mod(name, items) => {
+            let sub = &module.get_submod(name).unwrap();
+            if let Some(items) = items {
+                let env2 = &mut phox.get_value_env(sub);
+                for mut item in items {
+                    eval_item(phox, sub, env2, &mut item);
+                }
+                // let mut last = None;
+                // for mut item in items {
+                //     let res = eval_item(phox, &sub, env2, &mut item);
+                //     last = Some(res);
+                // }
+                // last.ok_or_else(|| "program contained no expression".to_string())
+            }
+        },
         Stmt::Let(pat, expr) => {
-            let val = eval_expr(expr, env);
+            let val = eval_expr(phox, module, env, expr);
             if let Some(bindings) = match_pat(pat, &val) {
                 env.extend(&bindings);
             } else {
@@ -38,7 +64,7 @@ pub fn eval_stmt(stmt: &Stmt, env: &mut ValueEnv) {
                     env.insert(x.clone(), Value::Builtin(Rc::new(|_| {
                         panic!("recursive value used before initialization")
                     })));
-                    let val = eval_expr(expr, env);
+                    let val = eval_expr(phox, module, env, expr);
                     env.insert(x.clone(), val);
                 }
                 _ => panic!("let rec pattern not supported (only variable)"),
@@ -48,7 +74,12 @@ pub fn eval_stmt(stmt: &Stmt, env: &mut ValueEnv) {
 }
 
 /// 評価関数
-pub fn eval_expr(expr: &Expr, env: &ValueEnv) -> Value {
+pub fn eval_expr(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    env: &mut ValueEnv,
+    expr: &Expr,
+) -> Value {
     match &expr.body {
         // リテラル
         ExprBody::Lit(lit) => Value::Lit(lit.clone()),
@@ -78,15 +109,15 @@ pub fn eval_expr(expr: &Expr, env: &ValueEnv) -> Value {
 
         // 関数適用
         ExprBody::App(f, arg) => {
-            let f_val = eval_expr(&f, env);
-            let arg_val = eval_expr(&arg, env);
+            let f_val = eval_expr(phox, module, env, &f);
+            let arg_val = eval_expr(phox, module, env, &arg);
             match f_val {
                 // ユーザ定義関数（Closure）
                 Value::Closure { pat, body, env: closure_env } => {
                     if let Some(bindings) = match_pat(&pat, &arg_val) {
-                        let env2 = closure_env.duplicate();
+                        let env2 = &mut closure_env.duplicate();
                         env2.extend(&bindings);
-                        eval_expr(&body, &env2)
+                        eval_expr(phox, module, env2, &body)
                     } else {
                         panic!("function argument pattern match failed");
                     }
@@ -104,49 +135,52 @@ pub fn eval_expr(expr: &Expr, env: &ValueEnv) -> Value {
         }
 
         ExprBody::Block(items) => {
-            let mut env2 = env.duplicate(); // 新しいスコープ
+            let env2 = &mut env.duplicate(); // 新しいスコープ
             let mut last_val = Value::Lit(Lit::Unit);
             for item in items {
-                last_val = eval_item(&item, &mut env2);
+                last_val = eval_item(phox, module, env2, &item);
             }
             last_val
         }
 
         ExprBody::If(e1, e2, e3) => {
-            match eval_expr(&e1, env) {
-                Value::Lit(Lit::Bool(true))  => eval_expr(&e2, env),
-                Value::Lit(Lit::Bool(false)) => eval_expr(&e3, env),
+            match eval_expr(phox, module, env, &e1) {
+                Value::Lit(Lit::Bool(true))  => eval_expr(phox, module, env, &e2),
+                Value::Lit(Lit::Bool(false)) => eval_expr(phox, module, env, &e3),
                 v => panic!("if condition must be Bool, got {}", v),
             }
         }
 
         ExprBody::Match(scrut, arms) => {
-            let v_scrut = eval_expr(&scrut, env);
+            let v_scrut = eval_expr(phox, module, env, &scrut);
             for (pat, body) in arms {
                 if let Some(bindings) = match_pat(&pat, &v_scrut) {
-                    let env2 = env.duplicate();
+                    let env2 = &mut env.duplicate();
                     env2.extend(&bindings);
-                    return eval_expr(&body, &env2);
+                    return eval_expr(phox, module, env2, &body);
                 }
             }
             panic!("non-exhaustive match: no pattern matched value {}", v_scrut);
         }
 
         ExprBody::Tuple(es) => {
-            let xs: Vec<Value> = es.iter().map(|x| eval_expr(x, env)).collect();
+            let xs: Vec<Value> = es
+                .iter()
+                .map(|x| eval_expr(phox, module, env, x))
+                .collect();
             Value::Tuple(xs)
         }
 
         ExprBody::Record(fields) => {
             let mut vals = Vec::new();
             for (fname, fexpr) in fields {
-                let v = eval_expr(&fexpr, env);
+                let v = eval_expr(phox, module, env, &fexpr);
                 vals.push((fname.clone(), v));
             }
             Value::Record(vals)
         }
         ExprBody::FieldAccess(base, field) => {
-            let v_base = eval_expr(&base, env);
+            let v_base = eval_expr(phox, module, env, &base);
             match v_base {
                 Value::Record(fields) => {
                     match fields.iter().find(|(name, _)| name == field) {
@@ -169,7 +203,7 @@ pub fn eval_expr(expr: &Expr, env: &ValueEnv) -> Value {
             }
         }
         ExprBody::TupleAccess(base, index) => {
-            let v_base = eval_expr(&base, env);
+            let v_base = eval_expr(phox, module, env, &base);
             match v_base {
                 Value::Tuple(elems) => {
                     if *index < elems.len() {
