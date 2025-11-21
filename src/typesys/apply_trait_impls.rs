@@ -119,9 +119,20 @@ pub fn apply_trait_impls_expr(
                         // 通常の変数参照なら infer_expr 側で処理される
                     }
                     _ => {
-                        // let (_, impl_expr) = matches.pop().unwrap();
                         let (_, impl_expr) = matches.iter().min_by_key(|(c, _)| c.score()).unwrap();
-                        expr.body = impl_expr.body.clone();
+                        let mut impl_expr = impl_expr.clone();
+                        {
+                            // NOTE:
+                            // Currently, the inference and application (baking)
+                            // of `impl` member implementations are handled in
+                            // the calling environment. However, these should
+                            // perhaps be performed in the environment of the
+                            // module where the implementation is defined.
+                            let mut icx = phox.get_infer_ctx(module).duplicate();
+                            infer_expr(phox, module, &mut icx, &mut impl_expr)?;
+                            apply_trait_impls_expr(phox, module, &mut impl_expr)?;
+                        }
+                        expr.body = impl_expr.body;
                         // expr.ty は既に推論済みなのでそのままでOK
                     }
                     // _ => {
