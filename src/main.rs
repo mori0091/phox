@@ -1,6 +1,7 @@
 use std::io::{self, Read};
 
 use phox::repl::repl;
+use phox::typesys::Pretty;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

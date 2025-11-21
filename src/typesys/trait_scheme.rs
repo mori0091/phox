@@ -1,3 +1,3 @@
-use super::{Constraint, Scheme};
+use super::{TraitHead, Scheme};
 
-pub type TraitScheme = Scheme<Constraint>;
+pub type TraitScheme = Scheme<TraitHead>;

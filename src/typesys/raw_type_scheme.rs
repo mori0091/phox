@@ -1,9 +1,9 @@
-use crate::syntax::ast::{RawConstraint, RawType};
+use crate::syntax::ast::{RawTraitHead, RawType};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RawTypeScheme {
     pub vars: Vec<String>,               // `∀ [e]`
-    pub constraints: Vec<RawConstraint>, // `Monad (Result e) =>`
+    pub constraints: Vec<RawTraitHead>, // `Monad (Result e) =>`
     pub target: RawType,                 // `Result e 'a -> ('a -> Result e 'b) -> Result e 'b`
 }
 
@@ -15,11 +15,20 @@ impl fmt::Display for RawTypeScheme {
     }
 }
 
-impl fmt::Display for RawConstraint {
+impl fmt::Display for RawTraitHead {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let tys = self.params
                     .iter()
-                    .map(|ty| ty.to_string())
+                    .map(|ty| {
+                        match ty {
+                            RawType::App(_, _) | RawType::Fun(_, _) => {
+                                format!("({})", ty)
+                            }
+                            _ => {
+                                format!("{}", ty)
+                            }
+                        }
+                    })
                     .collect::<Vec<_>>()
             .join(" ");
         write!(f, "{} {}", self.name, tys)
@@ -77,18 +86,18 @@ impl RawTypeScheme {
             let cs = self.constraints
                          .iter()
                          .map(|c| c.to_string())
-                         .collect::<Vec<_>>()
-                .join(", ");
-            ty_string = format!("{} => {}", cs, ty_string);
+                         .collect::<Vec<_>>();
+            if cs.len() == 1 {
+                ty_string = format!("{} => {}", cs[0], ty_string);
+            }
+            else {
+                ty_string = format!("({}) => {}", cs.join(", "), ty_string);
+            }
         }
 
         if self.vars.is_empty() {
             format!("{}", ty_string)
         } else {
-            // let vars: Vec<String> = (0..self.vars.len())
-            //     .map(|i| ((b'a' + i as u8) as char).to_string())
-            //     .collect();
-            // format!("∀ {}. {}", vars.join(" "), ty_string)
             format!("∀ {}. {}", self.vars.join(" "), ty_string)
         }
     }
@@ -109,17 +118,18 @@ impl RawTypeScheme {
             c.free_type_vars(&mut free);
         }
         self.target.free_type_vars(&mut free);
-        let vars: Vec<_> = free.into_iter().collect();
+        let mut vars: Vec<_> = free.into_iter().collect();
+        vars.sort();
         let constraints = self.constraints.clone();
         let target = self.target.clone();
         RawTypeScheme { vars, constraints, target }
     }
 }
 
-impl RawConstraint {
+impl RawTraitHead {
     pub fn apply_subst(&self, subst: &HashMap<String, RawType>) -> Self {
         let params = self.params.iter().map(|p| p.apply_subst(subst)).collect();
-        RawConstraint { name: self.name.clone(), params }
+        RawTraitHead { name: self.name.clone(), params }
     }
 
     pub fn free_type_vars(&self, free: &mut HashSet<String>) {

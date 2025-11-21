@@ -1,4 +1,4 @@
-use phox::api::eval;
+use phox::api::*;
 
 #[test]
 fn unary_neg_literal() {

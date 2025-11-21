@@ -1,5 +1,4 @@
-use phox::api::check_expr_scheme;
-use phox::api::eval;
+use phox::api::*;
 
 #[test]
 fn test_field_access_type_simple() {
