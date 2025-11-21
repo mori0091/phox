@@ -3,11 +3,9 @@ use crate::syntax::ast::*;
 use crate::typesys::*;
 use crate::module::*;
 
-use std::cell::RefMut;
-
 pub fn apply_trait_impls_item(
     phox: &mut PhoxEngine,
-    module: &mut RefMut<Module>,
+    module: &RefModule,
     item: &mut Item,
 ) -> Result<(), TypeError> {
     match item {
@@ -21,12 +19,20 @@ pub fn apply_trait_impls_item(
 
 pub fn apply_trait_impls_stmt(
     phox: &mut PhoxEngine,
-    module: &mut RefMut<Module>,
+    module: &RefModule,
     stmt: &mut Stmt,
 ) -> Result<(), TypeError> {
     match stmt {
-        Stmt::Mod(_) => Ok(()),
         Stmt::Use(_) => Ok(()),
+        Stmt::Mod(name, items) => {
+            let sub = &module.get_submod(name).unwrap();
+            if let Some(items) = items {
+                 for mut item in items {
+                    apply_trait_impls_item(phox, sub, &mut item)?;
+                }
+            }
+            Ok(())
+        },
         Stmt::Let(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
         Stmt::LetRec(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
     }
@@ -34,7 +40,7 @@ pub fn apply_trait_impls_stmt(
 
 pub fn apply_trait_impls_expr(
     phox: &mut PhoxEngine,
-    module: &mut RefMut<Module>,
+    module: &RefModule,
     expr: &mut Expr,
 ) -> Result<(), TypeError> {
     // 再帰的に子ノードを処理
@@ -92,9 +98,20 @@ pub fn apply_trait_impls_expr(
                 });
             }
 
-            if module.icx.trait_member_env.contains_key(name) {
+            if phox.get_infer_ctx(module).is_trait_member(name) {
                 // このメンバに必要な制約を構築（型から導出）
-                let constraints = TraitHead::from_trait_member(&mut phox.ctx, &module.icx.trait_member_env, name, ty)?;
+                let constraints = {
+                    let trait_member_env = phox
+                        .get_infer_ctx(module)
+                        .inner
+                        .borrow()
+                        .trait_member_env
+                        .clone();
+                    TraitHead::from_trait_member(
+                        &mut phox.ctx,
+                        &trait_member_env,
+                        name, ty)?
+                };
 
                 let mut matches = Vec::new();
                 for (impl_head, member_map) in phox.impl_env.iter() {
@@ -119,9 +136,20 @@ pub fn apply_trait_impls_expr(
                         // 通常の変数参照なら infer_expr 側で処理される
                     }
                     _ => {
-                        // let (_, impl_expr) = matches.pop().unwrap();
                         let (_, impl_expr) = matches.iter().min_by_key(|(c, _)| c.score()).unwrap();
-                        expr.body = impl_expr.body.clone();
+                        let mut impl_expr = impl_expr.clone();
+                        {
+                            // NOTE:
+                            // Currently, the inference and application (baking)
+                            // of `impl` member implementations are handled in
+                            // the calling environment. However, these should
+                            // perhaps be performed in the environment of the
+                            // module where the implementation is defined.
+                            let mut icx = phox.get_infer_ctx(module).duplicate();
+                            infer_expr(phox, module, &mut icx, &mut impl_expr)?;
+                            apply_trait_impls_expr(phox, module, &mut impl_expr)?;
+                        }
+                        expr.body = impl_expr.body;
                         // expr.ty は既に推論済みなのでそのままでOK
                     }
                     // _ => {

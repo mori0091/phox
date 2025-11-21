@@ -307,7 +307,12 @@ Stmt: Stmt = {
 };
 
 StmtMod: Stmt = {
-    "mod" <m:"identifier"> => Stmt::Mod(m),
+    "mod" <m:"identifier"> <items:ModBlock> => Stmt::Mod(m, items),
+};
+
+ModBlock: Option<Vec<Item>> = {
+    "{" "}" => None,
+    <("{" <ItemList> "}")?>,
 };
 
 StmtUse: Stmt = {

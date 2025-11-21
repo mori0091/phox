@@ -4,27 +4,50 @@ use crate::module::*;
 use super::*;
 
 // ===== Inference (Algorithm J core) =====
-pub fn infer_item(phox: &mut PhoxEngine, icx: &mut InferCtx, item: &mut Item) -> Result<Type, TypeError> {
+pub fn infer_item(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    icx: &mut InferCtx,
+    item: &mut Item
+) -> Result<Type, TypeError> {
     match item {
         Item::Stmt(stmt) => {
-            infer_stmt(phox, icx, stmt)
+            infer_stmt(phox, module, icx, stmt)
         }
         Item::Expr(expr) => {
-            infer_expr(phox, icx, expr)
+            infer_expr(phox, module, icx, expr)
         }
         _ => Ok(Type::unit())
     }
 }
 
-pub fn infer_stmt(phox: &mut PhoxEngine, icx: &mut InferCtx, stmt: &mut Stmt) -> Result<Type, TypeError> {
+pub fn infer_stmt(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    icx: &mut InferCtx,
+    stmt: &mut Stmt
+) -> Result<Type, TypeError> {
     match stmt {
-        Stmt::Mod(_) => Ok(Type::unit()),
         Stmt::Use(_) => Ok(Type::unit()),
+        Stmt::Mod(name, items) => {
+            let sub = module.get_submod(name)
+                .ok_or_else(|| {
+                    let p = module.borrow().path().concat_str(&[name]);
+                    TypeError::UnknownPath(p)
+                })?;
+            if let Some(items) = items {
+                let icx2 = &mut phox.get_infer_ctx(&sub);
+                for item in items.iter_mut() {
+                    infer_item(phox, &sub, icx2, item)?;
+                }
+            }
+            Ok(Type::unit())
+        }
         Stmt::Let(pat, expr) => {
-            let t_expr = infer_expr(phox, icx, expr)?;
+            let t_expr = infer_expr(phox, module, icx, expr)?;
             let t_pat = phox.ctx.fresh_type_for_pattern(pat);
             phox.ctx.unify(&t_expr, &t_pat)?;
-            let ref_icx = icx.clone(); // snapshot for reference
+            let ref_icx = icx.duplicate(); // snapshot for reference
             phox.ctx.match_pattern(icx, pat, &t_pat, &ref_icx, true)?;
             Ok(Type::unit())
         }
@@ -32,14 +55,14 @@ pub fn infer_stmt(phox: &mut PhoxEngine, icx: &mut InferCtx, stmt: &mut Stmt) ->
             match pat {
                 Pat::Var(x) => {
                     let tv = Type::Var(phox.ctx.fresh_type_var_id());
-                    let mut icx2 = icx.clone();
+                    let mut icx2 = icx.duplicate();
                     {
-                        icx2.type_env.insert(x.clone(), TypeScheme::mono(tv.clone()));
-                        let t_expr = infer_expr(phox, &mut icx2, expr)?;
+                        icx2.put_type_scheme(x.clone(), TypeScheme::mono(tv.clone()));
+                        let t_expr = infer_expr(phox, module, &mut icx2, expr)?;
                         phox.ctx.unify(&tv, &t_expr)?;
                     }
                     let sch = generalize(&mut phox.ctx, icx, &tv);
-                    icx.type_env.insert(x.clone(), sch);
+                    icx.put_type_scheme(x.clone(), sch);
                     Ok(Type::unit())
                 }
                 _ => Err(TypeError::LetRecPatternNotSupported(pat.clone())),
@@ -48,10 +71,15 @@ pub fn infer_stmt(phox: &mut PhoxEngine, icx: &mut InferCtx, stmt: &mut Stmt) ->
     }
 }
 
-pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) -> Result<Type, TypeError> {
+pub fn infer_expr(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    icx: &mut InferCtx,
+    expr: &mut Expr
+) -> Result<Type, TypeError> {
     let ty = match &mut expr.body {
         ExprBody::Var(symbol) => {
-            match icx.type_env.get(symbol) {
+            match icx.get_type_scheme(symbol) {
                 Some(sch) => {
                     let (_constraints, ty) = sch.instantiate(&mut phox.ctx);
                     ty
@@ -59,6 +87,12 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
                 None => {
                     match phox.impl_member_env.get(symbol).clone() {
                         None => return Err(TypeError::UnboundVariable(symbol.clone())),
+                        Some(cands) if cands.len() == 1 => {
+                            let tmpl = &cands.iter().cloned().next().unwrap();
+                            let winner = tmpl.fresh_copy(&mut phox.ctx);
+                            let (_, ty_inst) = winner.instantiate(&mut phox.ctx);
+                            ty_inst
+                        }
                         Some(cands) => {
                             let symbol = symbol.clone();
                             let cands: Vec<_> = cands.iter().cloned().collect();
@@ -70,7 +104,7 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
         }
 
         ExprBody::App(f, a) => {
-            let ta = infer_expr(phox, icx, a)?;
+            let ta = infer_expr(phox, module, icx, a)?;
             if let Type::Overloaded(name, candidates) = ta {
                 let mut ctx = phox.ctx.clone();
                 let candidates: Vec<_> = candidates
@@ -80,7 +114,7 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
                 return Err(TypeError::AmbiguousVariable { name, candidates })
             }
 
-            let tf = infer_expr(phox, icx, f)?;
+            let tf = infer_expr(phox, module, icx, f)?;
             let tr = Type::Var(phox.ctx.fresh_type_var_id());
 
             match tf {
@@ -145,38 +179,38 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
             let t_pat = phox.ctx.fresh_type_for_pattern(&pat);
 
             // 環境を拡張
-            let mut icx2 = icx.clone();
+            let mut icx2 = icx.duplicate();
             // ctx.match_pattern(&mut env2, pat, &t_pat, tenv)?;
             phox.ctx.match_pattern(&mut icx2, &pat, &t_pat, icx, false)?;
 
             // 本体を推論
-            let t_body = infer_expr(phox, &mut icx2, body)?;
+            let t_body = infer_expr(phox, module, &mut icx2, body)?;
 
             // 関数型を返す
             Type::fun(t_pat, t_body)
         }
 
         ExprBody::Block(items) => {
-            let mut icx2 = icx.clone(); // 新しいスコープ
+            let mut icx2 = icx.duplicate(); // 新しいスコープ
             let mut last_ty = Type::unit();
             for item in items.iter_mut() {
-                last_ty = infer_item(phox, &mut icx2, item)?;
+                last_ty = infer_item(phox, module, &mut icx2, item)?;
             }
             last_ty
         }
         ExprBody::If(cond, then_e, else_e) => {
-            let t_cond = infer_expr(phox, icx, cond)?;
+            let t_cond = infer_expr(phox, module, icx, cond)?;
             phox.ctx.unify(&t_cond, &Type::bool_())?;
 
-            let t_then = infer_expr(phox, icx, then_e)?;
-            let t_else = infer_expr(phox, icx, else_e)?;
+            let t_then = infer_expr(phox, module, icx, then_e)?;
+            let t_else = infer_expr(phox, module, icx, else_e)?;
             phox.ctx.unify(&t_then, &t_else)?;
             t_then
         }
 
         ExprBody::Match(scrutinee, arms) => {
             // 判別対象式の型を推論
-            let t_scrut = infer_expr(phox, icx, scrutinee)?;
+            let t_scrut = infer_expr(phox, module, icx, scrutinee)?;
 
             // 各アームの式型を集める
             let mut result_types = vec![];
@@ -189,11 +223,11 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
                 phox.ctx.unify(&t_scrut, &t_pat)?;
 
                 // 束縛環境を構築
-                let mut env2 = icx.clone();
+                let mut env2 = icx.duplicate();
                 phox.ctx.match_pattern(&mut env2, &pat, &t_pat, icx, false)?;
 
                 // アーム本体の型を推論
-                let t_body = infer_expr(phox, &mut env2, body)?;
+                let t_body = infer_expr(phox, module, &mut env2, body)?;
                 result_types.push(t_body);
             }
 
@@ -213,7 +247,7 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
         ExprBody::Tuple(es) => {
             let mut tys = Vec::with_capacity(es.len());
             for e in es.iter_mut() {
-                let ty = infer_expr(phox, icx, e)?;
+                let ty = infer_expr(phox, module, icx, e)?;
                 tys.push(ty);
             }
             Type::Tuple(tys)
@@ -223,14 +257,14 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
             // 各フィールドの型を推論
             let mut typed_fields = Vec::with_capacity(fields.len());
             for (fname, fexpr) in fields.iter_mut() {
-                let t_field = infer_expr(phox, icx, fexpr)?;
+                let t_field = infer_expr(phox, module, icx, fexpr)?;
                 typed_fields.push((fname.clone(), t_field));
             }
             Type::Record(typed_fields)
         }
 
         ExprBody::FieldAccess(base, field) => {
-            let t_base = infer_expr(phox, icx, base)?;
+            let t_base = infer_expr(phox, module, icx, base)?;
             match t_base {
                 Type::Record(fields) => {
                     if let Some((_, ty)) = fields.iter().find(|(fname, _)| fname == field) {
@@ -249,7 +283,8 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
                             // Item::Expr(Expr::field_access(Expr::local_var("r"), field.clone()))
                             Item::Expr(Expr::field_access(Expr::unresolved_var("r"), field.clone()))
                         ]);
-                        let ty = infer_expr(phox, icx, &mut expr).map_err(|_| TypeError::ExpectedRecord(other))?;
+                        let ty = infer_expr(phox, module, icx, &mut expr)
+                            .map_err(|_| TypeError::ExpectedRecord(other))?;
                         ty
                     }
                     else {
@@ -260,7 +295,7 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
         }
 
         ExprBody::TupleAccess(base, index) => {
-            let t_base = infer_expr(phox, icx, base)?;
+            let t_base = infer_expr(phox, module, icx, base)?;
             match t_base {
                 Type::Tuple(elems) => {
                     if *index < elems.len() {
@@ -279,7 +314,8 @@ pub fn infer_expr(phox: &mut PhoxEngine, icx: &mut InferCtx, expr: &mut Expr) ->
                             // Item::Expr(Expr::tuple_access(Expr::local_var("t"), *index))
                             Item::Expr(Expr::tuple_access(Expr::unresolved_var("t"), *index))
                         ]);
-                        let ty = infer_expr(phox, icx, &mut expr).map_err(|_| TypeError::ExpectedTuple(other))?;
+                        let ty = infer_expr(phox, module, icx, &mut expr)
+                            .map_err(|_| TypeError::ExpectedTuple(other))?;
                         ty
                     }
                     else {

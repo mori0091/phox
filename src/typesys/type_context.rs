@@ -232,12 +232,12 @@ impl TypeContext {
                 } else {
                     TypeScheme::mono(ty.clone()) // Abs や match の場合は単相
                 };
-                icx.type_env.insert(x.clone(), sch);
+                icx.put_type_scheme(x.clone(), sch);
                 Ok(())
             }
 
             Pat::Con(name, args) => {
-                let scheme = icx.type_env.get(name).ok_or(TypeError::UnknownConstructor(name.clone()))?;
+                let scheme = icx.get_type_scheme(name).ok_or(TypeError::UnknownConstructor(name.clone()))?;
                 let (_constraints, con_ty) = scheme.instantiate(self);
 
                 let mut arg_types = Vec::new();
