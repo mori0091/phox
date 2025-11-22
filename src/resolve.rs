@@ -5,6 +5,8 @@ use crate::syntax::ast::*;
 use crate::module::*;
 use crate::api::PhoxEngine;
 
+// -------------------------------------------------------------
+// === item ===
 pub fn resolve_item(
     phox: &mut PhoxEngine,
     module: &RefModule,
@@ -30,6 +32,8 @@ pub fn resolve_item(
     }
 }
 
+// -------------------------------------------------------------
+// === trait ===
 fn register_trait(
     phox: &mut PhoxEngine,
     module: &RefModule,
@@ -80,31 +84,8 @@ fn register_trait(
     Ok(())
 }
 
-fn check_impl_comflict(
-    phox: &mut PhoxEngine,
-    impl_head_sch: &TraitScheme,
-) -> Result<(), TypeError> {
-    for (sch, _) in phox.impl_env.iter() {
-        if sch.target.name != impl_head_sch.target.name { continue }
-        if sch.target.score() != impl_head_sch.target.score() { continue }
-        let mut ctx2 = phox.ctx.clone();
-        let mut same = true;
-        for (t1, t2) in sch.target.params.iter().zip(impl_head_sch.target.params.iter()) {
-            if ctx2.unify(t1, t2).is_err() {
-                same = false;
-                break;
-            }
-        }
-        if same {
-            return Err(TypeError::ConflictImpl {
-                it: impl_head_sch.target.clone(),
-                other: sch.target.clone(),
-            });
-        }
-    };
-    Ok(())
-}
-
+// -------------------------------------------------------------
+// === impl ===
 fn register_impl(
     phox: &mut PhoxEngine,
     module: &RefModule,
@@ -136,21 +117,25 @@ fn register_impl(
 
     for raw_member in raw.members.iter() {
         let sym = Symbol::local(&raw_member.name);
-        let ty = {
+        let impl_member_sch = {
+            // -------------------------------------------------
             let trait_scheme_tmpls = phox
                 .get_infer_ctx(module)
                 .get_trait_member_schemes(&sym)
                 .ok_or(TypeError::UnknownTraitMember(raw_member.name.clone()))?;
 
+            // -------------------------------------------------
             if trait_scheme_tmpls.is_empty() {
                 return Err(TypeError::UnknownTraitMember(raw_member.name.clone()));
             }
 
+            // -------------------------------------------------
             let trait_scheme_tmpl = trait_scheme_tmpls
                 .iter()
                 .find(|tmpl| tmpl.scheme_ref().constraints[0].name == impl_head.name)
                 .ok_or(TypeError::UnknownTrait(raw.name.clone()))?;
 
+            // -------------------------------------------------
             let trait_head = &trait_scheme_tmpl.scheme_ref().constraints[0];
             if impl_head.params.len() != trait_head.params.len() {
                 return Err(TypeError::ArityMismatch {
@@ -161,21 +146,23 @@ fn register_impl(
                 });
             }
 
+            // -------------------------------------------------
             let mut subst: HashMap<TypeVarId, Type> = HashMap::new();
             for (t1, t2) in trait_head.params.iter().zip(impl_head.params.iter()) {
                 if let Type::Var(id) = t1 {
                     subst.insert(*id, t2.clone());
                 }
             }
-            trait_scheme_tmpl
+            let ty = trait_scheme_tmpl
                 .scheme_ref()
-                .target.apply_subst(&subst)
-        };
-        // ----------------------------------------------------
-        let impl_member_sch = TypeScheme {
-            vars: impl_head_sch.vars.clone(),
-            constraints: vec![impl_head.clone()],
-            target: ty,
+                .target
+                .apply_subst(&subst);
+
+            TypeScheme {
+                vars: impl_head_sch.vars.clone(),
+                constraints: vec![impl_head.clone()],
+                target: ty,
+            }
         };
 
         phox.impl_member_env
@@ -192,6 +179,33 @@ fn register_impl(
     Ok(())
 }
 
+fn check_impl_comflict(
+    phox: &mut PhoxEngine,
+    impl_head_sch: &TraitScheme,
+) -> Result<(), TypeError> {
+    for (sch, _) in phox.impl_env.iter() {
+        if sch.target.name != impl_head_sch.target.name { continue }
+        if sch.target.score() != impl_head_sch.target.score() { continue }
+        let mut ctx2 = phox.ctx.clone();
+        let mut same = true;
+        for (t1, t2) in sch.target.params.iter().zip(impl_head_sch.target.params.iter()) {
+            if ctx2.unify(t1, t2).is_err() {
+                same = false;
+                break;
+            }
+        }
+        if same {
+            return Err(TypeError::ConflictImpl {
+                it: impl_head_sch.target.clone(),
+                other: sch.target.clone(),
+            });
+        }
+    };
+    Ok(())
+}
+
+// -------------------------------------------------------------
+// === stmt ===
 pub fn resolve_stmt(
     phox: &mut PhoxEngine,
     module: &RefModule,
@@ -260,6 +274,8 @@ pub fn resolve_stmt(
     }
 }
 
+// -------------------------------------------------------------
+// === pat ===
 fn resolve_pat(
     phox: &mut PhoxEngine,
     module: &RefModule,
@@ -294,6 +310,8 @@ fn resolve_pat(
     }
 }
 
+// -------------------------------------------------------------
+// === symbol ===
 pub fn make_top_level_symbol(
     phox: &mut PhoxEngine,
     module: &RefModule,
@@ -430,6 +448,8 @@ pub fn resolve_symbol(
     Ok(())
 }
 
+// -------------------------------------------------------------
+// === expr ===
 pub fn resolve_expr(
     phox: &mut PhoxEngine,
     module: &RefModule,
@@ -530,6 +550,49 @@ pub fn resolve_expr(
         }
         ExprBody::Lit(_) => Ok(()),
     }
+}
+
+// -------------------------------------------------------------
+// === type decl ===
+use crate::interpreter::*;
+
+fn register_type_decl(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    symbol_env: &mut SymbolEnv,
+    raw: &RawTypeDecl,
+) -> Result<(), TypeError> {
+    let TypeDecl::SumType {
+        name: ty_ctor_name,
+        params: ty_ctor_params,
+        variants,
+    } = &resolve_raw_type_decl(phox, module, symbol_env, raw)?;
+
+    let icx = &mut phox.get_infer_ctx(module);
+    let env = &mut phox.get_value_env(module);
+
+    // kind を構築
+    let mut kind = Kind::Star;
+    for _ in ty_ctor_params.iter().rev() {
+        kind = Kind::Fun(Box::new(Kind::Star), Box::new(kind));
+    }
+    icx.put_kind(ty_ctor_name.clone(), kind);
+
+    // 各コンストラクタを登録
+    for v in variants {
+        // Type scheme of the data constructor `v`.
+        icx.put_type_scheme(
+            v.name(),
+            v.as_scheme(ty_ctor_name, ty_ctor_params)
+        );
+        // Value of the data constructor `v`.
+        env.insert(
+            v.name(),
+            make_constructor(&v.name(), v.arity())
+        );
+    }
+
+    Ok(())
 }
 
 fn resolve_raw_type_decl(
@@ -639,54 +702,7 @@ fn resolve_raw_type(
     Ok(ty)
 }
 
-use crate::interpreter::*;
-
-fn register_type_decl(
-    phox: &mut PhoxEngine,
-    module: &RefModule,
-    symbol_env: &mut SymbolEnv,
-    raw: &RawTypeDecl,
-) -> Result<(), TypeError> {
-    let decl = resolve_raw_type_decl(phox, module, symbol_env, raw)?;
-    register_type(&decl, &mut phox.get_infer_ctx(module));
-    register_variants(&decl, &mut phox.get_value_env(module));
-    Ok(())
-}
-
-fn register_type(decl: &TypeDecl, icx: &mut InferCtx) {
-    match decl {
-        TypeDecl::SumType { name, params, variants } => {
-            // kind を構築
-            let mut kind = Kind::Star;
-            for _ in params.iter().rev() {
-                kind = Kind::Fun(Box::new(Kind::Star), Box::new(kind));
-            }
-            icx.put_kind(name.clone(), kind);
-            // 各コンストラクタを登録
-            for v in variants {
-                let (ctor_name, ctor_scheme) = v.as_scheme(name, params);
-                icx.put_type_scheme(ctor_name.clone(), ctor_scheme.clone());
-            }
-        }
-    }
-}
-
-fn register_variants(decl: &TypeDecl, env: &mut ValueEnv) {
-    match decl {
-        TypeDecl::SumType { name:_, params:_, variants } => {
-            // 各コンストラクタを登録
-            for v in variants {
-                let arity = match v {
-                    Variant::Unit(_) => 0,
-                    Variant::Tuple(_, ts) => ts.len(),
-                };
-                env.insert(v.name(),
-                           make_constructor(&v.name(), arity));
-            }
-        }
-    }
-}
-
+// -------------------------------------------------------------
 fn resolve_raw_trait_head(
     phox: &mut PhoxEngine,
     module: &RefModule,
