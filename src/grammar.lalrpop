@@ -108,54 +108,36 @@ pub ItemList: Vec<Item> = {
 };
 
 pub Item: Item = {
-    TraitDecl => Item::RawTraitDecl(<>),
-    ImplDecl => Item::RawImplDecl(<>),
-    TypeDecl => Item::RawTypeDecl(<>),
+    Decl => Item::Decl(<>),
     Stmt => Item::Stmt(<>),
     Expr => Item::Expr(<>),
 };
 
 // ----------------------------------------------
-// === trait declarations ===
-TraitDecl: RawTraitDecl = {
-    "trait" <name:ConIdent> <params:TypeParams> "{" <members:TraitMemberDecl+> "}"
-        => RawTraitDecl { name: name, params: params, members: members, },
-};
-
-TraitMemberDecl: RawTraitMemberDecl = {
-    <name:Ident> ":" <ty:Type> ";"
-        => RawTraitMemberDecl { name: name, ty: Box::new(ty), },
-};
-
-// ----------------------------------------------
-// === impl declarations ===
-ImplDecl: RawImplDecl = {
-    "impl" <name:PathCon> <params:TypeAtom+> "{" <members:ImplMemberDecl+> "}"
-        => RawImplDecl { name: Symbol::Unresolved(name), params: params, members: members, },
-};
-
-ImplMemberDecl: RawImplMemberDecl = {
-    <name:Ident> "=" <expr:Expr> ";"
-        => RawImplMemberDecl { name: name, expr: Box::new(expr) },
-};
+// === declarations ===
+Decl: Decl = {
+    DeclType => Decl::Type(<>),
+    DeclTrait => Decl::Trait(<>),
+    DeclImpl => Decl::Impl(<>),
+}
 
 // ----------------------------------------------
 // === ADT type declarations ===
-TypeDecl: RawTypeDecl = {
+DeclType: RawTypeDef = {
     "type" <name:ConIdent> <params:TypeParams> "=" <variants:VariantList>
-        => RawTypeDecl::SumType {
+        => RawTypeDef::SumType {
             name: name.clone(),
             params: params,
             variants: variants,
         },
     "type" <name:ConIdent> <params:TypeParams> "=" <tuple:TypeTuple>
-        => RawTypeDecl::SumType {
+        => RawTypeDef::SumType {
             name: name.clone(),
             params: params,
             variants: vec![RawVariant::Tuple(name.clone(), vec![tuple])],
         },
     "type" <name:ConIdent> <params:TypeParams> "=" <record:TypeRecord>
-        => RawTypeDecl::SumType {
+        => RawTypeDef::SumType {
             name: name.clone(),
             params: params,
             variants: vec![RawVariant::Tuple(name.clone(), vec![record])],
@@ -234,6 +216,30 @@ TypeRecord: RawType = {
 
 TypeRecordField: (String, RawType) = {
     <name:Ident> ":" <value:Type> => (name, value)
+};
+
+// ----------------------------------------------
+// === trait declarations ===
+DeclTrait: RawTrait = {
+    "trait" <name:ConIdent> <params:TypeParams> "{" <members:DeclTraitMember+> "}"
+        => RawTrait { name: name, params: params, members: members, },
+};
+
+DeclTraitMember: RawTraitMember = {
+    <name:Ident> ":" <ty:Type> ";"
+        => RawTraitMember { name: name, ty: Box::new(ty), },
+};
+
+// ----------------------------------------------
+// === impl declarations ===
+DeclImpl: RawImpl = {
+    "impl" <name:PathCon> <params:TypeAtom+> "{" <members:DeclImplMember+> "}"
+        => RawImpl { name: Symbol::Unresolved(name), params: params, members: members, },
+};
+
+DeclImplMember: RawImplMember = {
+    <name:Ident> "=" <expr:Expr> ";"
+        => RawImplMember { name: name, expr: Box::new(expr) },
 };
 
 // ----------------------------------------------

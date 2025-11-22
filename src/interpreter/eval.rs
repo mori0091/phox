@@ -13,16 +13,16 @@ pub fn eval_item(
     item: &Item,
 ) -> Value {
     match item {
+        Item::Decl(_) => {
+            // ignore
+            Value::Lit(Lit::Unit)
+        }
         Item::Stmt(stmt) => {
             eval_stmt(phox, module, env, stmt);
             Value::Lit(Lit::Unit)
         }
         Item::Expr(expr) => {
             eval_expr(phox, module, env, expr)
-        }
-        _ => {
-            // ignore
-            Value::Lit(Lit::Unit)
         }
     }
 }

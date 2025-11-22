@@ -1,51 +1,10 @@
 use crate::module::Symbol;
+use crate::syntax::ast::Expr;
 
-use super::Expr;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RawTraitHead {
-    pub name: Symbol,           // trait name (ex. Eq)
-    pub params: Vec<RawType>,   // instance type params (ex. [Int])
-}
-
-#[derive(Debug, Clone)]
-pub struct RawTraitDecl {
-    pub name: String,
-    pub params: Vec<String>,
-    pub members: Vec<RawTraitMemberDecl>,
-}
-
-#[derive(Debug, Clone)]
-pub struct RawTraitMemberDecl{
-    pub name: String,
-    pub ty: Box<RawType>,
-}
-
-#[derive(Debug, Clone)]
-pub struct RawImplDecl {
-    pub name: Symbol,
-    pub params: Vec<RawType>,
-    pub members: Vec<RawImplMemberDecl>,
-}
-
-#[derive(Debug, Clone)]
-pub struct RawImplMemberDecl {
-    pub name: String,
-    pub expr: Box<Expr>,
-}
-
-impl RawImplDecl {
-    pub fn head(&self) -> RawTraitHead {
-        RawTraitHead {
-            name: self.name.clone(),
-            params: self.params.clone(),
-        }
-    }
-}
-
+// ----------------------------------------------
 /// パース直後の型定義（まだ型変数は名前のまま）
 #[derive(Debug, Clone)]
-pub enum RawTypeDecl {
+pub enum RawTypeDef {
     /// 代数的データ型 (sum type)
     SumType {
         name: String,              // 型名 (例: "Option")
@@ -84,4 +43,48 @@ pub enum RawType {
 
     /// レコード型 (例; "@{x:a, y:b}")
     Record(Vec<(String, RawType)>),
+}
+
+// ----------------------------------------------
+#[derive(Debug, Clone)]
+pub struct RawTrait {
+    pub name: String,
+    pub params: Vec<String>,
+    pub members: Vec<RawTraitMember>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RawTraitMember{
+    pub name: String,
+    pub ty: Box<RawType>,
+}
+
+// ----------------------------------------------
+#[derive(Debug, Clone)]
+pub struct RawImpl {
+    pub name: Symbol,
+    pub params: Vec<RawType>,
+    pub members: Vec<RawImplMember>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RawImplMember {
+    pub name: String,
+    pub expr: Box<Expr>,
+}
+
+impl RawImpl {
+    pub fn head(&self) -> RawTraitHead {
+        RawTraitHead {
+            name: self.name.clone(),
+            params: self.params.clone(),
+        }
+    }
+}
+
+// ----------------------------------------------
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RawTraitHead {
+    pub name: Symbol,           // trait name (ex. Eq)
+    pub params: Vec<RawType>,   // instance type params (ex. [Int])
 }

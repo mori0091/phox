@@ -9,9 +9,7 @@ pub fn apply_trait_impls_item(
     item: &mut Item,
 ) -> Result<(), TypeError> {
     match item {
-        Item::RawTraitDecl(_) => Ok(()), // trait decl: no need to apply trait impls
-        Item::RawImplDecl(_) => Ok(()),  // impl decl : no need to apply trait impls
-        Item::RawTypeDecl(_) => Ok(()),  // type decl : no need to apply trait impls
+        Item::Decl(_) => Ok(()), // no need to apply trait impls
         Item::Expr(expr) => apply_trait_impls_expr(phox, module, expr),
         Item::Stmt(stmt) => apply_trait_impls_stmt(phox, module, stmt),
     }

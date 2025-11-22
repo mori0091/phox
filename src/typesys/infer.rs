@@ -11,13 +11,15 @@ pub fn infer_item(
     item: &mut Item
 ) -> Result<Type, TypeError> {
     match item {
+        Item::Decl(_) => {
+            Ok(Type::unit())
+        }
         Item::Stmt(stmt) => {
             infer_stmt(phox, module, icx, stmt)
         }
         Item::Expr(expr) => {
             infer_expr(phox, module, icx, expr)
         }
-        _ => Ok(Type::unit())
     }
 }
 
