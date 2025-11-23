@@ -1,26 +1,57 @@
-use crate::syntax::ast::{Expr, ExprBody, Item, Stmt};
-use super::{Value, Env, Binding};
+use std::rc::Rc;
 
-pub fn eval_item(item: &Item, env: &mut Env) -> Value {
+use crate::api::PhoxEngine;
+use crate::module::*;
+use crate::typesys::*;
+use crate::syntax::ast::*;
+use super::*;
+
+pub fn eval_item(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    env: &mut ValueEnv,
+    item: &Item,
+) -> Value {
     match item {
+        Item::Decl(_) => {
+            // ignore
+            Value::Lit(Lit::Unit)
+        }
         Item::Stmt(stmt) => {
-            eval_stmt(stmt, env);
+            eval_stmt(phox, module, env, stmt);
             Value::Lit(Lit::Unit)
         }
         Item::Expr(expr) => {
-            eval_expr(expr, env)
-        }
-        _ => {
-            // ignore
-            Value::Lit(Lit::Unit)
+            eval_expr(phox, module, env, expr)
         }
     }
 }
 
-pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
+pub fn eval_stmt(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    env: &mut ValueEnv,
+    stmt: &Stmt,
+) {
     match stmt {
+        Stmt::Use(_) => {},
+        Stmt::Mod(name, items) => {
+            let sub = &module.get_submod(name).unwrap();
+            if let Some(items) = items {
+                let env2 = &mut phox.get_value_env(sub);
+                for mut item in items {
+                    eval_item(phox, sub, env2, &mut item);
+                }
+                // let mut last = None;
+                // for mut item in items {
+                //     let res = eval_item(phox, &sub, env2, &mut item);
+                //     last = Some(res);
+                // }
+                // last.ok_or_else(|| "program contained no expression".to_string())
+            }
+        },
         Stmt::Let(pat, expr) => {
-            let val = eval_expr(expr, env);
+            let val = eval_expr(phox, module, env, expr);
             if let Some(bindings) = match_pat(pat, &val) {
                 env.extend(&bindings);
             } else {
@@ -33,7 +64,7 @@ pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
                     env.insert(x.clone(), Value::Builtin(Rc::new(|_| {
                         panic!("recursive value used before initialization")
                     })));
-                    let val = eval_expr(expr, env);
+                    let val = eval_expr(phox, module, env, expr);
                     env.insert(x.clone(), val);
                 }
                 _ => panic!("let rec pattern not supported (only variable)"),
@@ -43,7 +74,12 @@ pub fn eval_stmt(stmt: &Stmt, env: &mut Env) {
 }
 
 /// 評価関数
-pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
+pub fn eval_expr(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    env: &mut ValueEnv,
+    expr: &Expr,
+) -> Value {
     match &expr.body {
         // リテラル
         ExprBody::Lit(lit) => Value::Lit(lit.clone()),
@@ -55,9 +91,9 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
                    if let Some(ty) = &expr.ty {
                        use crate::typesys::TypeScheme;
                        let sch = TypeScheme::mono(ty.clone());
-                       panic!("unbound variable: {}: {}", name, sch.pretty())
+                       panic!("unbound variable: {}: {}", name.pretty(), sch.pretty())
                    } else {
-                       panic!("unbound variable: {}", name)
+                       panic!("unbound variable: {}", name.pretty())
                    }
                })
         }
@@ -73,15 +109,15 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
 
         // 関数適用
         ExprBody::App(f, arg) => {
-            let f_val = eval_expr(&f, env);
-            let arg_val = eval_expr(&arg, env);
+            let f_val = eval_expr(phox, module, env, &f);
+            let arg_val = eval_expr(phox, module, env, &arg);
             match f_val {
                 // ユーザ定義関数（Closure）
                 Value::Closure { pat, body, env: closure_env } => {
                     if let Some(bindings) = match_pat(&pat, &arg_val) {
-                        let env2 = closure_env.duplicate();
+                        let env2 = &mut closure_env.duplicate();
                         env2.extend(&bindings);
-                        eval_expr(&body, &env2)
+                        eval_expr(phox, module, env2, &body)
                     } else {
                         panic!("function argument pattern match failed");
                     }
@@ -99,49 +135,52 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
         }
 
         ExprBody::Block(items) => {
-            let mut env2 = env.duplicate(); // 新しいスコープ
+            let env2 = &mut env.duplicate(); // 新しいスコープ
             let mut last_val = Value::Lit(Lit::Unit);
             for item in items {
-                last_val = eval_item(&item, &mut env2);
+                last_val = eval_item(phox, module, env2, &item);
             }
             last_val
         }
 
         ExprBody::If(e1, e2, e3) => {
-            match eval_expr(&e1, env) {
-                Value::Lit(Lit::Bool(true))  => eval_expr(&e2, env),
-                Value::Lit(Lit::Bool(false)) => eval_expr(&e3, env),
+            match eval_expr(phox, module, env, &e1) {
+                Value::Lit(Lit::Bool(true))  => eval_expr(phox, module, env, &e2),
+                Value::Lit(Lit::Bool(false)) => eval_expr(phox, module, env, &e3),
                 v => panic!("if condition must be Bool, got {}", v),
             }
         }
 
         ExprBody::Match(scrut, arms) => {
-            let v_scrut = eval_expr(&scrut, env);
+            let v_scrut = eval_expr(phox, module, env, &scrut);
             for (pat, body) in arms {
                 if let Some(bindings) = match_pat(&pat, &v_scrut) {
-                    let env2 = env.duplicate();
+                    let env2 = &mut env.duplicate();
                     env2.extend(&bindings);
-                    return eval_expr(&body, &env2);
+                    return eval_expr(phox, module, env2, &body);
                 }
             }
             panic!("non-exhaustive match: no pattern matched value {}", v_scrut);
         }
 
         ExprBody::Tuple(es) => {
-            let xs: Vec<Value> = es.iter().map(|x| eval_expr(x, env)).collect();
+            let xs: Vec<Value> = es
+                .iter()
+                .map(|x| eval_expr(phox, module, env, x))
+                .collect();
             Value::Tuple(xs)
         }
 
         ExprBody::Record(fields) => {
             let mut vals = Vec::new();
             for (fname, fexpr) in fields {
-                let v = eval_expr(&fexpr, env);
+                let v = eval_expr(phox, module, env, &fexpr);
                 vals.push((fname.clone(), v));
             }
             Value::Record(vals)
         }
         ExprBody::FieldAccess(base, field) => {
-            let v_base = eval_expr(&base, env);
+            let v_base = eval_expr(phox, module, env, &base);
             match v_base {
                 Value::Record(fields) => {
                     match fields.iter().find(|(name, _)| name == field) {
@@ -164,7 +203,7 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
             }
         }
         ExprBody::TupleAccess(base, index) => {
-            let v_base = eval_expr(&base, env);
+            let v_base = eval_expr(phox, module, env, &base);
             match v_base {
                 Value::Tuple(elems) => {
                     if *index < elems.len() {
@@ -197,8 +236,8 @@ pub fn eval_expr(expr: &Expr, env: &Env) -> Value {
 use crate::syntax::ast::Pat;
 // use super::value::{Value, Env};
 
-fn match_pat(pat: &Pat, val: &Value) -> Option<Binding> {
-    let mut env = Binding::new();
+fn match_pat(pat: &Pat, val: &Value) -> Option<env::Binding> {
+    let mut env = env::Binding::new();
     match (pat, val) {
         // ワイルドカード
         (Pat::Wildcard, _) => Some(env),
@@ -249,99 +288,4 @@ fn match_pat(pat: &Pat, val: &Value) -> Option<Binding> {
         // それ以外は失敗
         _ => None,
     }
-}
-
-
-use std::rc::Rc;
-// use super::{Value, Env};
-use crate::syntax::ast::Lit;
-
-/// 評価時の初期環境
-pub fn initial_env() -> Env {
-    let env = Env::new();
-
-    // 比較演算子
-    env.insert("__i64_eq__".into(), make_i64_cmp_op(|a, b| a == b));
-    env.insert("__i64_ne__".into(), make_i64_cmp_op(|a, b| a != b));
-    env.insert("__i64_le__".into(), make_i64_cmp_op(|a, b| a <= b));
-    env.insert("__i64_lt__".into(), make_i64_cmp_op(|a, b| a < b));
-    env.insert("__i64_ge__".into(), make_i64_cmp_op(|a, b| a >= b));
-    env.insert("__i64_gt__".into(), make_i64_cmp_op(|a, b| a > b));
-
-    // 演算子
-    env.insert("__i64_add__".into(), make_i64_arith_op(|a, b| a + b));
-    env.insert("__i64_sub__".into(), make_i64_arith_op(|a, b| a - b));
-    env.insert("__i64_mul__".into(), make_i64_arith_op(|a, b| a * b));
-    env.insert("__i64_div__".into(), make_i64_arith_op(|a, b| {
-        if b == 0 {
-            panic!("division by zero");
-        }
-        a / b
-    }));
-
-    env.insert("__i64_neg__".into(), make_i64_unary_op(|x| -x));
-
-    env
-}
-
-pub fn make_constructor(name: &str, arity: usize) -> Value {
-    let name = name.to_string();
-    // 部分適用を保持する内部関数
-    fn curry(name: String, arity: usize, args: Vec<Value>) -> Value {
-        if args.len() == arity {
-            Value::Con(name, args)
-        } else {
-            Value::Builtin(Rc::new(move |arg: Value| {
-                let mut new_args = args.clone();
-                new_args.push(arg);
-                curry(name.clone(), arity, new_args)
-            }))
-        }
-    }
-    curry(name, arity, vec![])
-}
-
-/// 単項の整数演算子をBuiltinとして作る
-/// Int -> Int
-pub fn make_i64_unary_op<F>(op: F) -> Value
-where
-    F: Fn(i64) -> i64 + 'static,
-{
-    Value::Builtin(Rc::new(move |arg: Value| {
-        if let Value::Lit(Lit::Int(a)) = arg {
-            return Value::Lit(Lit::Int(op(a)));
-        }
-        panic!("type error in <builtin>");
-    }))
-}
-
-/// Int -> Int -> Int
-pub fn make_i64_arith_op<F>(op: F) -> Value
-where
-    F: Fn(i64, i64) -> i64 + 'static,
-{
-    Value::Builtin(Rc::new(move |arg: Value| {
-        if let Value::Tuple(xs) = arg {
-            if let [Value::Lit(Lit::Int(a)), Value::Lit(Lit::Int(b))] = &xs[..] {
-                return Value::Lit(Lit::Int(op(*a, *b)));
-            }
-        }
-        panic!("type error in <builtin>");
-    }))
-}
-
-/// 2引数の比較演算子をBuiltinとして作る
-/// Int -> Int -> Bool
-pub fn make_i64_cmp_op<F>(op: F) -> Value
-where
-    F: Fn(i64, i64) -> bool + 'static,
-{
-    Value::Builtin(Rc::new(move |arg: Value| {
-        if let Value::Tuple(xs) = arg {
-            if let [Value::Lit(Lit::Int(a)), Value::Lit(Lit::Int(b))] = &xs[..] {
-                return Value::Lit(Lit::Bool(op(*a, *b)));
-            }
-        }
-        panic!("type error in <builtin>");
-    }))
 }

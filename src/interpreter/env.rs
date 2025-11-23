@@ -1,26 +1,28 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use super::Value;
 
-pub type Binding = HashMap<String, Value>;
+use super::Value;
+use crate::module::*;
+
+pub type Binding = HashMap<Symbol, Value>;
 
 /// 評価時の環境
 #[derive(Clone)]
-pub struct Env {
+pub struct ValueEnv {
     map: Rc<RefCell<Binding>>,
 }
 
-impl Env {
+impl ValueEnv {
     pub fn new() -> Self {
-        Env { map: Rc::new(RefCell::new(HashMap::new())) }
+        ValueEnv { map: Rc::new(RefCell::new(HashMap::new())) }
     }
 
-    pub fn insert(&self, k: String, v: Value) {
+    pub fn insert(&self, k: Symbol, v: Value) {
         self.map.borrow_mut().insert(k, v);
     }
 
-    pub fn get(&self, k: &str) -> Option<Value> {
+    pub fn get(&self, k: &Symbol) -> Option<Value> {
         self.map.borrow().get(k).cloned()
     }
 
@@ -32,7 +34,23 @@ impl Env {
         self.map.borrow().clone()
     }
 
-    pub fn duplicate(&self) -> Env {
-        Env { map: Rc::new(RefCell::new(self.clone_map())) }
+    pub fn duplicate(&self) -> ValueEnv {
+        ValueEnv { map: Rc::new(RefCell::new(self.clone_map())) }
     }
+}
+
+pub fn make_constructor(name: &Symbol, arity: usize) -> Value {
+    // 部分適用を保持する内部関数
+    fn curry(name: Symbol, arity: usize, args: Vec<Value>) -> Value {
+        if args.len() == arity {
+            Value::Con(name, args)
+        } else {
+            Value::Builtin(Rc::new(move |arg: Value| {
+                let mut new_args = args.clone();
+                new_args.push(arg);
+                curry(name.clone(), arity, new_args)
+            }))
+        }
+    }
+    curry(name.clone(), arity, vec![])
 }

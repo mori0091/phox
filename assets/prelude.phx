@@ -3,6 +3,11 @@ let (&&) = \x.\y. if (x) y else false;
 let (||) = \x.\y. if (x) true else y;
 let not = \x. if (x) false else true;
 
+let (|>) = \x.\f. f x;
+let (<|) = \f.\x. f x;
+let (>>) = \f.\g.\x. g (f x);
+let (<<) = \f.\g.\x. f (g x);
+
 // -------------------------------------------------------------
 // === Eq ===
 trait Eq a {

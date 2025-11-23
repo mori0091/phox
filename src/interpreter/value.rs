@@ -1,12 +1,13 @@
 use std::rc::Rc;
-use crate::syntax::ast::{Expr, Pat, Lit};
-use super::Env;
+use crate::syntax::ast::*;
+use crate::module::*;
+use super::*;
 
 #[derive(Clone)]
 pub enum Value {
     Lit(Lit),
-    Closure { pat: Pat, body: Box<Expr>, env: Env },
-    Con(String, Vec<Value>),
+    Closure { pat: Pat, body: Box<Expr>, env: ValueEnv },
+    Con(Symbol, Vec<Value>),
     Builtin(Rc<dyn Fn(Value) -> Value>), // ← Rust 側の関数をラップ
 
     Tuple(Vec<Value>),
@@ -67,8 +68,7 @@ impl fmt::Display for Value {
                     // 引数が複雑なら括弧を付ける
                     let inner: Vec<String> = args.iter().map(|v| {
                         match v {
-                            Value::Lit(_)  => v.to_string(),
-                            Value::Record(_)  => v.to_string(),
+                            Value::Lit(_) | Value::Tuple(_) | Value::Record(_)  => v.to_string(),
                             Value::Con(_, ref a) if a.is_empty() => v.to_string(),
                             _ => format!("({})", v),
                         }

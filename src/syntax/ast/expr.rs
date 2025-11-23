@@ -1,6 +1,8 @@
 use std::fmt;
-use super::{Item, Lit, Pat, RawConstraint};
+
+use super::*;
 use crate::typesys::Type;
+use crate::module::*;
 
 #[derive(Clone, Debug)]
 pub struct Expr {
@@ -11,7 +13,7 @@ pub struct Expr {
 #[derive(Clone, Debug)]
 pub enum ExprBody {
     Lit(Lit),
-    Var(String),
+    Var(Symbol),
     App(Box<Expr>, Box<Expr>),
 
     Abs(Pat, Box<Expr>),
@@ -20,7 +22,7 @@ pub enum ExprBody {
 
     Tuple(Vec<Expr>),               // ex. `(1,)`, `(1, true, ())`
     Record(Vec<(String, Expr)>),    // ex. `@{ x:a, y:b }`
-    RawTraitRecord(RawConstraint),  // ex. `@{ Eq Int }`
+    RawTraitRecord(RawTraitHead),   // ex. `@{ Eq Int }`
     FieldAccess(Box<Expr>, String), // ex. `p.x`
     TupleAccess(Box<Expr>, usize),  // ex. `p.0`
     Block(Vec<Item>),               // ex. `{stmt; stmt; expr; expr}`
@@ -39,44 +41,51 @@ impl Expr {
     pub fn bool_(b: bool) -> Self {
         Expr::lit(Lit::Bool(b))
     }
-    pub fn var<S: Into<String>>(s: S) -> Self {
-        Expr { body: ExprBody::Var(s.into()), ty: None }
+
+    fn expr(e: ExprBody) -> Self {
+        Expr { body: e, ty: None }
+    }
+    pub fn unresolved_var<S: Into<String>>(s: S) -> Self {
+        Expr::expr(ExprBody::Var(Symbol::unresolved(s)))
+    }
+    pub fn unresolved_qvar(path: Path) -> Self {
+        Expr::expr(ExprBody::Var(Symbol::Unresolved(path)))
     }
     pub fn app(f: Expr, x: Expr) -> Self {
-        Expr { body: ExprBody::App(Box::new(f), Box::new(x)), ty: None }
+        Expr::expr(ExprBody::App(Box::new(f), Box::new(x)))
     }
     pub fn abs(pat: Pat, e: Expr) -> Self {
-        Expr { body: ExprBody::Abs(pat, Box::new(e)), ty: None }
+        Expr::expr(ExprBody::Abs(pat, Box::new(e)))
     }
     pub fn if_(e1: Expr, e2: Expr, e3: Expr) -> Self {
-        Expr { body: ExprBody::If(Box::new(e1), Box::new(e2), Box::new(e3)), ty: None }
+        Expr::expr(ExprBody::If(Box::new(e1), Box::new(e2), Box::new(e3)))
     }
     pub fn match_(e: Expr, arms: Vec<(Pat, Expr)>) -> Self {
-        Expr { body: ExprBody::Match(Box::new(e), arms), ty: None }
+        Expr::expr(ExprBody::Match(Box::new(e), arms))
     }
 
     pub fn record(fields: Vec<(String, Expr)>) -> Self {
-        Expr { body: ExprBody::Record(fields), ty: None }
+        Expr::expr(ExprBody::Record(fields))
     }
 
     pub fn tuple(elems: Vec<Expr>) -> Self {
-        Expr { body: ExprBody::Tuple(elems), ty: None }
+        Expr::expr(ExprBody::Tuple(elems))
     }
 
-    pub fn raw_trait_record(raw_constraint: RawConstraint) -> Self {
-        Expr { body: ExprBody::RawTraitRecord(raw_constraint), ty: None }
+    pub fn raw_trait_record(raw: RawTraitHead) -> Self {
+        Expr::expr(ExprBody::RawTraitRecord(raw))
     }
 
     pub fn field_access<S: Into<String>>(e: Expr, s: S) -> Self {
-        Expr { body: ExprBody::FieldAccess(Box::new(e), s.into()), ty: None }
+        Expr::expr(ExprBody::FieldAccess(Box::new(e), s.into()))
     }
 
     pub fn tuple_access(e: Expr, index: usize) -> Self {
-        Expr { body: ExprBody::TupleAccess(Box::new(e), index), ty: None }
+        Expr::expr(ExprBody::TupleAccess(Box::new(e), index))
     }
 
     pub fn block(items: Vec<Item>) -> Self {
-        Expr { body: ExprBody::Block(items), ty: None }
+        Expr::expr(ExprBody::Block(items))
     }
 }
 
@@ -84,7 +93,8 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.body {
             ExprBody::Lit(a)            => write!(f, "{}", a),
-            ExprBody::Var(x)            => write!(f, "{}", x),
+            // ExprBody::Var(x)            => write!(f, "{}", x),
+            ExprBody::Var(x)            => write!(f, "{}", x.pretty()),
             ExprBody::Abs(x, e)         => write!(f, "λ{}.{}", x, e),
             ExprBody::App(e1, e2) => {
                 if let ExprBody::App(_, _) = e2.body {
@@ -98,7 +108,7 @@ impl fmt::Display for Expr {
             ExprBody::Match(expr, arms) => {
                 let s: Vec<String>
                     = arms.iter()
-                          .map(|(p, e)| format!("{} => {},", p, e))
+                          .map(|(p, e)| format!("  {} => {},", p, e))
                           .collect();
                 write!(f, "match ({}) {{\n{}\n}}", *expr, s.join("\n"))
             }

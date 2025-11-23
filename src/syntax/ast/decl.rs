@@ -1,91 +1,26 @@
+mod raw;
+pub use raw::*;
+
+mod resolved;
+pub use resolved::*;
+
+#[derive(Clone, Debug)]
+pub enum Decl {
+    Type(RawTypeDef),           // parsed, "raw" type decl.
+    Trait(RawTrait),            // parsed, "raw" trait decl.
+    Impl(RawImpl),              // parsed, "raw" impl decl.
+    ImplResolved(Impl),         // resolved, "intermediate" impl decl.
+}
+
 use std::fmt;
-use crate::typesys::{Type, TypeVarId, TypeScheme};
 
-#[derive(Clone, Debug)]
-pub enum TypeDecl {
-    SumType {
-        name: String,           // Type constructor name of the ADT type
-        params: Vec<TypeVarId>, // Type variables of the ADT type
-        variants: Vec<Variant>, // Constructor variants
-    }
-}
-
-impl fmt::Display for TypeDecl {
+impl fmt::Display for Decl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TypeDecl::SumType {name, params, variants} => {
-                assert!(!variants.is_empty());
-                let s = if params.is_empty() {
-                    name.clone()
-                } else {
-                    format!("{} {}", name, params.iter()
-                            .map(|id| format!("{}", id))
-                            .collect::<Vec<_>>().join(" "))
-                };
-                let vs: Vec<_> = variants.iter().map(|v| v.to_string()).collect();
-                write!(f, "type {} = {}", s, vs.join(" | "))
-            }
+            Decl::Type(raw) => write!(f, "{:?}", raw),
+            Decl::Trait(raw) => write!(f, "{:?}", raw),
+            Decl::Impl(raw) => write!(f, "{:?}", raw),
+            Decl::ImplResolved(resolved) => write!(f, "{:?}", resolved),
         }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum Variant {
-    Unit(String),                        // ex. `None, `Nil`,
-    Tuple(String, Vec<Type>),            // ex. `Some a`, `Result a e`,
-}
-
-impl fmt::Display for Variant {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Variant::Unit(name) => write!(f, "{}", name),
-            Variant::Tuple(name, ts) => {
-                assert!(!ts.is_empty());
-                let s: Vec<_> = ts
-                    .iter()
-                    .map(|t| match t {
-                        Type::Fun(_, _) | Type::App(_, _) => format!("({})", t),
-                        _ => format!("{}", t)
-                    })
-                    .collect();
-                write!(f, "{} {}", name, s.join(" "))
-            }
-        }
-    }
-}
-
-impl Variant {
-    pub fn name(&self) -> String {
-        match self {
-            Variant::Unit(n) | Variant::Tuple(n, _) => n.clone(),
-        }
-    }
-}
-
-impl Variant {
-    pub fn as_scheme(&self, type_name: &str, params: &[TypeVarId]) -> (String, TypeScheme) {
-        // 型コンストラクタ適用: Option a, Result a b, ...
-        let mut applied = Type::Con(type_name.to_string());
-        for &p in params {
-            applied = Type::App(Box::new(applied), Box::new(Type::Var(p)));
-        }
-
-        // コンストラクタの型を構築
-        let ctor_type = match self {
-            Variant::Unit(_) => applied,
-            Variant::Tuple(_, elems) => {
-                let mut t = applied;
-                for arg in elems.iter().rev() {
-                    t = Type::Fun(Box::new(arg.clone()), Box::new(t));
-                }
-                t
-            }
-        };
-
-        // Scheme 化
-        let scheme = TypeScheme::poly(params.to_vec(), ctor_type);
-
-        // コンストラクタ名と Scheme を返す
-        (self.name().to_string(), scheme)
     }
 }

@@ -22,6 +22,9 @@ impl From<ParseIntError> for LexicalError {
         error = LexicalError)]
 pub enum Token {
     // --- キーワード ---
+    #[token("mod"  , priority = 10)] Mod,
+    #[token("use"  , priority = 10)] Use,
+    #[token("as"   , priority = 10)] As,
     #[token("type" , priority = 10)] Type,
     #[token("trait", priority = 10)] Trait,
     #[token("impl" , priority = 10)] Impl,
@@ -35,6 +38,8 @@ pub enum Token {
     #[token("()"   , priority = 10)] Unit,
 
     // --- 演算子・記号 ---
+    #[token("::"   , priority = 7)]  ColonColon, // path separator
+
     #[token("*"    , priority = 6)]  Star,
     #[token("/"    , priority = 6)]  Slash,
 
@@ -79,6 +84,9 @@ pub enum Token {
     #[token("!"    , priority = 3)]  ExclamationMark,
 
     // --- 識別子・リテラル ---
+    #[regex(r"[a-z_][a-zA-Z0-9_]*::", |lex| lex.slice().trim_end_matches("::").to_string())]
+    ModIdent(String),
+
     #[regex(r"[a-z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
     Ident(String),
 

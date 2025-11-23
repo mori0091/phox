@@ -1,8 +1,5 @@
-use crate::syntax::ast::{RawTypeDecl, RawVariant, RawType, RawConstraint};
-use crate::syntax::ast::{RawTraitDecl, RawTraitMemberDecl};
-use crate::syntax::ast::{RawImplDecl, RawImplMemberDecl};
-use crate::syntax::ast::{Item, Stmt, Expr, Lit, Pat};
-
+use crate::module::*;
+use crate::syntax::ast::*;
 use crate::syntax::token::{Token, LexicalError};
 
 grammar;
@@ -13,6 +10,9 @@ extern {
 
     enum Token {
         // --- キーワード ---
+        "mod"   => Token::Mod,
+        "use"   => Token::Use,
+        "as"    => Token::As,
         "type"  => Token::Type,
         "trait" => Token::Trait,
         "impl"  => Token::Impl,
@@ -26,6 +26,8 @@ extern {
         "()"    => Token::Unit,
 
         // --- 演算子・記号 ---
+        "::" =>  Token::ColonColon,
+
         "*"  =>  Token::Star,
         "/"  =>  Token::Slash,
 
@@ -70,6 +72,7 @@ extern {
         "!"  =>  Token::ExclamationMark,
 
         // --- 識別子・リテラル ---
+        "mod_ident"   => Token::ModIdent(<String>),
         "identifier" => Token::Ident(<String>),
         "Identifier" => Token::ConIdent(<String>),
         "int"        => Token::Int(<i64>),
@@ -79,11 +82,20 @@ extern {
     }
 }
 
+// ----------------------------------------------
+lambda: Token = {
+    "\\",
+    "λ",
+};
+
+
+// ----------------------------------------------
 pub Program: Vec<Item> = {
     ItemList,
 };
 
 // ----------------------------------------------
+// === items ===
 pub ItemList: Vec<Item> = {
     <mut v:(<Item> ";")*> <tail:Expr> => {
         v.push(Item::Expr(tail));
@@ -96,51 +108,36 @@ pub ItemList: Vec<Item> = {
 };
 
 pub Item: Item = {
-    TraitDecl => Item::RawTraitDecl(<>),
-    ImplDecl => Item::RawImplDecl(<>),
-    TypeDecl => Item::RawTypeDecl(<>),
+    Decl => Item::Decl(<>),
     Stmt => Item::Stmt(<>),
     Expr => Item::Expr(<>),
 };
 
 // ----------------------------------------------
-TraitDecl: RawTraitDecl = {
-    "trait" <name:ConIdent> <params:TypeParams> "{" <members:TraitMemberDecl+> "}"
-        => RawTraitDecl { name: name, params: params, members: members, },
-};
-
-TraitMemberDecl: RawTraitMemberDecl = {
-    <name:Ident> ":" <ty:Type> ";"
-        => RawTraitMemberDecl { name: name, ty: Box::new(ty), },
-};
+// === declarations ===
+Decl: Decl = {
+    DeclType => Decl::Type(<>),
+    DeclTrait => Decl::Trait(<>),
+    DeclImpl => Decl::Impl(<>),
+}
 
 // ----------------------------------------------
-ImplDecl: RawImplDecl = {
-    "impl" <name:ConIdent> <params:TypeAtom+> "{" <members:ImplMemberDecl+> "}"
-        => RawImplDecl { name: name, params: params, members: members, },
-};
-
-ImplMemberDecl: RawImplMemberDecl = {
-    <name:Ident> "=" <expr:Expr> ";"
-        => RawImplMemberDecl { name: name, expr: Box::new(expr) },
-};
-
-// ----------------------------------------------
-TypeDecl: RawTypeDecl = {
+// === ADT type declarations ===
+DeclType: RawTypeDef = {
     "type" <name:ConIdent> <params:TypeParams> "=" <variants:VariantList>
-        => RawTypeDecl::SumType {
+        => RawTypeDef::SumType {
             name: name.clone(),
             params: params,
             variants: variants,
         },
     "type" <name:ConIdent> <params:TypeParams> "=" <tuple:TypeTuple>
-        => RawTypeDecl::SumType {
+        => RawTypeDef::SumType {
             name: name.clone(),
             params: params,
             variants: vec![RawVariant::Tuple(name.clone(), vec![tuple])],
         },
     "type" <name:ConIdent> <params:TypeParams> "=" <record:TypeRecord>
-        => RawTypeDecl::SumType {
+        => RawTypeDef::SumType {
             name: name.clone(),
             params: params,
             variants: vec![RawVariant::Tuple(name.clone(), vec![record])],
@@ -151,6 +148,8 @@ TypeParams: Vec<String> = {
     <vars:Ident*> => vars
 };
 
+// ----------------------------------------------
+// === data constructors ===
 VariantList: Vec<RawVariant> = {
     <mut vs:(<Variant> "|")*> <v:Variant> => {
         vs.push(v);
@@ -159,11 +158,6 @@ VariantList: Vec<RawVariant> = {
 };
 
 Variant: RawVariant = {
-    // VariantRecord,
-    VariantSimple,
-};
-
-VariantSimple: RawVariant = {
     <name:ConIdent> <ts:TypeAtom*> => {
         if ts.is_empty() {
             RawVariant::Unit(name)
@@ -174,6 +168,8 @@ VariantSimple: RawVariant = {
     }
 };
 
+// ----------------------------------------------
+// === types ===
 Type: RawType = {
     TypeFun,
 };
@@ -201,8 +197,8 @@ TypeVar: RawType = {
 };
 
 TypeCon: RawType = {
-    ConIdent => RawType::ConName(<>),
-    <"()"> => RawType::ConName("()".to_string()),
+    PathCon => RawType::ConName(Symbol::Unresolved(<>)),
+    <"()"> => RawType::ConName(Symbol::unit()), // Hmm..
 };
 
 TypeParen: RawType = {
@@ -223,15 +219,110 @@ TypeRecordField: (String, RawType) = {
 };
 
 // ----------------------------------------------
-lambda: Token = {
-    "\\",
-    "λ",
+// === trait declarations ===
+DeclTrait: RawTrait = {
+    "trait" <name:ConIdent> <params:TypeParams> "{" <members:DeclTraitMember+> "}"
+        => RawTrait { name: name, params: params, members: members, },
+};
+
+DeclTraitMember: RawTraitMember = {
+    <name:Ident> ":" <ty:Type> ";"
+        => RawTraitMember { name: name, ty: Box::new(ty), },
 };
 
 // ----------------------------------------------
+// === impl declarations ===
+DeclImpl: RawImpl = {
+    "impl" <name:PathCon> <params:TypeAtom+> "{" <members:DeclImplMember+> "}"
+        => RawImpl { name: Symbol::Unresolved(name), params: params, members: members, },
+};
+
+DeclImplMember: RawImplMember = {
+    <name:Ident> "=" <expr:Expr> ";"
+        => RawImplMember { name: name, expr: Box::new(expr) },
+};
+
+// ----------------------------------------------
+// === path-glob pattern for `use` statements. ===
+PathGlob: PathGlob = {
+    "::" <ps:PathGlobNode> => PathGlob::Absolute(ps),
+    <ps:PathGlobNode>      => PathGlob::Relative(ps),
+};
+
+PathGlobNode: PathGlobNode = {
+    <ps:"mod_ident"*> <leaf:PathGlobLeaf> => {
+        PathGlobNode::List(ps, leaf)
+    },
+    <ps:"mod_ident"+> "{" <tree:SepByComma<PathGlobNode>> "}" => {
+        PathGlobNode::Tree(ps, tree)
+    },
+};
+
+PathGlobLeaf: PathGlobLeaf = {
+    // baz as quax
+    <p:Ident> <alias:("as" <Ident>)?> => {
+        PathGlobLeaf::Elem(p, alias)
+    },
+    // Baz as Quax
+    <p:ConIdent> <alias:("as" <ConIdent>)?> => {
+        PathGlobLeaf::Elem(p, alias)
+    },
+    "*" => {
+        PathGlobLeaf::Wildcard
+    },
+};
+
+// ----------------------------------------------
+// === path ===
+Path: Path = {
+    "::" <ps:PathList> => Path::absolute(ps),
+    <ps:PathList> => Path::relative(ps),
+};
+
+PathList: Vec<String> = {
+    <mut ps:"mod_ident"*> <leaf:PathLeaf> => {
+        ps.push(leaf);
+        ps
+    },
+};
+
+PathLeaf: String = {
+    ConIdent,
+    IdentOps,
+    <"identifier">,
+};
+
+PathCon: Path = {
+    <mut ps:"mod_ident"*> <leaf:ConIdent> => {
+        ps.push(leaf);
+        Path::relative(ps)
+    },
+    "::" <mut ps:"mod_ident"*> <leaf:ConIdent> => {
+        ps.push(leaf);
+        Path::absolute(ps)
+    },
+};
+
+// ----------------------------------------------
+// === statements ===
 Stmt: Stmt = {
+    StmtMod,
+    StmtUse,
     StmtLet,
     StmtLetRec,
+};
+
+StmtMod: Stmt = {
+    "mod" <m:"identifier"> <items:ModBlock> => Stmt::Mod(m, items),
+};
+
+ModBlock: Option<Vec<Item>> = {
+    "{" "}" => None,
+    <("{" <ItemList> "}")?>,
+};
+
+StmtUse: Stmt = {
+    "use" <ps:PathGlob> => Stmt::Use(ps),
 };
 
 StmtLet: Stmt = {
@@ -243,6 +334,7 @@ StmtLetRec: Stmt = {
 };
 
 // ----------------------------------------------
+// === expressions ===
 pub Expr: Expr = {
     Expr0,
 };
@@ -278,8 +370,8 @@ Expr1: Expr = {
 
 // 論理演算
 ExprBool: Expr = {
-    <l:Expr1> "&&" <r:Expr2> => Expr::app(Expr::app(Expr::var("&&"), l), r),
-    <l:Expr1> "||" <r:Expr2> => Expr::app(Expr::app(Expr::var("||"), l), r),
+    <l:Expr1> "&&" <r:Expr2> => Expr::app(Expr::app(Expr::unresolved_var("&&"), l), r),
+    <l:Expr1> "||" <r:Expr2> => Expr::app(Expr::app(Expr::unresolved_var("||"), l), r),
 };
 
 Expr2: Expr = {
@@ -289,12 +381,12 @@ Expr2: Expr = {
 
 // 比較演算子 (infix)
 ExprCmp: Expr = {
-    <l:Expr3> "==" <r:Expr3> => Expr::app(Expr::app(Expr::var("=="), l), r),
-    <l:Expr3> "!=" <r:Expr3> => Expr::app(Expr::app(Expr::var("!="), l), r),
-    <l:Expr3> "<"  <r:Expr3> => Expr::app(Expr::app(Expr::var("<") , l), r),
-    <l:Expr3> "<=" <r:Expr3> => Expr::app(Expr::app(Expr::var("<="), l), r),
-    <l:Expr3> ">"  <r:Expr3> => Expr::app(Expr::app(Expr::var(">") , l), r),
-    <l:Expr3> ">=" <r:Expr3> => Expr::app(Expr::app(Expr::var(">="), l), r),
+    <l:Expr3> "==" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("=="), l), r),
+    <l:Expr3> "!=" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("!="), l), r),
+    <l:Expr3> "<"  <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("<") , l), r),
+    <l:Expr3> "<=" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("<="), l), r),
+    <l:Expr3> ">"  <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var(">") , l), r),
+    <l:Expr3> ">=" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var(">="), l), r),
 };
 
 Expr3: Expr = {
@@ -304,8 +396,8 @@ Expr3: Expr = {
 
 // 加減算 (infixl)
 ExprAdd: Expr = {
-    <l:Expr3> "+" <r:Expr4> => Expr::app(Expr::app(Expr::var("+"), l), r),
-    <l:Expr3> "-" <r:Expr4> => Expr::app(Expr::app(Expr::var("-"), l), r),
+    <l:Expr3> "+" <r:Expr4> => Expr::app(Expr::app(Expr::unresolved_var("+"), l), r),
+    <l:Expr3> "-" <r:Expr4> => Expr::app(Expr::app(Expr::unresolved_var("-"), l), r),
 };
 
 Expr4: Expr = {
@@ -316,8 +408,8 @@ Expr4: Expr = {
 
 // 乗除算 (infixl)
 ExprMul: Expr = {
-    <l:Expr4> "*" <r:Expr5> => Expr::app(Expr::app(Expr::var("*"), l), r),
-    <l:Expr4> "/" <r:Expr5> => Expr::app(Expr::app(Expr::var("/"), l), r),
+    <l:Expr4> "*" <r:Expr5> => Expr::app(Expr::app(Expr::unresolved_var("*"), l), r),
+    <l:Expr4> "/" <r:Expr5> => Expr::app(Expr::app(Expr::unresolved_var("/"), l), r),
 };
 
 Expr5: Expr = {
@@ -339,7 +431,7 @@ Expr6: Expr = {
 
 ExprInfixOp: Expr = {
     <l:Expr6> <op:"infixOp"> <r:Expr7> => {
-        Expr::app(Expr::app(Expr::var(op), l), r)
+        Expr::app(Expr::app(Expr::unresolved_var(op), l), r)
     },
 };
 
@@ -349,7 +441,7 @@ Expr7: Expr = {
 };
 
 ExprPipeL: Expr = {
-    <f:Expr8> "<|" <x:Expr7> => Expr::app(f, x),
+    <f:Expr8> "<|" <x:Expr7> => Expr::app(Expr::app(Expr::unresolved_var("<|"), f), x),
 };
 
 Expr8: Expr = {
@@ -358,7 +450,7 @@ Expr8: Expr = {
 };
 
 ExprPipeR: Expr = {
-    <x:Expr8> "|>" <f:Expr9> => Expr::app(f, x),
+    <x:Expr8> "|>" <f:Expr9> => Expr::app(Expr::app(Expr::unresolved_var("|>"), x), f),
 };
 
 Expr9: Expr = {
@@ -367,16 +459,8 @@ Expr9: Expr = {
 };
 
 ExprCompose: Expr = {
-    <f:Expr9> ">>" <g:Expr10> => {
-        let x = Pat::var("__tmp_var__");
-        let body = Expr::app(g, Expr::app(f, Expr::var("__tmp_var__")));
-        Expr::abs(x, body)
-    },
-    <f:Expr9> "<<" <g:Expr10> => {
-        let x = Pat::var("__tmp_var__");
-        let body = Expr::app(f, Expr::app(g, Expr::var("__tmp_var__")));
-        Expr::abs(x, body)
-    },
+    <f:Expr9> ">>" <g:Expr10> => Expr::app(Expr::app(Expr::unresolved_var(">>"), f), g),
+    <f:Expr9> "<<" <g:Expr10> => Expr::app(Expr::app(Expr::unresolved_var("<<"), f), g),
 };
 
 Expr10: Expr = {
@@ -386,8 +470,8 @@ Expr10: Expr = {
 
 // 単項演算子 (prefix)
 ExprUnary: Expr = {
-    "-" <r:Expr10> => Expr::app(Expr::var("negate"), r),
-    "!" <r:Expr10> => Expr::app(Expr::var("not"), r),
+    "-" <r:Expr10> => Expr::app(Expr::unresolved_var("negate"), r),
+    "!" <r:Expr10> => Expr::app(Expr::unresolved_var("not"), r),
 };
 
 Expr11: Expr = {
@@ -402,10 +486,9 @@ ExprApp: Expr = {
 
 // 原子的な式
 Atom: Expr = {
-    Lit => Expr::lit(<>),
-    Ident => Expr::var(<>),
-    ConIdent => Expr::var(<>),
     ExprParen,
+    ExprVar,
+    Lit => Expr::lit(<>),
     ExprTuple,
     ExprRecord,
     ExprTraitRecord,
@@ -418,6 +501,10 @@ ExprParen: Expr = {
     "(" <e:Expr> ")" => e,
 };
 
+ExprVar: Expr = {
+    Path => Expr::unresolved_qvar(<>),
+};
+
 ExprTuple: Expr = {
     "(" <es:SepByComma<Expr>> ")" => Expr::tuple(es),
 };
@@ -428,14 +515,14 @@ ExprRecord: Expr = {
 };
 
 ExprTraitRecord: Expr = {
-    "@" "{" <raw_constraint:Constraint> "}" => {
-        Expr::raw_trait_record(raw_constraint)
+    "@" "{" <raw:TraitHead> "}" => {
+        Expr::raw_trait_record(raw)
     },
 };
 
-Constraint: RawConstraint = {
-    <name:ConIdent> <params:TypeAtom+> => {
-        RawConstraint { name, params }
+TraitHead: RawTraitHead = {
+    <name:PathCon> <params:TypeAtom+> => {
+        RawTraitHead { name: Symbol::Unresolved(name), params }
     },
 };
 
@@ -460,6 +547,7 @@ ExprBlock: Expr = {
     },
 };
 
+// ----------------------------------------------
 // === pattern ===
 Pat: Pat = {
     Pat0,
@@ -471,13 +559,13 @@ Pat0: Pat = {
 };
 
 PatCon: Pat = {
-    <name:ConIdent> <args:PatAtom*> => Pat::con(name, args),
+    <name:PathCon> <args:PatAtom*> => Pat::unresolved_qcon(name, args),
 };
 
 PatAtom: Pat = {
     "_" => Pat::Wildcard,
     Lit => Pat::Lit(<>),
-    Ident => Pat::var(<>),
+    Ident => Pat::unresolved_var(<>),
     PatParen,
     PatTuple,
     PatRecord,
@@ -498,7 +586,7 @@ PatRecord: Pat = {
 
 PatRecordField: (String, Pat) = {
     <name:Ident> ":" <pat:Pat> => (name, pat),
-    <name:Ident> => (name.clone(), Pat::Var(name)) // 省略形
+    <name:Ident> => (name.clone(), Pat::unresolved_var(name)) // 省略形
 };
 
 // === literal ===
@@ -527,7 +615,11 @@ Int: i64 = {
 
 // === identifier ===
 Ident: String = {
+    IdentOps,
     <"identifier">,
+};
+
+IdentOps: String = {
     "(" <"infixOp"> ")",
     "(" "==" ")" => "==".to_string(),
     "(" "!=" ")" => "!=".to_string(),
@@ -542,6 +634,10 @@ Ident: String = {
     "(" "!" ")"  => "not".to_string(),
     "(" "&&" ")" => "&&".to_string(),
     "(" "||" ")" => "||".to_string(),
+    "(" "|>" ")" => "|>".to_string(),
+    "(" "<|" ")" => "<|".to_string(),
+    "(" ">>" ")" => ">>".to_string(),
+    "(" "<<" ")" => "<<".to_string(),
 };
 
 ConIdent: String = {

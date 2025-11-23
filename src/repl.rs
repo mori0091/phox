@@ -1,9 +1,10 @@
 use crate::api;
+use crate::typesys::*;
 
 use lalrpop_util::ParseError;
 
 pub fn repl() {
-    let mut boot = api::Bootstrap::new();
+    let mut phox = api::PhoxEngine::new();
     let mut buffer = String::new();
     let mut prompt = "> ";
 
@@ -18,22 +19,35 @@ pub fn repl() {
         }
         buffer.push_str(&line);
 
-        if buffer.starts_with(':') {
-            let res = handle_command(&buffer);
-            buffer.clear();
-            if let Some(src) = res {
-                buffer.push_str(&src);
-            }
-            else {
-                continue;
+        if buffer.starts_with(':') && !buffer.starts_with("::") {
+            match handle_command(&mut phox, &buffer) {
+                CommandResult::Exit => {
+                    println!();
+                    std::process::exit(0);
+                }
+                CommandResult::Continue => {
+                    buffer.clear();
+                    println!();
+                    continue;
+                }
+                CommandResult::Load(src) => {
+                    buffer.clear();
+                    buffer.push_str(&src);
+                }
             }
         }
         match api::parse(&buffer) {
-            Ok(items) => {
-                for mut item in items {
-                    match boot.eval_item(&mut item) {
-                        Err(e)         => println!("{}", e),
-                        Ok((val, sch)) => println!("=> {}: {}", val, sch.pretty()),
+            Ok(mut items) => {
+                let mut module = phox.roots.get(api::DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
+                if let Err(e) = phox.resolve_items(&mut module, &mut items) {
+                    println!("{}", e)
+                }
+                else {
+                    for mut item in items {
+                        match phox.eval_item(&mut module, &mut item) {
+                            Err(e)         => println!("{}", e),
+                            Ok((val, sch)) => println!("=> {}: {}", val, sch.pretty()),
+                        }
                     }
                 }
                 println!();
@@ -45,8 +59,8 @@ pub fn repl() {
                 prompt = "| ";
             }
             Err(e) => {
-                println!();
                 println!("parse error: {:?}", e);
+                println!();
                 buffer.clear();
                 prompt = "> ";
             }
@@ -54,34 +68,10 @@ pub fn repl() {
     }
 }
 
-fn handle_command(input: &str) -> Option<String> {
-    let tokens: Vec<&str> = input.trim_start_matches(':').split_whitespace().collect();
-    match tokens.as_slice() {
-        ["quit"] | ["q"]  => {
-            exit();
-            None
-        }
-        ["help"] | ["h"] | ["?"] => {
-            help();
-            None
-        }
-        ["load", path] | ["l", path] => {
-            load_file(path)
-        }
-        ["load"] | ["l"] => {
-            println!("Required an argument: {}", input);
-            None
-        }
-        _ => {
-            println!("Unknown command: {}", input);
-            None
-        }
-    }
-}
-
-fn exit() {
-    println!();
-    std::process::exit(0)
+enum CommandResult {
+    Continue,
+    Exit,
+    Load(String),
 }
 
 fn help() {
@@ -95,24 +85,118 @@ fn help() {
 :load <path>, :l <path>
     load and evaluate Phox source file specified by <path>.
 
+:modules, :m
+    print list of root modules.
+
+:using, :u
+    print list of using aliases for each modules.
+
+:symbols, :s
+    print list of symbols for each modules.
+
+:impls, or :impls [options]
+    print list of `impl`s.
+    options:
+        -v, or --verbose
+            print also the `impl`s' implementation.
 "#
     );
 }
 
-fn load_file(path: &str) -> Option<String> {
-    match std::fs::read_to_string(path) {
-        Err(e) => {
-            println!("failed to read {}: {}", path, e);
-            println!("");
-            None
+fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
+    let tokens: Vec<&str> = input.trim_start_matches(':').split_whitespace().collect();
+    match tokens.as_slice() {
+        ["quit"] | ["q"] => CommandResult::Exit,
+
+        ["help"] | ["h"] | ["?"] => {
+            help();
+            CommandResult::Continue
         }
-        Ok(src) => {
-            Some(src)
+
+        ["load"] | ["l"] => {
+            println!("Required an argument: {}", input);
+            CommandResult::Continue
+        }
+        ["load", path] | ["l", path] => {
+            match std::fs::read_to_string(path) {
+                Ok(src) => CommandResult::Load(src),
+                Err(e) => {
+                    println!("failed to read {}: {}", path, e);
+                    CommandResult::Continue
+                }
+            }
+        }
+
+        ["modules"] | ["m"] => {
+            for name in phox.roots.keys() {
+                println!("{}", name);
+            }
+            CommandResult::Continue
+        }
+        ["using"] | ["u"] => {
+            use crate::module::Symbol;
+            for module in phox.roots.values() {
+                println!("mod {};", module.borrow().path().pretty());
+                let mut aliases = module.borrow().using.clone().into_iter().collect::<Vec<_>>();
+                aliases.sort_by_key(|(_alias, path)| path.pretty());
+                for (alias, path) in aliases.iter() {
+                    let tmp = Symbol::Local(alias.to_string());
+                    println!("  use {:<30} as {}", path.pretty(), tmp.pretty());
+                }
+                println!();
+            }
+            CommandResult::Continue
+        }
+        ["symbols"] | ["s"] => {
+            for (path, symbol_env) in phox.module_symbol_envs.iter() {
+                println!("mod {};", path.pretty());
+                let map = symbol_env.clone_map();
+                let mut syms = map.iter().collect::<Vec<_>>();
+                syms.sort_by_key(|(path, _)| path.pretty());
+                for (path, symbol) in syms.iter() {
+                    println!("  {:<30} {:?}", path.pretty(), symbol);
+                }
+                println!();
+            }
+            println!("EXTERN");
+            for (path, symbol_env) in phox.extern_symbol_envs.iter() {
+                println!("mod {};", path.pretty());
+                let map = symbol_env.clone_map();
+                let mut syms = map.iter().collect::<Vec<_>>();
+                syms.sort_by_key(|(path, _)| path.pretty());
+                for (path, symbol) in syms.iter() {
+                    println!("  {:<30} {:?}", path.pretty(), symbol);
+                }
+                println!();
+            }
+            CommandResult::Continue
+        }
+
+        ["impls"] => {
+            for (impl_head, _members) in phox.impl_env.iter() {
+                println!("impl {}", impl_head.pretty());
+            }
+            CommandResult::Continue
+        }
+        ["impls", "--verbose"] | ["impls", "-v"] => {
+            for (impl_head, members) in phox.impl_env.iter() {
+                println!("impl {} {{", impl_head.pretty());
+                for (sym, expr) in members.iter() {
+                    println!("  {} = {};", sym.pretty(), expr);
+                }
+                println!("}};");
+                println!();
+            }
+            CommandResult::Continue
+        }
+        ["impls", _unknown] => {
+            println!("Unknown option: {}", input);
+            CommandResult::Continue
+        }
+
+        _ => {
+            println!("Unknown command: {}", input);
+            CommandResult::Continue
         }
     }
-}
-
-fn _repl_todo() {
-    println!("Command not implemented yet.");
-    println!()
 }
