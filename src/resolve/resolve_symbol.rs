@@ -1,0 +1,139 @@
+use super::*;
+
+// -------------------------------------------------------------
+// === resolve symbol ===
+pub fn resolve_symbol(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    symbol_env: &mut SymbolEnv,
+    symbol: &mut Symbol,
+) -> Result<(), TypeError> {
+    if let Symbol::Unresolved(path) = symbol {
+        let path = path.clone();
+        let resolved = match path {
+            Path::Relative(_) => {
+                resolve_symbol_relative(phox, module, symbol_env, path)?
+            }
+            Path::Absolute(_) => {
+                resolve_symbol_absolute(phox, module, path)?
+            }
+        };
+        *symbol = resolved;
+    }
+    Ok(())
+}
+
+// -------------------------------------------------------------
+fn resolve_symbol_relative(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    symbol_env: &mut SymbolEnv,
+    path: Path,
+) -> Result<Symbol, TypeError> {
+    if let Some(s) = symbol_env.get(&path) {
+        return Ok(s.clone())
+    }
+
+    // Is an alias contained in the path?
+    let tmp_absolute_path = module.borrow().resolve_alias(&path);
+    if let Some(alias_path) = tmp_absolute_path {
+        let mut sym = Symbol::Unresolved(alias_path);
+        resolve_symbol(phox, module, symbol_env, &mut sym)?;
+        return Ok(sym)
+    }
+
+    // Otherwise, module top-level symbol, trait member, or local symbol
+    let name = path.to_string();
+    // Is a known trait member's name?
+    if module.borrow().trait_members.values().any(|v| v.contains(&name)) {
+        let sym = Symbol::trait_member(&name);
+        return Ok(sym)
+    }
+    // Is local?
+    else if symbol_env.is_local() {
+        let sym = Symbol::local(&name);
+        symbol_env.insert(path.clone(), sym.clone());
+        return Ok(sym)
+    }
+    // module top-level symbol
+    else {
+        let sym = Symbol::Local(module.borrow().path().concat_path(&path).pretty());
+        symbol_env.insert(path.clone(), sym.clone());
+        return Ok(sym)
+    }
+}
+
+// -------------------------------------------------------------
+fn resolve_symbol_absolute(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    path: Path,
+) -> Result<Symbol, TypeError> {
+    if let Some(global_sym) = phox.get_extern_symbol_env(module).get(&path) {
+        return Ok(global_sym)
+    }
+
+    // and then register target into corresponding tables.
+    // - `mod` sub-module             -> module.submods \NOTE Symbols shall not be assigned to the module itself.
+    // - `type` type constructor      -> module.icx.kind_env
+    // - `trait` trait name           -> module.trait_members
+    //   - `trait` member type scheme -> module.icx.trait_member_env
+    //   - `impl` member type scheme  -> phox.impl_member_env \TODO move to module scope
+    //   - `impl` expr                -> phox.impl_env        \TODO move to module scope
+    // - top-level var type scheme    -> module.icx.type_env
+    //   - top-level var expr         -> module.value_env
+    match path.resolve(module, &phox.roots) {
+        Some((m, None)) => {
+            // NOTE: A path specifying `module` itself is permitted only in `mod`/`use` statements.
+            return Err(TypeError::Expeted {
+                expected: "value".to_string(),
+                actual: format!("module {}", m.borrow().path().pretty()),
+            })
+        }
+        Some((m, Some(rem))) if rem.len() == 1 => {
+            let target_sym = phox.get_symbol_env(&m).get(&rem).ok_or(TypeError::UnknownPath(path.clone()))?;
+            let extern_sym = target_sym.clone(); // <- \NOTE may be an "extern" symbol?
+
+            // is Trait name ?
+            if let Some(xs) = m.borrow().trait_members.get(&rem.to_string()) {
+                module.borrow_mut().trait_members.insert(rem.to_string(), xs.clone());
+                for member_name in xs.iter() {
+                    let member_sym = Symbol::trait_member(member_name);
+                    if let Some(member_schemes) = phox.get_infer_ctx(&m).get_trait_member_schemes(&member_sym) {
+                        phox.get_infer_ctx(module).extend_trait_member_schemes(&member_sym, member_schemes);
+                    }
+                    // \TODO import `impl_member_env`
+                }
+
+                phox.get_extern_symbol_env(module).insert(path, extern_sym.clone());
+                return Ok(extern_sym)
+            }
+
+            // is Data constructor or Variable ?
+            if let Some(ty_sch) = phox.get_infer_ctx(&m).get_type_scheme(&target_sym) {
+                phox.get_infer_ctx(module).put_type_scheme(extern_sym.clone(), ty_sch);
+                if let Some(val) = phox.get_value_env(&m).get(&target_sym) {
+                    phox.get_value_env(module).insert(extern_sym.clone(), val);
+                }
+
+                phox.get_extern_symbol_env(module).insert(path, extern_sym.clone());
+                return Ok(extern_sym)
+            }
+
+            // is Type constructor ?
+            if let Some(k) = phox.get_infer_ctx(&m).get_kind(&target_sym) {
+                phox.get_infer_ctx(module).put_kind(extern_sym.clone(), k.clone());
+
+                phox.get_extern_symbol_env(module).insert(path, extern_sym.clone());
+                return Ok(extern_sym)
+            }
+
+            // return Err(TypeError::UnknownPath(path))
+        }
+        _ => {
+            // return Err(TypeError::UnknownPath(path))
+        }
+    }
+
+    Err(TypeError::UnknownPath(path))
+}

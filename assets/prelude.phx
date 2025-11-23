@@ -1,19 +1,7 @@
 // -------------------------------------------------------------
-let (&&) = \x.\y. match ((x, y)) {
-    (true, true) => true,
-    (_, _)       => false,
-};
-
-let (||) = \x.\y. match ((x, y)) {
-    (true, _) => true,
-    (_, true) => true,
-    (_, _)    => false,
-};
-
-let not = \x. match (x) {
-    true  => false,
-    false => true,
-};
+let (&&) = \x.\y. if (x) y else false;
+let (||) = \x.\y. if (x) true else y;
+let not = \x. if (x) false else true;
 
 let (|>) = \x.\f. f x;
 let (<|) = \f.\x. f x;
@@ -191,7 +179,8 @@ impl Applicative (Result e) {
     pure = \x. Ok x;
     afmap = \f.\x. match ((f, x)) {
         (Ok g, Ok a) => Ok (g a),
-        Err err => Err err,
+        (Err err, _) => Err err,
+        (_, Err err) => Err err,
     };
 };
 
@@ -222,9 +211,10 @@ let rec __List__fmap = \f.\xs. match (xs) {
 
 let map = __List__fmap;
 
-let rec __List__afmap = \fs.\xs. match ((fs, xs)) {
-    (Cons g gs, Cons y ys) => Cons (g y) (__List__afmap gs ys),
-    _ => Nil,
+/// Cartesian product (not zip)
+let rec __List__afmap = \fs.\xs. match (fs) {
+    Nil => Nil,
+    Cons g gs => append (map g xs) (__List__afmap gs xs),
 };
 
 impl Functor List {

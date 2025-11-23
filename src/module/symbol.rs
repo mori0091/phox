@@ -13,6 +13,9 @@ impl Symbol {
     pub fn local<S: Into<String>>(name: S) -> Self {
         Symbol::Local(name.into())
     }
+    pub fn trait_member<S: Into<String>>(name: S) -> Self {
+        Symbol::local(name)
+    }
     // === for premitive type ===
     pub fn unit() -> Symbol {
         Symbol::local("::prelude::()")

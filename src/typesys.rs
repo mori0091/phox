@@ -33,9 +33,6 @@ pub use type_scheme::TypeScheme;
 mod trait_scheme;
 pub use trait_scheme::TraitScheme;
 
-mod raw_type_scheme;
-pub use raw_type_scheme::RawTypeScheme;
-
 mod type_context;
 pub use type_context::TypeContext;
 
