@@ -81,7 +81,7 @@ fn resolve_symbol_absolute(
     //   - `impl` member type scheme  -> phox.impl_member_env \TODO move to module scope
     //   - `impl` expr                -> phox.impl_env        \TODO move to module scope
     // - top-level var type scheme    -> module.icx.type_env
-    //   - top-level var expr         -> module.env
+    //   - top-level var expr         -> module.value_env
     match path.resolve(module, &phox.roots) {
         Some((m, None)) => {
             // NOTE: A path specifying `module` itself is permitted only in `mod`/`use` statements.

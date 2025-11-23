@@ -7,7 +7,7 @@ pub fn resolve_decl_impl(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawImpl,
-) -> Result<(), TypeError> {
+) -> Result<Impl, TypeError> {
     let head_sch = resolve_impl_head_scheme(phox, module, symbol_env, raw)?;
     check_impl_comflict(phox, &head_sch)?;
 
@@ -19,25 +19,26 @@ pub fn resolve_decl_impl(
         );
         let mut expr = m.expr.as_ref().clone();
         resolve_expr(phox, module, symbol_env, &mut expr)?;
-        members.push((symbol, expr, sch_tmpl));
+        members.push(ImplMember { symbol, expr, sch_tmpl });
     };
 
-    for (symbol, expr, sch_tmpl) in members {
+    for m in members.iter() {
         phox.impl_env
             .entry(head_sch.clone())
             .or_default()
-            .insert(symbol.clone(), expr);
+            .insert(m.symbol.clone(), m.expr.clone());
         phox.impl_member_env
-            .entry(symbol)
+            .entry(m.symbol.clone())
             .or_default()
-            .insert(sch_tmpl);
+            .insert(m.sch_tmpl.clone());
     }
-    Ok(())
+
+    Ok(Impl { head_sch, members })
 }
 
 fn check_impl_comflict(
     phox: &mut PhoxEngine,
-    impl_head_sch: &TraitScheme,
+    impl_head_sch: &Scheme<TraitHead>,
 ) -> Result<(), TypeError> {
     for (sch, _) in phox.impl_env.iter() {
         if sch.target.name != impl_head_sch.target.name { continue }

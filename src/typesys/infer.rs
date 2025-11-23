@@ -11,14 +11,38 @@ pub fn infer_item(
     item: &mut Item
 ) -> Result<Type, TypeError> {
     match item {
-        Item::Decl(_) => {
-            Ok(Type::unit())
+        Item::Decl(decl) => {
+            infer_decl(phox, module, icx, decl)
         }
         Item::Stmt(stmt) => {
             infer_stmt(phox, module, icx, stmt)
         }
         Item::Expr(expr) => {
             infer_expr(phox, module, icx, expr)
+        }
+    }
+}
+
+pub fn infer_decl(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    icx: &mut InferCtx,
+    decl: &mut Decl,
+) -> Result<Type, TypeError> {
+    match decl {
+        Decl::Type(_) | Decl::Trait(_) => Ok(Type::unit()),
+
+        Decl::Impl(_) => unreachable!(),
+
+        Decl::ImplResolved(Impl { head_sch: _, members }) => {
+            for m in members.iter() {
+                let icx = &mut icx.duplicate();
+                let ty = infer_expr(phox, module, icx, &mut m.expr.clone())?;
+                let sch = m.sch_tmpl.fresh_copy(&mut phox.ctx);
+                let (_, ty_inst) = &sch.instantiate(&mut phox.ctx);
+                phox.ctx.unify(&ty, ty_inst)?;
+            }
+            Ok(Type::unit())
         }
     }
 }
