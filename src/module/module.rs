@@ -67,7 +67,12 @@ impl Module {
 impl Module {
     pub fn add_alias(&mut self, name: &str, path: &Path) -> Result<(), TypeError> {
         if let Some(other) = self.using.get(name) {
-            Err(TypeError::ConflictAlias { name: name.to_string(), other: other.clone() })
+            if other == path {
+                Ok(())
+            }
+            else {
+                Err(TypeError::ConflictAlias { name: name.to_string(), other: other.clone() })
+            }
         }
         else {
             self.using.insert(name.to_string(), path.clone());
