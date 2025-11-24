@@ -119,7 +119,7 @@ fn test_unbound_trait_record_error() {
         @{Eq2 Bool}
     "#;
     let err = eval(src).unwrap_err();
-    assert!(format!("{}", err).contains("resolve error: no implementation for Eq2 Bool"));
+    assert!(format!("{}", err).contains("infer error: no implementation for Eq2 Bool"));
 }
 
 #[test]

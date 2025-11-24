@@ -40,7 +40,7 @@ pub fn repl() {
             Ok(items) => {
                 let mut module = phox.roots.get(api::DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
                 for mut item in items {
-                    match phox.eval_mod_item(&mut module, &mut item) {
+                    match phox.eval_item(&mut module, &mut item) {
                         Err(e)         => println!("{}", e),
                         Ok((val, sch)) => println!("=> {}: {}", val, sch.pretty()),
                     }

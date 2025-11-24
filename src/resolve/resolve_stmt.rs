@@ -16,7 +16,7 @@ pub fn resolve_stmt(
             }
 
             if let Some(items) = items {
-                phox.eval_mod_items(sub, items).unwrap();
+                phox.eval_items(sub, items).unwrap();
             }
             phox.eval_mod(module, &format!("use {name};")).unwrap();
             Ok(())

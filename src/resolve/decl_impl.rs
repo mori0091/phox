@@ -9,7 +9,6 @@ pub fn resolve_decl_impl(
     raw: &RawImpl,
 ) -> Result<Impl, TypeError> {
     let head_sch = resolve_impl_head_scheme(phox, module, symbol_env, raw)?;
-    check_impl_comflict(phox, &head_sch)?;
 
     let mut members = Vec::new();
     for m in raw.members.iter() {
@@ -22,43 +21,7 @@ pub fn resolve_decl_impl(
         members.push(ImplMember { symbol, expr, sch_tmpl });
     };
 
-    for m in members.iter() {
-        phox.impl_env
-            .entry(head_sch.clone())
-            .or_default()
-            .insert(m.symbol.clone(), m.expr.clone());
-        phox.impl_member_env
-            .entry(m.symbol.clone())
-            .or_default()
-            .insert(m.sch_tmpl.clone());
-    }
-
     Ok(Impl { head_sch, members })
-}
-
-fn check_impl_comflict(
-    phox: &mut PhoxEngine,
-    impl_head_sch: &Scheme<TraitHead>,
-) -> Result<(), TypeError> {
-    for (sch, _) in phox.impl_env.iter() {
-        if sch.target.name != impl_head_sch.target.name { continue }
-        if sch.target.score() != impl_head_sch.target.score() { continue }
-        let mut ctx2 = phox.ctx.clone();
-        let mut same = true;
-        for (t1, t2) in sch.target.params.iter().zip(impl_head_sch.target.params.iter()) {
-            if ctx2.unify(t1, t2).is_err() {
-                same = false;
-                break;
-            }
-        }
-        if same {
-            return Err(TypeError::ConflictImpl {
-                it: impl_head_sch.target.clone(),
-                other: sch.target.clone(),
-            });
-        }
-    };
-    Ok(())
 }
 
 // -------------------------------------------------------------
