@@ -11,9 +11,12 @@ pub fn resolve_stmt(
     match stmt {
         Stmt::Mod(name, items) => {
             let sub = &module.add_submod(name);
-            phox.eval_mod(sub, "use ::prelude::*;").unwrap();
+            if is_prelude_required_by(sub) {
+                phox.eval_mod(sub, "use ::prelude::*;").unwrap();
+            }
+
             if let Some(items) = items {
-                phox.resolve_items(sub, items)?;
+                phox.eval_mod_items(sub, items).unwrap();
             }
             phox.eval_mod(module, &format!("use {name};")).unwrap();
             Ok(())
@@ -30,4 +33,15 @@ pub fn resolve_stmt(
             resolve_expr(phox, module, symbol_env, expr)
         }
     }
+}
+
+fn is_prelude_required_by(module: &RefModule) -> bool {
+    if let Some(compo) = module.borrow().path().head() {
+        if let PathComponent::Name(name) = compo {
+            if name == "core" || name == "prelude" {
+                return false
+            }
+        }
+    }
+    true
 }
