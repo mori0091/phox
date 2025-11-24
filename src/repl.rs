@@ -37,17 +37,12 @@ pub fn repl() {
             }
         }
         match api::parse(&buffer) {
-            Ok(mut items) => {
+            Ok(items) => {
                 let mut module = phox.roots.get(api::DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
-                if let Err(e) = phox.resolve_items(&mut module, &mut items) {
-                    println!("{}", e)
-                }
-                else {
-                    for mut item in items {
-                        match phox.eval_item(&mut module, &mut item) {
-                            Err(e)         => println!("{}", e),
-                            Ok((val, sch)) => println!("=> {}: {}", val, sch.pretty()),
-                        }
+                for mut item in items {
+                    match phox.eval_mod_item(&mut module, &mut item) {
+                        Err(e)         => println!("{}", e),
+                        Ok((val, sch)) => println!("=> {}: {}", val, sch.pretty()),
                     }
                 }
                 println!();

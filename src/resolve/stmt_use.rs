@@ -36,7 +36,6 @@ pub fn resolve_stmt_use(
                         }
                     }
                     PathComponent::Name(name) => {
-                        eprintln!(">> use {} as {} / name = {}", path, alias, name);
                         let other_symbol_env = phox.get_symbol_env(&m);
                         if let Some(_sym) = other_symbol_env.get(&rem) {
                             module.borrow_mut().add_alias(&alias, path)?;

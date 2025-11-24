@@ -18,13 +18,13 @@ impl Symbol {
     }
     // === for premitive type ===
     pub fn unit() -> Symbol {
-        Symbol::local("::prelude::()")
+        Symbol::local("::core::()")
     }
     pub fn bool_() -> Symbol {
-        Symbol::local("::prelude::Bool")
+        Symbol::local("::core::Bool")
     }
     pub fn int() -> Symbol {
-        Symbol::local("::prelude::Int")
+        Symbol::local("::core::Int")
     }
 }
 
