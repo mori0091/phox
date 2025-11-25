@@ -108,7 +108,7 @@ fn test_unimplemented_trait_error() {
         eq true false
     "#;
     let err = eval(src).unwrap_err();
-    assert!(format!("{}", err).contains("infer error: UnboundVariable"));
+    assert!(format!("{}", err).contains("infer error: unbound variable"));
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn test_unbound_trait_record_error() {
         @{Eq2 Bool}
     "#;
     let err = eval(src).unwrap_err();
-    assert!(format!("{}", err).contains("infer error: no implementation for Eq2 Bool"));
+    assert!(format!("{}", err).contains("infer error: no implementation for `Eq2 Bool`"));
 }
 
 #[test]
@@ -138,7 +138,7 @@ fn test_field_access_on_var_error() {
         f @{Eq2 Int} 1 2
     "#;
     let err = eval(src).unwrap_err();
-    assert!(format!("{}", err).contains("infer error: ExpectedRecord"));
+    assert!(format!("{}", err).contains("infer error: expected a record"));
 }
 
 #[test]

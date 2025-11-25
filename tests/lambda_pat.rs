@@ -157,19 +157,19 @@ fn test_let_polymorphism_with_partial_application() {
 #[test]
 fn test_type_error_add_int_and_bool() {
     let err = eval("1 + true").unwrap_err();
-    assert!(err.contains("Mismatch"), "unexpected error: {err}");
+    assert!(err.contains("type mismatch"), "unexpected error: {err}");
 }
 
 #[test]
 fn test_pattern_tuple_length_mismatch() {
     let err = eval("let (x, y) = (1, 2, 3);").unwrap_err();
-    assert!(err.contains("TupleLengthMismatch"), "unexpected error: {err}");
+    assert!(err.contains("tuple length mismatch"), "unexpected error: {err}");
 }
 
 #[test]
 fn test_unbound_variable() {
     let err = eval("x + 1").unwrap_err();
-    assert!(err.contains("UnboundVariable"), "unexpected error: {err}");
+    assert!(err.contains("unbound variable"), "unexpected error: {err}");
 }
 
 #[test]
@@ -178,7 +178,7 @@ fn test_constructor_arity_mismatch() {
         "type Pair a b = Pair (a, b);
          let f = \\Pair x y. x;"  // Pair は1引数なのに2引数でパターンマッチ
     ).unwrap_err();
-    assert!(err.contains("ConstructorArityMismatch"), "unexpected error: {err}");
+    assert!(err.contains("arity mismatch for constructor `Pair`"), "unexpected error: {err}");
 }
 
 #[test]
@@ -187,7 +187,7 @@ fn test_unknown_field_access() {
         "let r = @{ x: 1 };
          r.y"
     ).unwrap_err();
-    assert!(err.contains("UnknownField"), "unexpected error: {err}");
+    assert!(err.contains("unknown field `y`"), "unexpected error: {err}");
 }
 
 #[test]
@@ -195,5 +195,5 @@ fn test_unknown_field_in_pattern() {
     let err = eval(
         "let @{ x, y } = @{ x: 1 };"
     ).unwrap_err();
-    assert!(err.contains("Mismatch"), "unexpected error: {err}");
+    assert!(err.contains("type mismatch"), "unexpected error: {err}");
 }

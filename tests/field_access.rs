@@ -15,13 +15,13 @@ fn test_field_access_type_nested() {
 #[test]
 fn test_field_access_type_missing_field() {
     let err = check_expr_scheme("{ let p = @{ x: 42 }; p.y }").unwrap_err();
-    assert!(format!("{:?}", err).contains("UnknownField"));
+    assert!(format!("{:?}", err).contains("unknown field `y`"));
 }
 
 #[test]
 fn test_field_access_type_non_record() {
     let err = check_expr_scheme("{ let n = 42; n.x }").unwrap_err();
-    assert!(format!("{:?}", err).contains("ExpectedRecord"));
+    assert!(format!("{:?}", err).contains("expected a record"));
 }
 
 #[test]
@@ -46,13 +46,13 @@ fn test_field_access_nested() {
 }
 
 #[test]
-#[should_panic(expected = "UnknownField")]
+#[should_panic(expected = "unknown field `y`")]
 fn test_field_access_missing_field() {
     let _ = eval("{ let p = @{ x: 42 }; p.y }").unwrap();
 }
 
 #[test]
-#[should_panic(expected = "ExpectedRecord")]
+#[should_panic(expected = "expected a record")]
 fn test_field_access_non_record() {
     let _ = eval("{ let n = 42; n.x }").unwrap();
 }

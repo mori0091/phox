@@ -24,7 +24,7 @@ pub fn resolve_expr_trait_record(
     match matches.len() {
         0 => {
             // 実装が見つからない
-            Err(TypeError::MissingTraitImpl(impl_head.clone()))
+            Err(TypeError::MissingImpl(impl_head.clone()))
         }
         1 => {
             let (impl_sch, impls) = matches[0];
@@ -35,10 +35,10 @@ pub fn resolve_expr_trait_record(
             Ok(ExprBody::Record(fields))
         }
         _ => {
-            let cand_traits: Vec<String> =
-                matches.into_iter().map(|(trait_sch, _)| trait_sch.target.to_string()).collect();
+            let cand_traits: Vec<TraitScheme> =
+                matches.into_iter().map(|(trait_sch, _)| trait_sch.clone()).collect();
             Err(TypeError::AmbiguousTrait {
-                trait_head: impl_head.to_string(),
+                trait_head: impl_head.clone(),
                 candidates: cand_traits,
             })
         }

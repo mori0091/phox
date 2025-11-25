@@ -29,7 +29,7 @@ fn test_simple_let() {
 #[test]
 fn test_var() {
     let err = check_expr_type("foo").unwrap_err();
-    assert!(format!("{}", err).contains("infer error: UnboundVariable"));
+    assert!(format!("{}", err).contains("infer error: unbound variable"));
 }
 
 #[test]
@@ -107,13 +107,13 @@ fn test_tuple_argument_function() {
 #[test]
 fn test_tuple_mismatch_length() {
     let err = check_expr_scheme("if (true) (1,) else (1, 2)").unwrap_err();
-    assert!(err.contains("TupleLengthMismatch"));
+    assert!(err.contains("tuple length mismatch"));
 }
 
 #[test]
 fn test_tuple_mismatch_type() {
     let err = check_expr_scheme("if (true) (1, true) else (1, 1)").unwrap_err();
-    assert!(err.contains("Mismatch"));
+    assert!(err.contains("type mismatch"));
 }
 
 #[test]
@@ -175,7 +175,7 @@ fn test_cons_pattern_tail() {
 #[test]
 fn test_nested_cons_pattern_mismatch() {
     let err = check_expr_scheme("{ let Cons x (Cons y ys) = Cons 1 (Cons true Nil) ; y }").unwrap_err();
-    assert!(err.contains("Mismatch"));
+    assert!(err.contains("type mismatch"));
 }
 
 #[test]

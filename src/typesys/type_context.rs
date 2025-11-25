@@ -107,7 +107,7 @@ impl TypeContext {
             (Type::Record(fields1), Type::Record(fields2)) => {
                 // まずフィールド数が一致しているか確認
                 if fields1.len() != fields2.len() {
-                    return Err(TypeError::Mismatch(
+                    return Err(TypeError::TypeMismatch(
                         Type::Record(fields1.clone()),
                         Type::Record(fields2.clone()),
                     ));
@@ -135,7 +135,7 @@ impl TypeContext {
 
             _ => {
                 // eprintln!("unify failed: {a:?} vs {b:?}");
-                Err(TypeError::Mismatch(a.clone(), b.clone()))
+                Err(TypeError::TypeMismatch(a.clone(), b.clone()))
             }
         }
     }

@@ -102,9 +102,8 @@ fn resolve_impl_member_scheme(
     // -------------------------------------------------
     let trait_head = &trait_scheme_tmpl.scheme_ref().constraints[0];
     if impl_head_sch.target.params.len() != trait_head.params.len() {
-        return Err(TypeError::ArityMismatch {
+        return Err(TypeError::TraitArityMismatch {
             trait_name: trait_head.name.clone(),
-            member: raw_member.name.clone(),
             expected: trait_head.params.len(),
             actual: impl_head_sch.target.params.len()
         });

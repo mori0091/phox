@@ -128,7 +128,7 @@ pub fn infer_stmt(
                     icx.put_type_scheme(x.clone(), sch);
                     Ok(Type::unit())
                 }
-                _ => Err(TypeError::LetRecPatternNotSupported(pat.clone())),
+                _ => Err(TypeError::UnsupportedLetRecPattern(pat.clone())),
             }
         }
     }
@@ -201,7 +201,7 @@ pub fn infer_expr(
                     }
 
                     if filtered.is_empty() {
-                        return Err(TypeError::NoMatchingOverload);
+                        return Err(TypeError::NoMatchingOverload(*f.clone()));
                     }
 
                     let (best_score, winner_tmpl) = filtered.iter().max_by_key(|(score, _)| score).unwrap();

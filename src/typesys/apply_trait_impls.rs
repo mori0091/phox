@@ -81,7 +81,7 @@ pub fn apply_trait_impls_expr(
         }
         ExprBody::Var(name) => {
             // 型情報が必要なので、型が推論済みであることを確認
-            let ty = expr.ty.as_ref().ok_or(TypeError::MissingType)?;
+            let ty = expr.ty.as_ref().ok_or(TypeError::MissingType(name.clone()))?;
 
             // 推論器で解決しきれなかったエラーをここで拾う
             if let Type::Overloaded(name, cands) = ty {

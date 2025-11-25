@@ -65,9 +65,8 @@ impl TraitHead {
             });
         }
         if self.params.len() != other.params.len() {
-            return Err(TypeError::ArityMismatch {
+            return Err(TypeError::TraitArityMismatch {
                 trait_name: self.name.clone(),
-                member: "".to_string(),
                 expected: self.params.len(),
                 actual: other.params.len(),
             });
