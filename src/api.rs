@@ -46,30 +46,26 @@ impl PhoxEngine {
             impl_env: ImplEnv::new(),
         };
 
-        let core = Module::new_root("core");
-        bootstrap(&mut phox, &core).expect("fatal error");
-        phox.roots.add(core);
-        {
-            let mut core = phox.roots.get("core").unwrap();
-            phox.eval_mod(&mut core, CORE).unwrap();
-        }
-
-        let prelude = Module::new_root("prelude");
-        phox.roots.add(prelude);
-        {
-            let mut prelude = phox.roots.get("prelude").unwrap();
-            phox.eval_mod(&mut prelude, PRELUDE).unwrap();
-        }
-
-        let usermod = Module::new_root(DEFAULT_USER_ROOT_MODULE_NAME);
-        phox.roots.add(usermod);
-        {
-            // import `prelude` automatically.
-            let mut usermod = phox.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
-            phox.eval_mod(&mut usermod, "use ::prelude::*;").unwrap();
-        }
+        phox.new_core("core", SRC_CORE);
+        phox.new_root("prelude", SRC_PRELUDE);
+        phox.new_root(DEFAULT_USER_ROOT_MODULE_NAME, "use ::prelude::*;");
 
         phox
+    }
+
+    // Bootstrap and register "::core" module.
+    fn new_core(&mut self, name: &str, src: &str) {
+        let root = Module::new_root(name);
+        bootstrap(self, &root).expect("fatal error");
+        self.roots.add(root.clone());
+        self.eval_mod(&root, src).unwrap();
+    }
+
+    // Create and register new root module.
+    fn new_root(&mut self, name: &str, src: &str) {
+        let root = Module::new_root(name);
+        self.roots.add(root.clone());
+        self.eval_mod(&root, src).unwrap();
     }
 }
 
