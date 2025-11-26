@@ -92,20 +92,7 @@ pub fn infer_stmt(
 ) -> Result<Type, Error> {
     match stmt {
         Stmt::Use(_) => Ok(Type::unit()),
-        Stmt::Mod(name, items) => {
-            let sub = module.get_submod(name)
-                .ok_or_else(|| {
-                    let p = module.borrow().path().concat_str(&[name]);
-                    Error::UnknownPath(p)
-                })?;
-            if let Some(items) = items {
-                let icx2 = &mut phox.get_infer_ctx(&sub);
-                for item in items.iter_mut() {
-                    infer_item(phox, &sub, icx2, item)?;
-                }
-            }
-            Ok(Type::unit())
-        }
+        Stmt::Mod(_name, _items) => Ok(Type::unit()),
         Stmt::Let(pat, expr) => {
             let t_expr = infer_expr(phox, module, icx, expr)?;
             let t_pat = phox.ctx.fresh_type_for_pattern(pat);

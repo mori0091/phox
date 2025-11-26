@@ -22,15 +22,7 @@ pub fn apply_trait_impls_stmt(
 ) -> Result<(), Error> {
     match stmt {
         Stmt::Use(_) => Ok(()),
-        Stmt::Mod(name, items) => {
-            let sub = &module.get_submod(name).unwrap();
-            if let Some(items) = items {
-                 for mut item in items {
-                    apply_trait_impls_item(phox, sub, &mut item)?;
-                }
-            }
-            Ok(())
-        },
+        Stmt::Mod(_name, _items) => Ok(()),
         Stmt::Let(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
         Stmt::LetRec(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
     }
