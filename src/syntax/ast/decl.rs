@@ -4,7 +4,7 @@ pub use raw::*;
 mod resolved;
 pub use resolved::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Decl {
     Type(RawTypeDef),           // parsed, "raw" type decl.
     Trait(RawTrait),            // parsed, "raw" trait decl.

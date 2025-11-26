@@ -3,8 +3,10 @@ use crate::syntax::ast::*;
 use super::*;
 
 // ===== Type error =====
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeError {
+    Message(String),
+
     // ---- from `resolve_*`
     UnknownPath(Path),
     UnknownTrait(Symbol),
@@ -47,14 +49,24 @@ pub enum TypeError {
     UnknownField(String, Type),
 }
 
+impl TypeError {
+    pub fn contains(&self, s: &str) -> bool {
+        self.to_string().contains(s)
+    }
+}
+
 use std::fmt;
 
 impl fmt::Display for TypeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            TypeError::Message(msg) => {
+                write!(f, "{}", msg)
+            }
+
             // ---- resolve errors
             TypeError::UnknownPath(path) => {
-                write!(f, "couldn't resolve path `{}`", path.pretty())
+                write!(f, "cannot resolve path `{}`", path.pretty())
             }
             TypeError::UnknownTrait(symbol) => {
                 write!(f, "unknown trait `{}`", symbol.pretty())

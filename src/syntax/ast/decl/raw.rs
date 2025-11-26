@@ -3,7 +3,7 @@ use crate::syntax::ast::Expr;
 
 // ----------------------------------------------
 /// パース直後の型定義（まだ型変数は名前のまま）
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RawTypeDef {
     /// 代数的データ型 (sum type)
     SumType {
@@ -14,7 +14,7 @@ pub enum RawTypeDef {
 }
 
 /// バリアント(データ構築子)定義
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RawVariant {
     /// 単位バリアント (例: None)
     Unit(String),
@@ -46,28 +46,28 @@ pub enum RawType {
 }
 
 // ----------------------------------------------
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RawTrait {
     pub name: String,
     pub params: Vec<String>,
     pub members: Vec<RawTraitMember>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RawTraitMember{
     pub name: String,
     pub ty: Box<RawType>,
 }
 
 // ----------------------------------------------
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RawImpl {
     pub name: Symbol,
     pub params: Vec<RawType>,
     pub members: Vec<RawImplMember>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RawImplMember {
     pub name: String,
     pub expr: Box<Expr>,

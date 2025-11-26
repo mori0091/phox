@@ -12,13 +12,13 @@ pub fn resolve_stmt(
         Stmt::Mod(name, items) => {
             let sub = &module.add_submod(name);
             if is_prelude_required_by(sub) {
-                phox.eval_mod(sub, "use ::prelude::*;").unwrap();
+                phox.eval_mod(sub, "use ::prelude::*;")?;
             }
 
             if let Some(items) = items {
-                phox.eval_items(sub, items).unwrap();
+                phox.eval_items(sub, items)?;
             }
-            phox.eval_mod(module, &format!("use {name};")).unwrap();
+            phox.eval_mod(module, &format!("use {name};"))?;
             Ok(())
         }
         Stmt::Use(pathglob) => {

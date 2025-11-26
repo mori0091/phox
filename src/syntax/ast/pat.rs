@@ -2,7 +2,7 @@ use std::fmt;
 use super::Lit;
 use crate::module::*;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Pat {
     Wildcard,                   // `_`
     Lit(Lit),                   // `()`, `true`, `1`, etc.

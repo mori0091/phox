@@ -18,7 +18,8 @@ pub use crate::typesys::Pretty;
 
 use crate::interpreter::*;
 
-use crate::prelude::*;
+const SRC_CORE   : &str = include_str!("../assets/core.phx");
+const SRC_PRELUDE: &str = include_str!("../assets/prelude.phx");
 
 pub const DEFAULT_USER_ROOT_MODULE_NAME: &str = "__main__";
 
@@ -82,7 +83,7 @@ pub fn parse(src: &str) -> Result<Program, ParseError<usize, Token, LexicalError
 }
 
 /// Parse, infer type scheme, and evaluate of a program.
-pub fn eval(src: &str) -> Result<(Value, TypeScheme), String> {
+pub fn eval(src: &str) -> Result<(Value, TypeScheme), TypeError> {
     let mut phox = PhoxEngine::new();
     phox.eval(src)
 }
@@ -137,34 +138,35 @@ impl PhoxEngine {
     }
 
     /// Resolve, infer type scheme, and evaluate an item.
-    pub fn eval_item(&mut self, module: &RefModule, item: &mut Item) -> Result<(Value, TypeScheme), String> {
+    pub fn eval_item(&mut self, module: &RefModule, item: &mut Item) -> Result<(Value, TypeScheme), TypeError> {
         let sch = self
             .infer_item(module, item)
-            .map_err(|e| format!("infer error: {e}"))?;
+            .map_err(|e| TypeError::Message(format!("infer error: {e}")))?;
         let env = &mut self.get_value_env(module);
-        let val = eval_item(self, module, env, &item);
+        let val = eval_item(self, module, env, &item)
+            .map_err(|e| TypeError::Message(format!("eval error: {e}")))?;
         Ok((val, sch))
     }
 
     /// Resolve, infer type scheme, and evaluate items.
-    pub fn eval_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(Value, TypeScheme), String> {
+    pub fn eval_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(Value, TypeScheme), TypeError> {
         let mut last = None;
         for mut item in items {
             let ret = self.eval_item(module, &mut item)?;
             last = Some(ret);
         }
-        last.ok_or_else(|| "program contained no expression".to_string())
+        last.ok_or_else(|| TypeError::Message(format!("program contained no expression")))
     }
 
     /// Parse, resolve, infer type scheme, and evaluate a program source code.
-    pub fn eval_mod(&mut self, module: &RefModule, src: &str) -> Result<(Value, TypeScheme), String> {
+    pub fn eval_mod(&mut self, module: &RefModule, src: &str) -> Result<(Value, TypeScheme), TypeError> {
         let mut items = parse(src)
-            .map_err(|e| format!("parse error: {e:?}"))?;
+            .map_err(|e| TypeError::Message(format!("parse error: {e:?}")))?;
         self.eval_items(module, &mut items)
     }
 
     /// Parse, resolve, infer type scheme, and evaluate a program source code in "::__main__" module.
-    pub fn eval(&mut self, src: &str) -> Result<(Value, TypeScheme), String> {
+    pub fn eval(&mut self, src: &str) -> Result<(Value, TypeScheme), TypeError> {
         let module = self.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
         self.eval_mod(&module, src)
     }
@@ -172,37 +174,37 @@ impl PhoxEngine {
 
 // -------------------------------------------------------------
 /// Parse an expression. (for test)
-pub fn parse_expr(src: &str) -> Result<Expr, String> {
+pub fn parse_expr(src: &str) -> Result<Expr, TypeError> {
     let mut lexer = Lexer::new(src);
     ExprParser::new()
         .parse(&mut lexer)
-        .map_err(|e| format!("parse error: {e:?}"))
+        .map_err(|e| TypeError::Message(format!("parse error: {e:?}")))
 }
 
 // -------------------------------------------------------------
 /// Infer type scheme of Expr AST. (for test)
-pub fn infer_expr_scheme(ast: &mut Expr) -> Result<TypeScheme, String> {
+pub fn infer_expr_scheme(ast: &mut Expr) -> Result<TypeScheme, TypeError> {
     let mut phox = PhoxEngine::new();
     let mut module = phox.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
     let mut item = Item::Expr(ast.clone());
     phox.infer_item(&mut module, &mut item)
-        .map_err(|e| format!("infer error: {e}"))
+        .map_err(|e| TypeError::Message(format!("infer error: {e}")))
 }
 
 /// Infer type of Expr AST. (for test)
-pub fn infer_expr_type(ast: &mut Expr) -> Result<Type, String> {
+pub fn infer_expr_type(ast: &mut Expr) -> Result<Type, TypeError> {
     let sch = infer_expr_scheme(ast)?;
     Ok(sch.target)
 }
 
 /// Parse and infer type scheme of an expression. (for test)
-pub fn check_expr_scheme(src: &str) -> Result<TypeScheme, String> {
+pub fn check_expr_scheme(src: &str) -> Result<TypeScheme, TypeError> {
     let mut ast = parse_expr(src)?;
     infer_expr_scheme(&mut ast)
 }
 
 /// Parse and infer type of an expression. (for test)
-pub fn check_expr_type(src: &str) -> Result<Type, String> {
+pub fn check_expr_type(src: &str) -> Result<Type, TypeError> {
     let sch = check_expr_scheme(src)?;
     Ok(sch.target)
 }

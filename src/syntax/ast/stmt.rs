@@ -1,7 +1,7 @@
 use super::{Item, Expr, Pat};
 use crate::module::PathGlob;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Stmt {
     Mod(String, Option<Vec<Item>>), // `mod bar;`
     Use(PathGlob),              // `use ::foo::bar;`

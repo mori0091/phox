@@ -4,13 +4,13 @@ use super::*;
 use crate::typesys::Type;
 use crate::module::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Expr {
     pub body: ExprBody,
     pub ty: Option<Type>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ExprBody {
     Lit(Lit),
     Var(Symbol),

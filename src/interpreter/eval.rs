@@ -6,20 +6,24 @@ use crate::typesys::*;
 use crate::syntax::ast::*;
 use super::*;
 
+fn error(msg: String) -> TypeError {
+    TypeError::Message(msg)
+}
+
 pub fn eval_item(
     phox: &mut PhoxEngine,
     module: &RefModule,
     env: &mut ValueEnv,
     item: &Item,
-) -> Value {
+) -> Result<Value, TypeError> {
     match item {
         Item::Decl(_) => {
             // ignore
-            Value::Lit(Lit::Unit)
+            Ok(Value::Lit(Lit::Unit))
         }
         Item::Stmt(stmt) => {
-            eval_stmt(phox, module, env, stmt);
-            Value::Lit(Lit::Unit)
+            eval_stmt(phox, module, env, stmt)?;
+            Ok(Value::Lit(Lit::Unit))
         }
         Item::Expr(expr) => {
             eval_expr(phox, module, env, expr)
@@ -32,42 +36,34 @@ pub fn eval_stmt(
     module: &RefModule,
     env: &mut ValueEnv,
     stmt: &Stmt,
-) {
+) -> Result<(), TypeError> {
     match stmt {
-        Stmt::Use(_) => {},
-        Stmt::Mod(name, items) => {
-            let sub = &module.get_submod(name).unwrap();
-            if let Some(items) = items {
-                let env2 = &mut phox.get_value_env(sub);
-                for mut item in items {
-                    eval_item(phox, sub, env2, &mut item);
-                }
-                // let mut last = None;
-                // for mut item in items {
-                //     let res = eval_item(phox, &sub, env2, &mut item);
-                //     last = Some(res);
-                // }
-                // last.ok_or_else(|| "program contained no expression".to_string())
-            }
+        Stmt::Use(_) => {
+            Ok(())
+        },
+        Stmt::Mod(_name, _items) => {
+            Ok(())
         },
         Stmt::Let(pat, expr) => {
-            let val = eval_expr(phox, module, env, expr);
+            let val = eval_expr(phox, module, env, expr)?;
             if let Some(bindings) = match_pat(pat, &val) {
                 env.extend(&bindings);
+                Ok(())
             } else {
-                panic!("pattern match failed in let");
+                Err(error(format!("pattern match failed in let")))
             }
         }
         Stmt::LetRec(pat, expr) => {
             match pat {
                 Pat::Var(x) => {
                     env.insert(x.clone(), Value::Builtin(Rc::new(|_| {
-                        panic!("recursive value used before initialization")
+                        unreachable!("recursive value used before initialization")
                     })));
-                    let val = eval_expr(phox, module, env, expr);
+                    let val = eval_expr(phox, module, env, expr)?;
                     env.insert(x.clone(), val);
+                    Ok(())
                 }
-                _ => panic!("let rec pattern not supported (only variable)"),
+                _ => unreachable!("let rec pattern not supported (only variable)"),
             }
         }
     }
@@ -79,38 +75,40 @@ pub fn eval_expr(
     module: &RefModule,
     env: &mut ValueEnv,
     expr: &Expr,
-) -> Value {
+) -> Result<Value, TypeError> {
     match &expr.body {
         // リテラル
-        ExprBody::Lit(lit) => Value::Lit(lit.clone()),
+        ExprBody::Lit(lit) => {
+            Ok(Value::Lit(lit.clone()))
+        }
 
         // 変数参照
         ExprBody::Var(name) => {
             env.get(&name)
-               .unwrap_or_else(|| {
+               .ok_or_else(|| {
                    if let Some(ty) = &expr.ty {
                        use crate::typesys::TypeScheme;
                        let sch = TypeScheme::mono(ty.clone());
-                       panic!("unbound variable: {}: {}", name.pretty(), sch.pretty())
+                       unreachable!("unbound variable: {}: {}", name.pretty(), sch.pretty())
                    } else {
-                       panic!("unbound variable: {}", name.pretty())
+                       unreachable!("unbound variable: {}", name.pretty())
                    }
                })
         }
 
         // λ抽象
         ExprBody::Abs(pat, body) => {
-            Value::Closure {
+            Ok(Value::Closure {
                 pat: pat.clone(),
                 body: body.clone(),
                 env: env.clone(), // クロージャは定義時の環境をキャプチャ（Rc<RefCell<_>>共有）
-            }
+            })
         }
 
         // 関数適用
         ExprBody::App(f, arg) => {
-            let f_val = eval_expr(phox, module, env, &f);
-            let arg_val = eval_expr(phox, module, env, &arg);
+            let f_val = eval_expr(phox, module, env, &f)?;
+            let arg_val = eval_expr(phox, module, env, &arg)?;
             match f_val {
                 // ユーザ定義関数（Closure）
                 Value::Closure { pat, body, env: closure_env } => {
@@ -119,7 +117,7 @@ pub fn eval_expr(
                         env2.extend(&bindings);
                         eval_expr(phox, module, env2, &body)
                     } else {
-                        panic!("function argument pattern match failed");
+                        Err(error(format!("function argument pattern match failed")))
                     }
                 }
 
@@ -127,10 +125,10 @@ pub fn eval_expr(
                 Value::Builtin(func) => {
                     // Builtin は「Vec<Value>」を受け取るので単引数なら vec![arg_val]
                     // func(vec![arg_val])
-                    func(arg_val)
+                    Ok(func(arg_val))
                 }
 
-                _ => panic!("attempted to apply non-function"),
+                _ => unreachable!("attempted to apply non-function"),
             }
         }
 
@@ -138,21 +136,22 @@ pub fn eval_expr(
             let env2 = &mut env.duplicate(); // 新しいスコープ
             let mut last_val = Value::Lit(Lit::Unit);
             for item in items {
-                last_val = eval_item(phox, module, env2, &item);
+                last_val = eval_item(phox, module, env2, &item)?;
             }
-            last_val
+            Ok(last_val)
         }
 
         ExprBody::If(e1, e2, e3) => {
-            match eval_expr(phox, module, env, &e1) {
+            let cond = eval_expr(phox, module, env, &e1)?;
+            match cond {
                 Value::Lit(Lit::Bool(true))  => eval_expr(phox, module, env, &e2),
                 Value::Lit(Lit::Bool(false)) => eval_expr(phox, module, env, &e3),
-                v => panic!("if condition must be Bool, got {}", v),
+                v => unreachable!("if condition must be Bool, got {}", v),
             }
         }
 
         ExprBody::Match(scrut, arms) => {
-            let v_scrut = eval_expr(phox, module, env, &scrut);
+            let v_scrut = eval_expr(phox, module, env, &scrut)?;
             for (pat, body) in arms {
                 if let Some(bindings) = match_pat(&pat, &v_scrut) {
                     let env2 = &mut env.duplicate();
@@ -160,71 +159,72 @@ pub fn eval_expr(
                     return eval_expr(phox, module, env2, &body);
                 }
             }
-            panic!("non-exhaustive match: no pattern matched value {}", v_scrut);
+            Err(error(format!("non-exhaustive match: no pattern matched value {}", v_scrut)))
         }
 
         ExprBody::Tuple(es) => {
-            let xs: Vec<Value> = es
-                .iter()
-                .map(|x| eval_expr(phox, module, env, x))
-                .collect();
-            Value::Tuple(xs)
+            let mut xs = Vec::new();
+            for e in es.iter() {
+                let x = eval_expr(phox, module, env, e)?;
+                xs.push(x);
+            }
+            Ok(Value::Tuple(xs))
         }
 
         ExprBody::Record(fields) => {
             let mut vals = Vec::new();
             for (fname, fexpr) in fields {
-                let v = eval_expr(phox, module, env, &fexpr);
+                let v = eval_expr(phox, module, env, &fexpr)?;
                 vals.push((fname.clone(), v));
             }
-            Value::Record(vals)
+            Ok(Value::Record(vals))
         }
         ExprBody::FieldAccess(base, field) => {
-            let v_base = eval_expr(phox, module, env, &base);
+            let v_base = eval_expr(phox, module, env, &base)?;
             match v_base {
                 Value::Record(fields) => {
                     match fields.iter().find(|(name, _)| name == field) {
-                        Some((_, val)) => val.clone(),
-                        None => panic!("field '{}' not found in record", field),
+                        Some((_, val)) => Ok(val.clone()),
+                        None => unreachable!("field '{}' not found in record", field),
                     }
                 }
                 Value::Con(_, args) if args.len() == 1 => {
                     match &args[0] {
                         Value::Record(fields) => {
                             match fields.iter().find(|(name, _)| name == field) {
-                                Some((_, val)) => val.clone(),
-                                None => panic!("field '{}' not found in record", field),
+                                Some((_, val)) => Ok(val.clone()),
+                                None => unreachable!("field '{}' not found in record", field),
                             }
                         }
-                        other => panic!("field access on non-record value: {}", other),
+                        other => unreachable!("field access on non-record value: {}", other),
                     }
                 }
-                other => panic!("field access on non-record value: {}", other),
+                other => unreachable!("field access on non-record value: {}", other),
             }
         }
         ExprBody::TupleAccess(base, index) => {
-            let v_base = eval_expr(phox, module, env, &base);
+            let v_base = eval_expr(phox, module, env, &base)?;
             match v_base {
                 Value::Tuple(elems) => {
                     if *index < elems.len() {
-                        elems[*index].clone()
+                        Ok(elems[*index].clone())
                     } else {
-                        panic!("index out of bounds: {}", index)
+                        unreachable!("index out of bounds: {}", index)
                     }
                 }
                 Value::Con(_, args) if args.len() == 1 => {
                     match &args[0] {
                         Value::Tuple(elems) => {
                             if *index < elems.len() {
-                                elems[*index].clone()
+                                Ok(elems[*index].clone())
                             } else {
-                                panic!("index out of bounds: {}", index)
+                                unreachable!("index out of bounds: {}", index)
                             }
                         }
-                        other => panic!("index access on non-tuple value: {}", other),
+                        other => unreachable!("index access on non-tuple value: {}", other),
                     }
                 }
-                other => panic!("index access on non-tuple value: {}", other),
+                other => unreachable!("index access on non-tuple value: {}", other),
             }
         }
         ExprBody::RawTraitRecord(_) => {
@@ -232,9 +232,6 @@ pub fn eval_expr(
         }
     }
 }
-
-use crate::syntax::ast::Pat;
-// use super::value::{Value, Env};
 
 fn match_pat(pat: &Pat, val: &Value) -> Option<env::Binding> {
     let mut env = env::Binding::new();

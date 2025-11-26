@@ -1,14 +1,14 @@
 use super::*;
 
 // -------------------------------------------------------------
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Impl {
     pub head_sch: Scheme<TraitHead>,
     pub members: Vec<ImplMember>,
 }
 
 // -------------------------------------------------------------
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ImplMember {
     /// Shared/Non-unique member's symbol (i.e. `Symbol::trait_member(name)`)
     pub symbol: Symbol,

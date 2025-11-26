@@ -1,6 +1,6 @@
 use super::{Decl, Stmt, Expr};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Item {
     Decl(Decl),
     Stmt(Stmt),

@@ -1,16 +1,16 @@
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PathGlob {
     Absolute(PathGlobNode),     // `::foo::bar::{baz, quax::*}`
     Relative(PathGlobNode),     // `foo::bar::{baz, quax::*}`
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PathGlobNode {
     List(Vec<String>, PathGlobLeaf),      // `ab::cd::foo as bar`
     Tree(Vec<String>, Vec<PathGlobNode>), // `ab::cd::{foo, foo::bar}`
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PathGlobLeaf {
     Elem(String, Option<String>), // `foo`, `foo as bar`
     Wildcard,                     // `*`
