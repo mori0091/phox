@@ -1,10 +1,10 @@
 use crate::module::*;
 use crate::syntax::ast::*;
-use super::*;
+use crate::typesys::*;
 
 // ===== Type error =====
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum TypeError {
+pub enum Error {
     Message(String),
 
     // ---- from `resolve_*`
@@ -49,7 +49,7 @@ pub enum TypeError {
     UnknownField(String, Type),
 }
 
-impl TypeError {
+impl Error {
     pub fn contains(&self, s: &str) -> bool {
         self.to_string().contains(s)
     }
@@ -57,50 +57,50 @@ impl TypeError {
 
 use std::fmt;
 
-impl fmt::Display for TypeError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TypeError::Message(msg) => {
+            Error::Message(msg) => {
                 write!(f, "{}", msg)
             }
 
             // ---- resolve errors
-            TypeError::UnknownPath(path) => {
+            Error::UnknownPath(path) => {
                 write!(f, "cannot resolve path `{}`", path.pretty())
             }
-            TypeError::UnknownTrait(symbol) => {
+            Error::UnknownTrait(symbol) => {
                 write!(f, "unknown trait `{}`", symbol.pretty())
             }
-            TypeError::UnknownTraitMember(name) => {
+            Error::UnknownTraitMember(name) => {
                 write!(f, "unknown trait member `{}`", name)
             }
-            TypeError::ConflictImpl { it, other } => {
+            Error::ConflictImpl { it, other } => {
                 write!(f, "impl `{}` conflicts with `{}`", it.pretty(), other.pretty())
             }
-            TypeError::ConflictAlias { name, other } => {
+            Error::ConflictAlias { name, other } => {
                 write!(f, "name `{}` is already used as `{}`", name, other.pretty())
             }
-            TypeError::TraitArityMismatch { trait_name, expected, actual } => {
+            Error::TraitArityMismatch { trait_name, expected, actual } => {
                 write!(f, "arity mismatch `{}`; expected {} arguments, but was {}", trait_name.pretty(), expected, actual)
             }
-            TypeError::UnificationFail { expected, actual } => {
+            Error::UnificationFail { expected, actual } => {
                 write!(f, "trait mismatch; expected {}, but was {}", expected.pretty(), actual.pretty())
             }
 
             // ---- infer errors
-            TypeError::TypeMismatch(t1, t2) => {
+            Error::TypeMismatch(t1, t2) => {
                 write!(f, "type mismatch `{}` and `{}`", t1.pretty(), t2.pretty())
             }
-            TypeError::NoMatchingOverload(expr) => {
+            Error::NoMatchingOverload(expr) => {
                 write!(f, "no matching overload for `{}`", expr)
             }
-            TypeError::RecursiveType => {
+            Error::RecursiveType => {
                 write!(f, "recursive type")
             }
-            TypeError::UnboundVariable(symbol) => {
+            Error::UnboundVariable(symbol) => {
                 write!(f, "unbound variable `{}`", symbol.pretty())
             }
-            TypeError::AmbiguousVariable { name, candidates } => {
+            Error::AmbiguousVariable { name, candidates } => {
                 let mut cands: Vec<_> = candidates
                     .iter().map(|sch| sch.pretty()).collect();
                 cands.sort();
@@ -113,13 +113,13 @@ impl fmt::Display for TypeError {
                 writeln!(f, "candidates:\n  {}", cands.join("\n  "))?;
                 write!(f, "solution:\n  {}", hints.join("\n  "))
             }
-            TypeError::MissingType(symbol) => {
+            Error::MissingType(symbol) => {
                 write!(f, "type not infered yet for `{}`", symbol.pretty())
             }
-            TypeError::MissingImpl(head) => {
+            Error::MissingImpl(head) => {
                 write!(f, "no implementation for `{}`", head.pretty())
             }
-            TypeError::AmbiguousTrait { trait_head, candidates } => {
+            Error::AmbiguousTrait { trait_head, candidates } => {
                 let mut cands: Vec<_> = candidates
                     .iter().map(|sch| sch.pretty()).collect();
                 cands.sort();
@@ -134,36 +134,36 @@ impl fmt::Display for TypeError {
             }
 
             // --- patterns
-            TypeError::UnknownConstructor(symbol) => {
+            Error::UnknownConstructor(symbol) => {
                 write!(f, "unknown data constructor `{}`", symbol.pretty())
             }
-            TypeError::ConstructorArityMismatch(symbol, arity, ty) => {
+            Error::ConstructorArityMismatch(symbol, arity, ty) => {
                 write!(f, "arity mismatch for constructor `{}` of type `{}` ({} arguments given, but was less than it)",
                        symbol.pretty(), ty.pretty(), arity)
             }
-            TypeError::EmptyMatch => {
+            Error::EmptyMatch => {
                 write!(f, "no match arms in `match` expression")
             }
-            TypeError::UnsupportedLetRecPattern(pat) => {
+            Error::UnsupportedLetRecPattern(pat) => {
                 write!(f, "pattern `{}` not supported for `let rec` statements", pat)
             }
 
             // --- tuples
-            TypeError::ExpectedTuple(ty) => {
+            Error::ExpectedTuple(ty) => {
                 write!(f, "expected a tuple but was `{}`", ty.pretty())
             }
-            TypeError::TupleLengthMismatch(len1, len2) => {
+            Error::TupleLengthMismatch(len1, len2) => {
                 write!(f, "tuple length mismatch `{}` and `{}`", len1, len2)
             }
-            TypeError::IndexOutOfBounds(index, ty) => {
+            Error::IndexOutOfBounds(index, ty) => {
                 write!(f, "tuple index out of bounds `{}.{}`", ty.pretty(), index)
             }
 
             // --- records
-            TypeError::ExpectedRecord(ty) => {
+            Error::ExpectedRecord(ty) => {
                 write!(f, "expected a record but was `{}`", ty.pretty())
             }
-            TypeError::UnknownField(name, ty) => {
+            Error::UnknownField(name, ty) => {
                 write!(f, "unknown field `{}` for `{}`", name, ty.pretty())
             }
         }

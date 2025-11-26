@@ -7,7 +7,7 @@ pub fn resolve_decl_impl(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawImpl,
-) -> Result<Impl, TypeError> {
+) -> Result<Impl, Error> {
     let head_sch = resolve_impl_head_scheme(phox, module, symbol_env, raw)?;
 
     let mut members = Vec::new();
@@ -32,7 +32,7 @@ pub fn resolve_impl_head(
     symbol_env: &mut SymbolEnv,
     raw: &RawTraitHead,
     param_map: &HashMap<String, TypeVarId>,
-) -> Result<TraitHead, TypeError> {
+) -> Result<TraitHead, Error> {
     let mut symbol = raw.name.clone();
     resolve_symbol(phox, module, symbol_env, &mut symbol)?;
     let mut params = Vec::new();
@@ -50,7 +50,7 @@ fn resolve_impl_head_scheme(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawImpl,
-) -> Result<Scheme<TraitHead>, TypeError> {
+) -> Result<Scheme<TraitHead>, Error> {
     let mut param_map = HashMap::new();
     for p in raw.params.iter() {
         if let RawType::VarName(name) = p {
@@ -82,27 +82,27 @@ fn resolve_impl_member_scheme(
     module: &RefModule,
     impl_head_sch: &Scheme<TraitHead>,
     raw_member: &RawImplMember,
-) -> Result<TypeScheme, TypeError> {
+) -> Result<TypeScheme, Error> {
     let trait_scheme_tmpls = phox
         .get_infer_ctx(module)
         .get_trait_member_schemes(&Symbol::trait_member(&raw_member.name))
-        .ok_or(TypeError::UnknownTraitMember(raw_member.name.clone()))?;
+        .ok_or(Error::UnknownTraitMember(raw_member.name.clone()))?;
 
     // -------------------------------------------------
     if trait_scheme_tmpls.is_empty() {
-        return Err(TypeError::UnknownTraitMember(raw_member.name.clone()));
+        return Err(Error::UnknownTraitMember(raw_member.name.clone()));
     }
 
     // -------------------------------------------------
     let trait_scheme_tmpl = trait_scheme_tmpls
         .iter()
         .find(|tmpl| tmpl.scheme_ref().constraints[0].name == impl_head_sch.target.name)
-        .ok_or(TypeError::UnknownTrait(impl_head_sch.target.name.clone()))?;
+        .ok_or(Error::UnknownTrait(impl_head_sch.target.name.clone()))?;
 
     // -------------------------------------------------
     let trait_head = &trait_scheme_tmpl.scheme_ref().constraints[0];
     if impl_head_sch.target.params.len() != trait_head.params.len() {
-        return Err(TypeError::TraitArityMismatch {
+        return Err(Error::TraitArityMismatch {
             trait_name: trait_head.name.clone(),
             expected: trait_head.params.len(),
             actual: impl_head_sch.target.params.len()

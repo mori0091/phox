@@ -7,7 +7,7 @@ pub fn resolve_decl(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     decl: &mut Decl,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     match decl {
         Decl::Type(raw) => {
             resolve_decl_type_def(phox, module, symbol_env, raw)

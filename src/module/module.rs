@@ -2,10 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 
-use crate::typesys::*;
 use super::*;
-
-// use crate::prelude::*;
 
 pub type RefModule = Rc<RefCell<Module>>;
 pub type WeakRefModule = Weak<RefCell<Module>>;
@@ -65,13 +62,13 @@ impl Module {
 }
 
 impl Module {
-    pub fn add_alias(&mut self, name: &str, path: &Path) -> Result<(), TypeError> {
+    pub fn add_alias(&mut self, name: &str, path: &Path) -> Result<(), Error> {
         if let Some(other) = self.using.get(name) {
             if other == path {
                 Ok(())
             }
             else {
-                Err(TypeError::ConflictAlias { name: name.to_string(), other: other.clone() })
+                Err(Error::ConflictAlias { name: name.to_string(), other: other.clone() })
             }
         }
         else {

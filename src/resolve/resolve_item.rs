@@ -7,7 +7,7 @@ pub fn resolve_item(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     item: &mut Item,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     match item {
         Item::Decl(decl) => {
             resolve_decl(phox, module, symbol_env, decl)

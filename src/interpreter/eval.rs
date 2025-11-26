@@ -6,8 +6,8 @@ use crate::typesys::*;
 use crate::syntax::ast::*;
 use super::*;
 
-fn error(msg: String) -> TypeError {
-    TypeError::Message(msg)
+fn error(msg: String) -> Error {
+    Error::Message(msg)
 }
 
 pub fn eval_item(
@@ -15,7 +15,7 @@ pub fn eval_item(
     module: &RefModule,
     env: &mut ValueEnv,
     item: &Item,
-) -> Result<Value, TypeError> {
+) -> Result<Value, Error> {
     match item {
         Item::Decl(_) => {
             // ignore
@@ -36,7 +36,7 @@ pub fn eval_stmt(
     module: &RefModule,
     env: &mut ValueEnv,
     stmt: &Stmt,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     match stmt {
         Stmt::Use(_) => {
             Ok(())
@@ -75,7 +75,7 @@ pub fn eval_expr(
     module: &RefModule,
     env: &mut ValueEnv,
     expr: &Expr,
-) -> Result<Value, TypeError> {
+) -> Result<Value, Error> {
     match &expr.body {
         // リテラル
         ExprBody::Lit(lit) => {

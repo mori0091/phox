@@ -5,11 +5,11 @@ pub fn resolve_stmt_use(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     pathglob: &PathGlob,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     for (alias, path) in pathglob.flatten().iter() {
         match path.resolve(module, &phox.roots) {
             None => {
-                return Err(TypeError::UnknownPath(path.clone()))
+                return Err(Error::UnknownPath(path.clone()))
             }
             Some((m, None)) => {
                 let p = m.borrow().path();
@@ -17,7 +17,7 @@ pub fn resolve_stmt_use(
             }
             Some((m, Some(rem))) => {
                 if rem.len() > 1 {
-                    return Err(TypeError::UnknownPath(rem.clone()))
+                    return Err(Error::UnknownPath(rem.clone()))
                 }
                 match rem.head().unwrap() {
                     PathComponent::Wildcard => {
@@ -47,7 +47,7 @@ pub fn resolve_stmt_use(
                             make_symbol(phox, module, symbol_env, &alias)?;
                         }
                         else {
-                            return Err(TypeError::UnknownPath(rem.clone()))
+                            return Err(Error::UnknownPath(rem.clone()))
                         }
                     }
                 }

@@ -75,7 +75,7 @@ impl TypeContext {
 }
 
 impl TypeContext {
-    pub fn unify(&mut self, a: &Type, b: &Type) -> Result<(), TypeError> {
+    pub fn unify(&mut self, a: &Type, b: &Type) -> Result<(), Error> {
         match (a, b) {
             (Type::Var(v), t) | (t, Type::Var(v)) => {
                 self.unify_var(*v, t)
@@ -95,7 +95,7 @@ impl TypeContext {
 
             (Type::Tuple(ts1), Type::Tuple(ts2)) => {
                 if ts1.len() != ts2.len() {
-                    return Err(TypeError::TupleLengthMismatch(ts1.len(), ts2.len()));
+                    return Err(Error::TupleLengthMismatch(ts1.len(), ts2.len()));
                 }
                 for (t1, t2) in ts1.iter().zip(ts2.iter()) {
                     self.unify(t1, t2)?;
@@ -107,7 +107,7 @@ impl TypeContext {
             (Type::Record(fields1), Type::Record(fields2)) => {
                 // まずフィールド数が一致しているか確認
                 if fields1.len() != fields2.len() {
-                    return Err(TypeError::TypeMismatch(
+                    return Err(Error::TypeMismatch(
                         Type::Record(fields1.clone()),
                         Type::Record(fields2.clone()),
                     ));
@@ -118,7 +118,7 @@ impl TypeContext {
                     match fields2.iter().find(|(n, _)| n == fname) {
                         Some((_, ty2)) => self.unify(ty1, ty2)?,
                         None => {
-                            return Err(TypeError::UnknownField(
+                            return Err(Error::UnknownField(
                                 fname.clone(),
                                 Type::Record(fields2.clone())
                             ));
@@ -135,12 +135,12 @@ impl TypeContext {
 
             _ => {
                 // eprintln!("unify failed: {a:?} vs {b:?}");
-                Err(TypeError::TypeMismatch(a.clone(), b.clone()))
+                Err(Error::TypeMismatch(a.clone(), b.clone()))
             }
         }
     }
 
-    fn unify_var(&mut self, v: TypeVarId, t: &Type) -> Result<(), TypeError> {
+    fn unify_var(&mut self, v: TypeVarId, t: &Type) -> Result<(), Error> {
         // 代表を取る
         let r = self.find(v);
 
@@ -170,7 +170,7 @@ impl TypeContext {
 
         // occurs check を生の t に対して実施
         if self.occurs_in(r, t) {
-            return Err(TypeError::RecursiveType);
+            return Err(Error::RecursiveType);
         }
 
         // ★ ここで repr はかけず、そのまま束縛。必要なら clone。
@@ -213,7 +213,7 @@ impl TypeContext {
         ty: &Type,
         outer_icx: &InferCtx,
         generalize_bindings: bool,
-    ) -> Result<(), TypeError> {
+    ) -> Result<(), Error> {
         match pat {
             Pat::Wildcard => Ok(()), // 束縛なし
 
@@ -237,7 +237,7 @@ impl TypeContext {
             }
 
             Pat::Con(name, args) => {
-                let scheme = icx.get_type_scheme(name).ok_or(TypeError::UnknownConstructor(name.clone()))?;
+                let scheme = icx.get_type_scheme(name).ok_or(Error::UnknownConstructor(name.clone()))?;
                 let (_constraints, con_ty) = scheme.instantiate(self);
 
                 let mut arg_types = Vec::new();
@@ -249,7 +249,7 @@ impl TypeContext {
                             arg_types.push(*a);
                             ty_fun = *b;
                         }
-                        other => return Err(TypeError::ConstructorArityMismatch(name.clone(), args.len(), other)),
+                        other => return Err(Error::ConstructorArityMismatch(name.clone(), args.len(), other)),
                     }
                 }
 
@@ -266,14 +266,14 @@ impl TypeContext {
                 match ty {
                     Type::Tuple(ts) => {
                         if ps.len() != ts.len() {
-                            return Err(TypeError::TupleLengthMismatch(ps.len(), ts.len()));
+                            return Err(Error::TupleLengthMismatch(ps.len(), ts.len()));
                         }
                         for (p, t) in ps.iter().zip(ts.iter()) {
                             self.match_pattern(icx, p, t, outer_icx, generalize_bindings)?;
                         }
                         Ok(())
                     }
-                    _ => Err(TypeError::ExpectedTuple(ty.clone())),
+                    _ => Err(Error::ExpectedTuple(ty.clone())),
                 }
             }
 
@@ -283,13 +283,13 @@ impl TypeContext {
                     for (fname, p) in fields {
                         let ft = tys.iter()
                                     .find(|(n, _)| n == fname)
-                                    .ok_or_else(|| TypeError::UnknownField(fname.clone(), ty.clone()))?
+                                    .ok_or_else(|| Error::UnknownField(fname.clone(), ty.clone()))?
                                     .1.clone();
                         self.match_pattern(icx, p, &ft, outer_icx, generalize_bindings)?;
                     }
                     Ok(())
                 } else {
-                    Err(TypeError::ExpectedRecord(ty.clone()))
+                    Err(Error::ExpectedRecord(ty.clone()))
                 }
             }
         }

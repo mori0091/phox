@@ -1,3 +1,5 @@
+use crate::error::Error;
+
 // -------------------------------------------------------------
 mod make_resolved_symbol;
 pub use make_resolved_symbol::*;

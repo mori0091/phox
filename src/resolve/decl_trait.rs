@@ -7,7 +7,7 @@ pub fn resolve_decl_trait(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawTrait,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     let trait_symbol = make_symbol(phox, module, symbol_env, &raw.name)?;
 
     let mut vars = Vec::new();          // [id]

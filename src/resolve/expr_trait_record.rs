@@ -5,7 +5,7 @@ pub fn resolve_expr_trait_record(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawTraitHead,
-) -> Result<ExprBody, TypeError> {
+) -> Result<ExprBody, Error> {
     let impl_head = resolve_impl_head(phox, module, symbol_env, &raw, &HashMap::new())?;
     let base_score = impl_head.score();
     let mut matches = Vec::new();
@@ -24,7 +24,7 @@ pub fn resolve_expr_trait_record(
     match matches.len() {
         0 => {
             // 実装が見つからない
-            Err(TypeError::MissingImpl(impl_head.clone()))
+            Err(Error::MissingImpl(impl_head.clone()))
         }
         1 => {
             let (impl_sch, impls) = matches[0];
@@ -37,7 +37,7 @@ pub fn resolve_expr_trait_record(
         _ => {
             let cand_traits: Vec<TraitScheme> =
                 matches.into_iter().map(|(trait_sch, _)| trait_sch.clone()).collect();
-            Err(TypeError::AmbiguousTrait {
+            Err(Error::AmbiguousTrait {
                 trait_head: impl_head.clone(),
                 candidates: cand_traits,
             })

@@ -15,10 +15,10 @@ impl TraitHead {
         member_env: &TraitMemberEnv,
         member_name: &Symbol,
         member_ty: &Type,
-    ) -> Result<Vec<TraitHead>, TypeError> {
+    ) -> Result<Vec<TraitHead>, Error> {
         let entries = member_env
             .get(member_name)
-            .ok_or_else(|| TypeError::UnknownTraitMember(member_name.to_string()))?;
+            .ok_or_else(|| Error::UnknownTraitMember(member_name.to_string()))?;
 
         let mut out = Vec::new();
         for scheme_tmpl in entries {
@@ -57,15 +57,15 @@ impl Repr for TraitHead {
 }
 
 impl TraitHead {
-    pub fn unify(&self, ctx: &mut TypeContext, other: &TraitHead) -> Result<(), TypeError> {
+    pub fn unify(&self, ctx: &mut TypeContext, other: &TraitHead) -> Result<(), Error> {
         if self.name != other.name {
-            return Err(TypeError::UnificationFail {
+            return Err(Error::UnificationFail {
                 expected: self.clone(),
                 actual: other.clone(),
             });
         }
         if self.params.len() != other.params.len() {
-            return Err(TypeError::TraitArityMismatch {
+            return Err(Error::TraitArityMismatch {
                 trait_name: self.name.clone(),
                 expected: self.params.len(),
                 actual: other.params.len(),

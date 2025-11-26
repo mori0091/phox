@@ -7,7 +7,7 @@ pub fn resolve_stmt(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     stmt: &mut Stmt,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     match stmt {
         Stmt::Mod(name, items) => {
             let sub = &module.add_submod(name);

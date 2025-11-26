@@ -9,7 +9,7 @@ pub fn infer_item(
     module: &RefModule,
     icx: &mut InferCtx,
     item: &mut Item
-) -> Result<Type, TypeError> {
+) -> Result<Type, Error> {
     match item {
         Item::Decl(decl) => {
             infer_decl(phox, module, icx, decl)
@@ -28,7 +28,7 @@ pub fn infer_decl(
     module: &RefModule,
     icx: &mut InferCtx,
     decl: &mut Decl,
-) -> Result<Type, TypeError> {
+) -> Result<Type, Error> {
     match decl {
         Decl::Type(_) | Decl::Trait(_) => Ok(Type::unit()),
 
@@ -62,7 +62,7 @@ pub fn infer_decl(
 fn check_impl_comflict(
     phox: &mut PhoxEngine,
     impl_head_sch: &Scheme<TraitHead>,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     for (sch, _) in phox.impl_env.iter() {
         if sch.target.name != impl_head_sch.target.name { continue }
         if sch.target.score() != impl_head_sch.target.score() { continue }
@@ -75,7 +75,7 @@ fn check_impl_comflict(
             }
         }
         if same {
-            return Err(TypeError::ConflictImpl {
+            return Err(Error::ConflictImpl {
                 it: impl_head_sch.target.clone(),
                 other: sch.target.clone(),
             });
@@ -89,14 +89,14 @@ pub fn infer_stmt(
     module: &RefModule,
     icx: &mut InferCtx,
     stmt: &mut Stmt
-) -> Result<Type, TypeError> {
+) -> Result<Type, Error> {
     match stmt {
         Stmt::Use(_) => Ok(Type::unit()),
         Stmt::Mod(name, items) => {
             let sub = module.get_submod(name)
                 .ok_or_else(|| {
                     let p = module.borrow().path().concat_str(&[name]);
-                    TypeError::UnknownPath(p)
+                    Error::UnknownPath(p)
                 })?;
             if let Some(items) = items {
                 let icx2 = &mut phox.get_infer_ctx(&sub);
@@ -128,7 +128,7 @@ pub fn infer_stmt(
                     icx.put_type_scheme(x.clone(), sch);
                     Ok(Type::unit())
                 }
-                _ => Err(TypeError::UnsupportedLetRecPattern(pat.clone())),
+                _ => Err(Error::UnsupportedLetRecPattern(pat.clone())),
             }
         }
     }
@@ -139,7 +139,7 @@ pub fn infer_expr(
     module: &RefModule,
     icx: &mut InferCtx,
     expr: &mut Expr
-) -> Result<Type, TypeError> {
+) -> Result<Type, Error> {
     let ty = match &mut expr.body {
         ExprBody::Var(symbol) => {
             match icx.get_type_scheme(symbol) {
@@ -149,7 +149,7 @@ pub fn infer_expr(
                 }
                 None => {
                     match phox.impl_member_env.get(symbol).clone() {
-                        None => return Err(TypeError::UnboundVariable(symbol.clone())),
+                        None => return Err(Error::UnboundVariable(symbol.clone())),
                         Some(cands) if cands.len() == 1 => {
                             let tmpl = &cands.iter().cloned().next().unwrap();
                             let winner = tmpl.fresh_copy(&mut phox.ctx);
@@ -174,7 +174,7 @@ pub fn infer_expr(
                     .into_iter()
                     .map(|tmpl| tmpl.fresh_copy(&mut ctx))
                     .collect();
-                return Err(TypeError::AmbiguousVariable { name, candidates })
+                return Err(Error::AmbiguousVariable { name, candidates })
             }
 
             let tf = infer_expr(phox, module, icx, f)?;
@@ -201,7 +201,7 @@ pub fn infer_expr(
                     }
 
                     if filtered.is_empty() {
-                        return Err(TypeError::NoMatchingOverload(*f.clone()));
+                        return Err(Error::NoMatchingOverload(*f.clone()));
                     }
 
                     let (best_score, winner_tmpl) = filtered.iter().max_by_key(|(score, _)| score).unwrap();
@@ -213,7 +213,7 @@ pub fn infer_expr(
                                 .into_iter()
                                 .map(|(_, tmpl)| tmpl.fresh_copy(&mut ctx))
                                 .collect();
-                            return Err(TypeError::AmbiguousVariable { name, candidates })
+                            return Err(Error::AmbiguousVariable { name, candidates })
                         }
                     }
 
@@ -295,7 +295,7 @@ pub fn infer_expr(
             }
 
             let mut result_types = result_types.into_iter();
-            let t_result = result_types.next().ok_or(TypeError::EmptyMatch)?;
+            let t_result = result_types.next().ok_or(Error::EmptyMatch)?;
             for ty in result_types {
                 phox.ctx.unify(&t_result, &ty)?;
             }
@@ -333,7 +333,7 @@ pub fn infer_expr(
                     if let Some((_, ty)) = fields.iter().find(|(fname, _)| fname == field) {
                         ty.clone()
                     } else {
-                        return Err(TypeError::UnknownField(field.clone(), Type::Record(fields)));
+                        return Err(Error::UnknownField(field.clone(), Type::Record(fields)));
                     }
                 }
                 other => {
@@ -347,11 +347,11 @@ pub fn infer_expr(
                             Item::Expr(Expr::field_access(Expr::unresolved_var("r"), field.clone()))
                         ]);
                         let ty = infer_expr(phox, module, icx, &mut expr)
-                            .map_err(|_| TypeError::ExpectedRecord(other))?;
+                            .map_err(|_| Error::ExpectedRecord(other))?;
                         ty
                     }
                     else {
-                        return Err(TypeError::ExpectedRecord(other));
+                        return Err(Error::ExpectedRecord(other));
                     }
                 }
             }
@@ -364,7 +364,7 @@ pub fn infer_expr(
                     if *index < elems.len() {
                         elems[*index].clone()
                     } else {
-                        return Err(TypeError::IndexOutOfBounds(*index, Type::Tuple(elems)));
+                        return Err(Error::IndexOutOfBounds(*index, Type::Tuple(elems)));
                     }
                 }
                 other => {
@@ -378,11 +378,11 @@ pub fn infer_expr(
                             Item::Expr(Expr::tuple_access(Expr::unresolved_var("t"), *index))
                         ]);
                         let ty = infer_expr(phox, module, icx, &mut expr)
-                            .map_err(|_| TypeError::ExpectedTuple(other))?;
+                            .map_err(|_| Error::ExpectedTuple(other))?;
                         ty
                     }
                     else {
-                        return Err(TypeError::ExpectedTuple(other));
+                        return Err(Error::ExpectedTuple(other));
                     }
                 }
             }

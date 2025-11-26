@@ -1,3 +1,5 @@
+use crate::error::Error;
+
 mod kind;
 pub use kind::Kind;
 
@@ -60,6 +62,3 @@ pub use apply_trait_impls::{
     apply_trait_impls_stmt,
     apply_trait_impls_expr,
 };
-
-mod error;
-pub use error::TypeError;

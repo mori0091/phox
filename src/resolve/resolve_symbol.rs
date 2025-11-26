@@ -7,7 +7,7 @@ pub fn resolve_symbol(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     symbol: &mut Symbol,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     if let Symbol::Unresolved(path) = symbol {
         let path = path.clone();
         let resolved = match path {
@@ -29,7 +29,7 @@ fn resolve_symbol_relative(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     path: Path,
-) -> Result<Symbol, TypeError> {
+) -> Result<Symbol, Error> {
     if let Some(s) = symbol_env.get(&path) {
         return Ok(s.clone())
     }
@@ -69,7 +69,7 @@ fn resolve_symbol_absolute(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     path: Path,
-) -> Result<Symbol, TypeError> {
+) -> Result<Symbol, Error> {
     if let Some(global_sym) = phox.get_extern_symbol_env(module).get(&path) {
         return Ok(global_sym)
     }
@@ -136,12 +136,12 @@ fn resolve_symbol_absolute(
                 phox.get_extern_symbol_env(module).insert(path, extern_sym.clone());
                 return Ok(extern_sym)
             }
-            // return Err(TypeError::UnknownPath(path))
+            // return Err(Error::UnknownPath(path))
         }
         _ => {
-            // return Err(TypeError::UnknownPath(path))
+            // return Err(Error::UnknownPath(path))
         }
     }
 
-    Err(TypeError::UnknownPath(path))
+    Err(Error::UnknownPath(path))
 }

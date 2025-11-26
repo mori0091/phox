@@ -1,3 +1,5 @@
+use crate::error::Error;
+
 mod module;
 pub use module::{Module, ModuleExt, RefModule};
 

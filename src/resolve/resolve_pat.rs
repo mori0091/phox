@@ -7,7 +7,7 @@ pub fn resolve_pat(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     pat: &mut Pat,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     match pat {
         Pat::Wildcard | Pat::Lit(_) => Ok(()),
         Pat::Var(symbol) => {

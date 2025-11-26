@@ -9,7 +9,7 @@ pub fn resolve_decl_type_def(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawTypeDef,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     let TypeDef::SumType {
         name: ty_ctor_name,
         params: ty_ctor_params,
@@ -48,7 +48,7 @@ fn resolve_raw_type_def(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawTypeDef,
-) -> Result<TypeDef, TypeError> {
+) -> Result<TypeDef, Error> {
     match raw {
         RawTypeDef::SumType { name, params, variants } => {
             let mut param_map = HashMap::new();
@@ -81,7 +81,7 @@ fn resolve_raw_variant(
     symbol_env: &mut SymbolEnv,
     raw: &RawVariant,
     param_map: &HashMap<String, TypeVarId>,
-) -> Result<Variant, TypeError> {
+) -> Result<Variant, Error> {
     let v = match raw {
         RawVariant::Unit(name) => {
             let symbol = make_symbol(phox, module, symbol_env, &name)?;
@@ -107,7 +107,7 @@ pub fn resolve_raw_type(
     symbol_env: &mut SymbolEnv,
     raw: &RawType,
     param_map: &mut HashMap<String, TypeVarId>,
-) -> Result<Type, TypeError> {
+) -> Result<Type, Error> {
     let ty = match raw {
         RawType::VarName(name) => {
             let id = param_map

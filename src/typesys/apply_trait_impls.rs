@@ -7,7 +7,7 @@ pub fn apply_trait_impls_item(
     phox: &mut PhoxEngine,
     module: &RefModule,
     item: &mut Item,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     match item {
         Item::Decl(_) => Ok(()), // no need to apply trait impls
         Item::Expr(expr) => apply_trait_impls_expr(phox, module, expr),
@@ -19,7 +19,7 @@ pub fn apply_trait_impls_stmt(
     phox: &mut PhoxEngine,
     module: &RefModule,
     stmt: &mut Stmt,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     match stmt {
         Stmt::Use(_) => Ok(()),
         Stmt::Mod(name, items) => {
@@ -40,7 +40,7 @@ pub fn apply_trait_impls_expr(
     phox: &mut PhoxEngine,
     module: &RefModule,
     expr: &mut Expr,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     // 再帰的に子ノードを処理
     match &mut expr.body {
         ExprBody::App(f, a) => {
@@ -81,7 +81,7 @@ pub fn apply_trait_impls_expr(
         }
         ExprBody::Var(name) => {
             // 型情報が必要なので、型が推論済みであることを確認
-            let ty = expr.ty.as_ref().ok_or(TypeError::MissingType(name.clone()))?;
+            let ty = expr.ty.as_ref().ok_or(Error::MissingType(name.clone()))?;
 
             // 推論器で解決しきれなかったエラーをここで拾う
             if let Type::Overloaded(name, cands) = ty {
@@ -90,7 +90,7 @@ pub fn apply_trait_impls_expr(
                     .into_iter()
                     .map(|tmpl| tmpl.fresh_copy(&mut ctx))
                     .collect();
-                return Err(TypeError::AmbiguousVariable {
+                return Err(Error::AmbiguousVariable {
                     name: name.clone(), // 元の変数名
                     candidates,
                 });
@@ -150,15 +150,6 @@ pub fn apply_trait_impls_expr(
                         expr.body = impl_expr.body;
                         // expr.ty は既に推論済みなのでそのままでOK
                     }
-                    // _ => {
-                    //     let cand_traits: Vec<String> =
-                    //         matches.iter().map(|(c, _)| c.to_string()).collect();
-                    //     return Err(TypeError::AmbiguousTraitMember {
-                    //         member: name.clone(),
-                    //         ty: ty.clone(),
-                    //         candidates: cand_traits,
-                    //     });
-                    // }
                 }
             }
         }

@@ -7,7 +7,7 @@ pub fn resolve_expr(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     expr: &mut Expr,
-) -> Result<(), TypeError> {
+) -> Result<(), Error> {
     match &mut expr.body {
         ExprBody::App(f, x) => {
             resolve_expr(phox, module, symbol_env, f)?;
