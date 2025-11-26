@@ -143,7 +143,9 @@ fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
             CommandResult::Continue
         }
         ["symbols"] | ["s"] => {
-            for (path, symbol_env) in phox.module_symbol_envs.iter() {
+            let mut mods = phox.module_symbol_envs.iter().collect::<Vec<_>>();
+            mods.sort_by_key(|(path, _)| path.pretty());
+            for (path, symbol_env) in mods.iter() {
                 println!("mod {};", path.pretty());
                 let map = symbol_env.clone_map();
                 let mut syms = map.iter().collect::<Vec<_>>();
@@ -153,17 +155,17 @@ fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
                 }
                 println!();
             }
-            println!("EXTERN");
-            for (path, symbol_env) in phox.extern_symbol_envs.iter() {
-                println!("mod {};", path.pretty());
-                let map = symbol_env.clone_map();
-                let mut syms = map.iter().collect::<Vec<_>>();
-                syms.sort_by_key(|(path, _)| path.pretty());
-                for (path, symbol) in syms.iter() {
-                    println!("  {:<30} {:?}", path.pretty(), symbol);
-                }
-                println!();
-            }
+            // println!("EXTERN");
+            // for (path, symbol_env) in phox.extern_symbol_envs.iter() {
+            //     println!("mod {};", path.pretty());
+            //     let map = symbol_env.clone_map();
+            //     let mut syms = map.iter().collect::<Vec<_>>();
+            //     syms.sort_by_key(|(path, _)| path.pretty());
+            //     for (path, symbol) in syms.iter() {
+            //         println!("  {:<30} {:?}", path.pretty(), symbol);
+            //     }
+            //     println!();
+            // }
             CommandResult::Continue
         }
 
