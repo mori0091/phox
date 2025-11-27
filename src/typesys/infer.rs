@@ -11,8 +11,8 @@ pub fn infer_item(
     item: &mut Item
 ) -> Result<Type, Error> {
     match item {
-        Item::Decl(decl) => {
-            infer_decl(phox, module, icx, decl)
+        Item::Decl(_decl) => {
+            Ok(Type::unit())
         }
         Item::Stmt(stmt) => {
             infer_stmt(phox, module, icx, stmt)
@@ -23,67 +23,6 @@ pub fn infer_item(
     }
 }
 
-pub fn infer_decl(
-    phox: &mut PhoxEngine,
-    module: &RefModule,
-    icx: &mut InferCtx,
-    decl: &mut Decl,
-) -> Result<Type, Error> {
-    match decl {
-        Decl::Type(_) | Decl::Trait(_) => Ok(Type::unit()),
-
-        Decl::Impl(_) => unreachable!(),
-
-        Decl::ImplResolved(Impl { head_sch, members }) => {
-            check_impl_comflict(phox, &head_sch)?;
-            for m in members.iter() {
-                let icx = &mut icx.duplicate();
-                let ty = infer_expr(phox, module, icx, &mut m.expr.clone())?;
-                let sch = m.sch_tmpl.fresh_copy(&mut phox.ctx);
-                let (_, ty_inst) = &sch.instantiate(&mut phox.ctx);
-                phox.ctx.unify(&ty, ty_inst)?;
-            }
-
-            for m in members.iter() {
-                phox.impl_env
-                    .entry(head_sch.clone())
-                    .or_default()
-                    .insert(m.symbol.clone(), m.expr.clone());
-                phox.impl_member_env
-                    .entry(m.symbol.clone())
-                    .or_default()
-                    .insert(m.sch_tmpl.clone());
-            }
-            Ok(Type::unit())
-        }
-    }
-}
-
-fn check_impl_comflict(
-    phox: &mut PhoxEngine,
-    impl_head_sch: &Scheme<TraitHead>,
-) -> Result<(), Error> {
-    for (sch, _) in phox.impl_env.iter() {
-        if sch.target.name != impl_head_sch.target.name { continue }
-        if sch.target.score() != impl_head_sch.target.score() { continue }
-        let mut ctx2 = phox.ctx.clone();
-        let mut same = true;
-        for (t1, t2) in sch.target.params.iter().zip(impl_head_sch.target.params.iter()) {
-            if ctx2.unify(t1, t2).is_err() {
-                same = false;
-                break;
-            }
-        }
-        if same {
-            return Err(Error::ConflictImpl {
-                it: impl_head_sch.target.clone(),
-                other: sch.target.clone(),
-            });
-        }
-    };
-    Ok(())
-}
-
 pub fn infer_stmt(
     phox: &mut PhoxEngine,
     module: &RefModule,
@@ -91,8 +30,7 @@ pub fn infer_stmt(
     stmt: &mut Stmt
 ) -> Result<Type, Error> {
     match stmt {
-        Stmt::Use(_) => Ok(Type::unit()),
-        Stmt::Mod(_name, _items) => Ok(Type::unit()),
+        Stmt::Use(_) | Stmt::Mod(_, _) => Ok(Type::unit()),
         Stmt::Let(pat, expr) => {
             let t_expr = infer_expr(phox, module, icx, expr)?;
             let t_pat = phox.ctx.fresh_type_for_pattern(pat);

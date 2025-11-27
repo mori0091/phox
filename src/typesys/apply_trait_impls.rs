@@ -22,8 +22,7 @@ pub fn apply_trait_impls_stmt(
     stmt: &mut Stmt,
 ) -> Result<(), Error> {
     match stmt {
-        Stmt::Use(_) => Ok(()),
-        Stmt::Mod(_name, _items) => Ok(()),
+        Stmt::Use(_) | Stmt::Mod(_, _) => Ok(()),
         Stmt::Let(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
         Stmt::LetRec(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
     }

@@ -7,9 +7,9 @@ pub fn resolve_decl_impl(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawImpl,
-) -> Result<Impl, Error> {
+) -> Result<(), Error> {
+    // resolve
     let head_sch = resolve_impl_head_scheme(phox, module, symbol_env, raw)?;
-
     let mut members = Vec::new();
     for m in raw.members.iter() {
         let symbol = Symbol::trait_member(&m.name);
@@ -18,10 +18,58 @@ pub fn resolve_decl_impl(
         );
         let mut expr = m.expr.as_ref().clone();
         resolve_expr(phox, module, symbol_env, &mut expr)?;
-        members.push(ImplMember { symbol, expr, sch_tmpl });
+        members.push((symbol, expr, sch_tmpl));
     };
 
-    Ok(Impl { head_sch, members })
+    // infer type
+    check_impl_comflict(phox, &head_sch)?;
+    let icx = &mut phox.get_infer_ctx(module);
+    for (_symbol, expr, sch_tmpl) in members.iter() {
+        let icx2 = &mut icx.duplicate();
+        let ty = infer_expr(phox, module, icx2, &mut expr.clone())?;
+        let sch = sch_tmpl.fresh_copy(&mut phox.ctx);
+        let (_, ty_inst) = &sch.instantiate(&mut phox.ctx);
+        phox.ctx.unify(&ty, ty_inst)?;
+    }
+
+    // register
+    for (symbol, expr, sch_tmpl) in members.iter() {
+        phox.impl_env
+            .entry(head_sch.clone())
+            .or_default()
+            .insert(symbol.clone(), expr.clone());
+        phox.impl_member_env
+            .entry(symbol.clone())
+            .or_default()
+            .insert(sch_tmpl.clone());
+    }
+
+    Ok(())
+}
+
+fn check_impl_comflict(
+    phox: &mut PhoxEngine,
+    impl_head_sch: &Scheme<TraitHead>,
+) -> Result<(), Error> {
+    for (sch, _) in phox.impl_env.iter() {
+        if sch.target.name != impl_head_sch.target.name { continue }
+        if sch.target.score() != impl_head_sch.target.score() { continue }
+        let mut ctx2 = phox.ctx.clone();
+        let mut same = true;
+        for (t1, t2) in sch.target.params.iter().zip(impl_head_sch.target.params.iter()) {
+            if ctx2.unify(t1, t2).is_err() {
+                same = false;
+                break;
+            }
+        }
+        if same {
+            return Err(Error::ConflictImpl {
+                it: impl_head_sch.target.clone(),
+                other: sch.target.clone(),
+            });
+        }
+    };
+    Ok(())
 }
 
 // -------------------------------------------------------------

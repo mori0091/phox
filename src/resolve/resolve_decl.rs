@@ -16,13 +16,7 @@ pub fn resolve_decl(
             resolve_decl_trait(phox, module, symbol_env, raw)
         }
         Decl::Impl(raw) => {
-            let resolved = resolve_decl_impl(phox, module, symbol_env, raw)?;
-            *decl = Decl::ImplResolved(resolved);
-            Ok(())
-        }
-        Decl::ImplResolved(_) => {
-            // skip
-            Ok(())
+            resolve_decl_impl(phox, module, symbol_env, raw)
         }
     }
 }
