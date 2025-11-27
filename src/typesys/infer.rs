@@ -127,6 +127,9 @@ pub fn infer_expr(
     icx: &mut InferCtx,
     expr: &mut Expr
 ) -> Result<Type, Error> {
+    if let Some(ty) = expr.ty.clone() {
+        return Ok(ty)
+    }
     let ty = match &mut expr.body {
         ExprBody::Var(symbol) => {
             match icx.get_type_scheme(symbol) {

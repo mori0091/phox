@@ -164,7 +164,6 @@ fn test_trait_member_conflict_error() {
         f 100
     "#;
     let err = eval(src).unwrap_err();
-    eprintln!("{err}");
     assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
     assert!(format!("{}", err).contains("candidates:"));
     assert!(format!("{}", err).contains("Bar Int => Int -> Int"));
@@ -185,7 +184,6 @@ fn test_trait_member_non_conflict_1() {
         f 100
     "#;
     let err = eval(src).unwrap_err();
-    eprintln!("{err}");
     assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
     assert!(format!("{}", err).contains("candidates:"));
     assert!(format!("{}", err).contains("Bar Int => Int -> Int"));
@@ -264,8 +262,6 @@ fn test_ambiguous_trait_type() {
         f
     "#;
     let err = eval(src).unwrap_err();
-    // assert!(format!("{}", err).contains("infer error: AmbiguousVariable"));
-    eprintln!("{err}");
     assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
     assert!(format!("{}", err).contains("candidates:"));
     assert!(format!("{}", err).contains("Foo Bool => Bool -> Bool"));
@@ -273,4 +269,28 @@ fn test_ambiguous_trait_type() {
     assert!(format!("{}", err).contains("solution:"));
     assert!(format!("{}", err).contains("@{Foo Bool}.f"));
     assert!(format!("{}", err).contains("@{Foo Int}.f"));
+}
+
+#[test]
+fn test_functor_list() {
+    let src =r#"@{Functor List}.fmap (\x. x + 1) (Cons 10 <| Cons 20 <| Nil)"#;
+    let (val, sch) = eval(src).unwrap();
+    assert_eq!(format!("{}", val), "Cons 11 (Cons 21 Nil)");
+    assert_eq!(format!("{}", sch.pretty()), "List Int");
+}
+
+#[test]
+fn test_applicative_list() {
+    let src =r#"afmap (Cons ((+) 1) <| Cons ((*) 2) <| Nil) (Cons 10 <| Cons 20 <| Nil)"#;
+    let (val, sch) = eval(src).unwrap();
+    assert_eq!(format!("{}", val), "Cons 11 (Cons 21 (Cons 20 (Cons 40 Nil)))");
+    assert_eq!(format!("{}", sch.pretty()), "List Int");
+}
+
+#[test]
+fn test_monad_list() {
+    let src =r#"(Cons 10 <| Cons 20 <| Nil) ?> (\x. (Cons (x + 1) <| Cons (x * 2) <| Nil))"#;
+    let (val, sch) = eval(src).unwrap();
+    assert_eq!(format!("{}", val), "Cons 11 (Cons 20 (Cons 21 (Cons 40 Nil)))");
+    assert_eq!(format!("{}", sch.pretty()), "List Int");
 }

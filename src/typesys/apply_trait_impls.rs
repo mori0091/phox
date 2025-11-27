@@ -1,4 +1,5 @@
 use crate::api::PhoxEngine;
+use crate::resolve::resolve_expr;
 use crate::syntax::ast::*;
 use crate::typesys::*;
 use crate::module::*;
@@ -130,14 +131,18 @@ pub fn apply_trait_impls_expr(
                         let mut impl_expr = impl_expr.clone();
                         {
                             // NOTE:
-                            // Currently, the inference and application (baking)
-                            // of `impl` member implementations are handled in
-                            // the calling environment. However, these should
-                            // perhaps be performed in the environment of the
-                            // module where the implementation is defined.
-                            let mut icx = phox.get_infer_ctx(module).duplicate();
-                            infer_expr(phox, module, &mut icx, &mut impl_expr)?;
-                            apply_trait_impls_expr(phox, module, &mut impl_expr)?;
+                            //
+                            // The inference and application (baking) of `impl`
+                            // member implementations occurs within the
+                            // environment of the module where the
+                            // implementation is defined.
+                            //
+                            // However, since the expression may reference
+                            // symbols not exported to the calling environment,
+                            // it currently needs to be resolved again in the
+                            // calling environment.
+                            let symbol_env = &mut phox.get_symbol_env(module);
+                            resolve_expr(phox, module, symbol_env, &mut impl_expr)?;
                         }
                         expr.body = impl_expr.body;
                         // expr.ty は既に推論済みなのでそのままでOK

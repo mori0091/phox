@@ -8,6 +8,16 @@ pub fn resolve_symbol(
     symbol_env: &mut SymbolEnv,
     symbol: &mut Symbol,
 ) -> Result<(), Error> {
+    // Is extern/global symbol?
+    if let Symbol::Local(s) = symbol.clone() {
+        if s.starts_with("::") {
+            let ps = s.trim_start_matches("::")
+                      .split("::")
+                      .map(|s| PathComponent::Name(s.to_string()))
+                      .collect::<Vec<_>>();
+            *symbol = Symbol::Unresolved(Path::Absolute(ps));
+        }
+    }
     if let Symbol::Unresolved(path) = symbol {
         let path = path.clone();
         let resolved = match path {
