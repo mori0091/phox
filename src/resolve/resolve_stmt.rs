@@ -36,7 +36,7 @@ pub fn resolve_stmt(
 }
 
 fn is_prelude_required_by(module: &RefModule) -> bool {
-    if let Some(compo) = module.borrow().path().head() {
+    if let Some(compo) = module.borrow().path().first() {
         if let PathComponent::Name(name) = compo {
             if name == "core" || name == "prelude" {
                 return false

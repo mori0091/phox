@@ -9,14 +9,8 @@ pub fn resolve_symbol(
     symbol: &mut Symbol,
 ) -> Result<(), Error> {
     // Is extern/global symbol?
-    if let Symbol::Local(s) = symbol.clone() {
-        if s.starts_with("::") {
-            let ps = s.trim_start_matches("::")
-                      .split("::")
-                      .map(|s| PathComponent::Name(s.to_string()))
-                      .collect::<Vec<_>>();
-            *symbol = Symbol::Unresolved(Path::Absolute(ps));
-        }
+    if let Symbol::Unique(abs_path) = symbol.clone() {
+        *symbol = Symbol::Unresolved(abs_path);
     }
     if let Symbol::Unresolved(path) = symbol {
         let path = path.clone();
@@ -67,7 +61,7 @@ fn resolve_symbol_relative(
     }
     // module top-level symbol
     else {
-        let sym = Symbol::Local(module.borrow().path().concat_path(&path).pretty());
+        let sym = Symbol::Unique(module.borrow().path().concat_path(&path));
         symbol_env.insert(path.clone(), sym.clone());
         return Ok(sym)
     }
@@ -98,7 +92,8 @@ fn resolve_symbol_absolute(
             // NOTE:
             // A path specifying `module` itself is permitted only in `mod`/`use` statements.
             // So do not bind the symbol to any local/module environment.
-            let extern_sym = Symbol::Local(m.borrow().path().pretty());
+
+            let extern_sym = Symbol::Unique(m.borrow().path());
             return Ok(extern_sym);
         }
         Some((m, Some(rem))) if rem.len() == 1 => {

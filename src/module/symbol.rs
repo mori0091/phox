@@ -1,9 +1,10 @@
-use super::Path;
+use super::{Path, PathComponent};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Symbol {
     Unresolved(Path),   // `foo`, `foo::Foo`
     Local(String),      // `map`, `foo`, `bar`
+    Unique(Path),       // `::foo::bar`
 }
 
 impl Symbol {
@@ -18,13 +19,29 @@ impl Symbol {
     }
     // === for premitive type ===
     pub fn unit() -> Symbol {
-        Symbol::local("::core::()")
+        Symbol::Unique(Path::absolute(vec!["core", "()"]))
     }
     pub fn bool_() -> Symbol {
-        Symbol::local("::core::Bool")
+        Symbol::Unique(Path::absolute(vec!["core", "Bool"]))
     }
     pub fn int() -> Symbol {
-        Symbol::local("::core::Int")
+        Symbol::Unique(Path::absolute(vec!["core", "Int"]))
+    }
+}
+
+impl std::fmt::Debug for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Symbol::Unresolved(path) => {
+                write!(f, "Unresolved({})", path)
+            }
+            Symbol::Local(name) => {
+                write!(f, "Local({})", name)
+            }
+            Symbol::Unique(path) => {
+                write!(f, "Unique({})", path)
+            }
+        }
     }
 }
 
@@ -35,8 +52,11 @@ impl std::fmt::Display for Symbol {
                 write!(f, "<unresolved {}>", path)
             }
             Symbol::Local(name) => {
-                let name = name.split("::").last().unwrap().to_string();
                 write!(f, "{}", name)
+            }
+            Symbol::Unique(path) => {
+                // write!(f, "{}", path)
+                write!(f, "{}", path.last().unwrap().pretty())
             }
         }
     }
@@ -46,13 +66,10 @@ impl Symbol {
     pub fn pretty(&self) -> String {
         match self {
             Symbol::Local(name) => {
-                let name = name.split("::").last().unwrap().to_string();
-                if name == "()" || name.starts_with('_') || name.starts_with(|c:char| c.is_ascii_alphabetic()) {
-                    format!("{}", name)
-                }
-                else {
-                    format!("({})", name)
-                }
+                PathComponent::Name(name.to_string()).pretty()
+            }
+            Symbol::Unique(path) => {
+                path.last().unwrap().pretty()
             }
             other => other.to_string()
         }

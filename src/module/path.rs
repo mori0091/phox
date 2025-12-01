@@ -12,16 +12,18 @@ pub enum Path {
     Relative(Vec<PathComponent>), // foo::bar, super::baz
 }
 
+// -------------------------------------------------------------
 impl Path {
-    pub fn absolute(xs: Vec<String>) -> Path {
-        Path::Absolute(xs.into_iter().map(PathComponent::Name).collect())
+    pub fn absolute<S: Into<String>>(xs: Vec<S>) -> Path {
+        Path::Absolute(xs.into_iter().map(|s| PathComponent::Name(s.into())).collect())
     }
 
-    pub fn relative(xs: Vec<String>) -> Path {
-        Path::Relative(xs.into_iter().map(PathComponent::Name).collect())
+    pub fn relative<S: Into<String>>(xs: Vec<S>) -> Path {
+        Path::Relative(xs.into_iter().map(|s| PathComponent::Name(s.into())).collect())
     }
 }
 
+// -------------------------------------------------------------
 impl Path {
     pub fn len(&self) -> usize {
         match self {
@@ -29,25 +31,20 @@ impl Path {
         }
     }
 
-    pub fn head(&self) -> Option<PathComponent> {
+    pub fn first(&self) -> Option<&PathComponent> {
         match self {
-            Path::Absolute(ps) | Path::Relative(ps) => {
-                if ps.is_empty() {
-                    None
-                } else {
-                    Some(ps[0].clone())
-                }
-            }
+            Path::Absolute(ps) | Path::Relative(ps) => ps.first()
         }
     }
 
-    pub fn components(&self) -> Vec<PathComponent> {
+    pub fn last(&self) -> Option<&PathComponent> {
         match self {
-            Path::Absolute(xs) | Path::Relative(xs) => xs.clone()
+            Path::Absolute(ps) | Path::Relative(ps) => ps.last()
         }
     }
 }
 
+// -------------------------------------------------------------
 impl Path {
     pub fn concat(&self, child: &[PathComponent]) -> Path {
         match self {
@@ -80,33 +77,12 @@ impl Path {
     }
 }
 
-impl PathComponent {
-    pub fn pretty(&self) -> String {
-        match self {
-            PathComponent::Name(name) => Symbol::Local(name.clone()).pretty(),
-            PathComponent::Wildcard => format!("{}", self),
-        }
-    }
-}
-
-impl Path {
-    pub fn pretty(&self) -> String {
-        fn normalize(xs: &Vec<PathComponent>) -> String {
-            xs.iter().map(|x| x.pretty()).collect::<Vec<_>>().join("::")
-        }
-        match self {
-            Path::Absolute(xs) => format!("::{}", normalize(xs)),
-            Path::Relative(xs) => format!("{}", normalize(xs)),
-        }
-    }
-}
-
+// -------------------------------------------------------------
 use std::fmt;
 
 impl fmt::Display for PathComponent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            // PathComponent::Name(name) => write!(f, "{}", Symbol::Local(name.clone()).pretty()),
             PathComponent::Name(name) => write!(f, "{}", name),
             PathComponent::Wildcard => write!(f, "<wildcard>"),
         }
@@ -129,6 +105,36 @@ impl fmt::Display for Path {
     }
 }
 
+// -------------------------------------------------------------
+impl PathComponent {
+    pub fn pretty(&self) -> String {
+        match self {
+            PathComponent::Name(name) => {
+                if name == "()" || name.starts_with('_') || name.starts_with(|c:char| c.is_ascii_alphabetic()) {
+                    format!("{}", name)
+                }
+                else {
+                    format!("({})", name)
+                }
+            }
+            PathComponent::Wildcard => format!("{}", self),
+        }
+    }
+}
+
+impl Path {
+    pub fn pretty(&self) -> String {
+        fn normalize(xs: &Vec<PathComponent>) -> String {
+            xs.iter().map(|x| x.pretty()).collect::<Vec<_>>().join("::")
+        }
+        match self {
+            Path::Absolute(xs) => format!("::{}", normalize(xs)),
+            Path::Relative(xs) => format!("{}", normalize(xs)),
+        }
+    }
+}
+
+// -------------------------------------------------------------
 impl Path {
     pub fn resolve(&self, current: &RefModule, roots: &RootModules) -> Option<(RefModule, Option<Path>)> {
         match self {

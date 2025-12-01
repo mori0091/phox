@@ -122,7 +122,6 @@ pub fn infer_expr(
                         // 3) フィルタ判定は「引数のみ」
                         if let Type::Fun(param, _) = &ty_inst {
                             if try_ctx.unify(&ta, param).is_ok() {
-                                // eprintln!("try_ta vs param: {} vs {}", try_ta.repr(&mut try_ctx), param.repr(&mut try_ctx));
                                 filtered.push((cand.target.score(), cand_tmpl));
                             }
                         }
@@ -148,7 +147,6 @@ pub fn infer_expr(
                     let winner = winner_tmpl.fresh_copy(&mut phox.ctx);
                     let (_, ty_inst) = winner.instantiate(&mut phox.ctx);
                     if let Type::Fun(param, ret) = ty_inst.clone() {
-                        // eprintln!("ta vs param: {} vs {}", ta.repr(ctx), param.repr(ctx));
                         let ta = ta.repr(&mut phox.ctx);
                         phox.ctx.unify(&ta, &param)?;
                         phox.ctx.unify(&tr, &ret)?;
@@ -266,12 +264,10 @@ pub fn infer_expr(
                 }
                 other => {
                     if let Some(con) = is_tycon(&other) {
-                        // let pat = Pat::Con(con, vec![Pat::local_var("r")]);
                         let pat = Pat::Con(con, vec![Pat::unresolved_var("r")]);
                         let p = base.clone();
                         let mut expr = Expr::block(vec![
                             Item::Stmt(Stmt::Let(pat, p)),
-                            // Item::Expr(Expr::field_access(Expr::local_var("r"), field.clone()))
                             Item::Expr(Expr::field_access(Expr::unresolved_var("r"), field.clone()))
                         ]);
                         let ty = infer_expr(phox, module, icx, &mut expr)
@@ -297,12 +293,10 @@ pub fn infer_expr(
                 }
                 other => {
                     if let Some(con) = is_tycon(&other) {
-                        // let pat = Pat::Con(con, vec![Pat::local_var("t")]);
                         let pat = Pat::Con(con, vec![Pat::unresolved_var("t")]);
                         let p = base.clone();
                         let mut expr = Expr::block(vec![
                             Item::Stmt(Stmt::Let(pat, p)),
-                            // Item::Expr(Expr::tuple_access(Expr::local_var("t"), *index))
                             Item::Expr(Expr::tuple_access(Expr::unresolved_var("t"), *index))
                         ]);
                         let ty = infer_expr(phox, module, icx, &mut expr)
