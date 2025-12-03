@@ -96,37 +96,15 @@ mod bool {
     use ::core::*;
 
     impl Eq Bool {
-        (==) = \x.\y. match ((x, y)) {
-            (true , true ) => true,
-            (false, false) => true,
-            _              => false,
-        };
-        (!=) = \x.\y. match ((x, y)) {
-            (true , true ) => false,
-            (false, false) => false,
-            _              => true,
-        };
+        (==) = \x.\y. if (x) y else !y;
+        (!=) = \x.\y. if (x) !y else y;
     };
 
     impl Ord Bool {
-        (<=) = \x.\y. match ((x, y)) {
-            (false , false) => true,
-            (_, true)       => true,
-            _               => false,
-        };
-        (<)  = \x.\y. match ((x, y)) {
-            (false, true)   => true,
-            _               => false,
-        };
-        (>)  = \x.\y. match ((x, y)) {
-            (true, false)   => true,
-            _               => false,
-        };
-        (>=) = \x.\y. match ((x, y)) {
-            (false, false) => true,
-            (true, _)      => true,
-            _              => false,
-        };
+        (<=) = \x.\y. if (x) y else true;
+        (<)  = \x.\y. if (!x) y else false;
+        (>)  = \x.\y. if (!y) x else false;
+        (>=) = \x.\y. if (y) x else true;
     };
 };
 use bool::*;
