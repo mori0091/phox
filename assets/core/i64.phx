@@ -1,0 +1,19 @@
+use ::core::*;
+
+impl Eq Int {
+    (==) = \x.\y. __i64_eq__ (x, y);
+    (!=) = \x.\y. __i64_ne__ (x, y);
+};
+
+impl Ord Int {
+    (<=) = \x.\y. __i64_le__ (x, y);
+    (<)  = \x.\y. __i64_lt__ (x, y);
+    (>=) = \x.\y. __i64_ge__ (x, y);
+    (>)  = \x.\y. __i64_gt__ (x, y);
+};
+
+impl Add Int { (+) = \x.\y. __i64_add__ (x, y); };
+impl Sub Int { (-) = \x.\y. __i64_sub__ (x, y); };
+impl Mul Int { (*) = \x.\y. __i64_mul__ (x, y); };
+impl Div Int { (/) = \x.\y. __i64_div__ (x, y); };
+impl Neg Int { negate = \x. __i64_neg__ x; };

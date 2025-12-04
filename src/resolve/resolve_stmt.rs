@@ -1,3 +1,5 @@
+use crate::api::loader::*;
+
 use super::*;
 
 // -------------------------------------------------------------
@@ -17,6 +19,10 @@ pub fn resolve_stmt(
 
             if let Some(items) = items {
                 phox.eval_items(sub, items)?;
+            }
+            else {
+                let (_file, src) = load_module_src(&sub.borrow().path())?;
+                phox.eval_mod(sub, &src)?;
             }
             phox.eval_mod(module, &format!("use {name};"))?;
             Ok(())

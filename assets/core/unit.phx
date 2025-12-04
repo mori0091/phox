@@ -1,0 +1,13 @@
+use ::core::*;
+
+impl Eq () {
+    (==) = \x.\y. true;
+    (!=) = \x.\y. false;
+};
+
+impl Ord () {
+    (<=) = \x.\y. true;
+    (<)  = \x.\y. false;
+    (>=) = \x.\y. true;
+    (>)  = \x.\y. false;
+};

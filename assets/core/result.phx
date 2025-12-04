@@ -1,0 +1,26 @@
+type Result e a = Err e | Ok a;
+
+use ::core::*;
+
+impl Functor (Result e) {
+    fmap = \f.\x. match (x) {
+        Ok a => Ok (f a),
+        Err err => Err err,
+    };
+};
+
+impl Applicative (Result e) {
+    pure = \x. Ok x;
+    afmap = \f.\x. match ((f, x)) {
+        (Ok g, Ok a) => Ok (g a),
+        (Err err, _) => Err err,
+        (_, Err err) => Err err,
+    };
+};
+
+impl Monad (Result e) {
+    (?>) = \x.\f. match (x) {
+        Ok a => f a,
+        Err err => Err err,
+    };
+};

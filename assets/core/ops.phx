@@ -1,0 +1,14 @@
+let (&&) = \x.\y. if (x) y else false;
+let (||) = \x.\y. if (x) true else y;
+let not = \x. if (x) false else true;
+
+let (|>) = \x.\f. f x;
+let (<|) = \f.\x. f x;
+let (>>) = \f.\g.\x. g (f x);
+let (<<) = \f.\g.\x. f (g x);
+
+trait Add a { (+) : a -> a -> a; };
+trait Sub a { (-) : a -> a -> a; };
+trait Mul a { (*) : a -> a -> a; };
+trait Div a { (/) : a -> a -> a; };
+trait Neg a { negate : a -> a; };

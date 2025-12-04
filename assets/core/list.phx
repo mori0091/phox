@@ -1,0 +1,39 @@
+type List a = Nil | Cons a (List a);
+
+let rec append = \xs.\ys. match (xs) {
+    Cons z zs => Cons z (append zs ys),
+    _ => ys,
+};
+
+let rec join = \xss. match (xss) {
+    Cons xs xss_ => append xs (join xss_),
+    _ => Nil,
+};
+
+let rec fmap = \f.\xs. match (xs) {
+    Cons y ys => Cons (f y) (fmap f ys),
+    _ => Nil,
+};
+
+use fmap as map;
+
+/// Cartesian product (not zip)
+let rec afmap = \fs.\xs. match (fs) {
+    Nil => Nil,
+    Cons g gs => append (fmap g xs) (afmap gs xs),
+};
+
+use ::core::*;
+
+impl Functor List {
+    fmap = ::core::list::fmap;
+};
+
+impl Applicative List {
+    pure = \x. Cons x Nil;
+    afmap = ::core::list::afmap;
+};
+
+impl Monad List {
+    (?>) = \xs.\f. join (::core::list::fmap f xs);
+};

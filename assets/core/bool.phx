@@ -1,0 +1,13 @@
+use ::core::*;
+
+impl Eq Bool {
+    (==) = \x.\y. if (x) y else !y;
+    (!=) = \x.\y. if (x) !y else y;
+};
+
+impl Ord Bool {
+    (<=) = \x.\y. if (x) y else true;
+    (<)  = \x.\y. if (!x) y else false;
+    (>)  = \x.\y. if (!y) x else false;
+    (>=) = \x.\y. if (y) x else true;
+};

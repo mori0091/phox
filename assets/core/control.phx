@@ -1,0 +1,15 @@
+// === Functor ===
+trait Functor f {
+    fmap: (a -> b) -> f a -> f b;
+};
+
+// === Applicative Functor ===
+trait Applicative f {
+    pure : a -> f a;
+    afmap: f (a -> b) -> f a -> f b;
+};
+
+// === Monad ===
+trait Monad m {
+    (?>) : m a -> (a -> m b) -> m b;
+};

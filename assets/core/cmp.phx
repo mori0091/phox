@@ -1,0 +1,27 @@
+use ::core::Bool;
+
+// === Eq ===
+trait Eq a {
+    (==) : a -> a -> Bool;
+    (!=) : a -> a -> Bool;
+};
+// // Default implementation.
+// impl Eq a {
+//     // Override either or both members.
+//     (==) = \x.\y. !(x != y);
+//     (!=) = \x.\y. !(x == y);
+// };
+
+// === Ord ===
+trait Ord a /* : Eq a */ {
+    (<=) : a -> a -> Bool;
+    (<)  : a -> a -> Bool;
+    (>=) : a -> a -> Bool;
+    (>)  : a -> a -> Bool;
+};
+// // Default implementation.
+// impl Ord a {
+//     (<)  = \x.\y. (x != y) && (x <= y);
+//     (>=) = \x.\y. (x == y) || (x > y);
+//     (>)  = \x.\y. !(x <= y);
+// };

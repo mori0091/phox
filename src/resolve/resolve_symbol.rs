@@ -98,7 +98,7 @@ fn resolve_symbol_absolute(
         }
         Some((m, Some(rem))) if rem.len() == 1 => {
             if let Some(target_sym) = phox.get_symbol_env(&m).get(&rem) {
-                let extern_sym = target_sym.clone(); // <- \NOTE may be an "extern" symbol?
+                let extern_sym = target_sym.clone();
 
                 // is Data constructor or Variable ?
                 if let Some(ty_sch) = phox.get_infer_ctx(&m).get_type_scheme(&target_sym) {

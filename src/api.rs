@@ -19,8 +19,8 @@ use crate::interpreter::*;
 mod bootstrap;
 use bootstrap::*;
 
-const SRC_CORE   : &str = include_str!("../assets/core.phx");
-const SRC_PRELUDE: &str = include_str!("../assets/prelude.phx");
+pub mod loader;
+use loader::*;
 
 pub const DEFAULT_USER_ROOT_MODULE_NAME: &str = "__main__";
 
@@ -48,8 +48,14 @@ impl PhoxEngine {
             impl_env: ImplEnv::new(),
         };
 
-        phox.new_core("core", SRC_CORE);
-        phox.new_root("prelude", SRC_PRELUDE);
+        {
+            let (_file, src) = load_module_src(&Path::absolute(vec!["core"])).unwrap();
+            phox.new_core("core", &src);
+        }
+        {
+            let (_file, src) = load_module_src(&Path::absolute(vec!["prelude"])).unwrap();
+            phox.new_root("prelude", &src);
+        }
         phox.new_root(DEFAULT_USER_ROOT_MODULE_NAME, "use ::prelude::*;");
 
         phox

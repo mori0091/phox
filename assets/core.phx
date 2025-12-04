@@ -1,246 +1,43 @@
 // -------------------------------------------------------------
-mod ops {
-    // use ::core::*;
-
-    let (&&) = \x.\y. if (x) y else false;
-    let (||) = \x.\y. if (x) true else y;
-    let not = \x. if (x) false else true;
-
-    let (|>) = \x.\f. f x;
-    let (<|) = \f.\x. f x;
-    let (>>) = \f.\g.\x. g (f x);
-    let (<<) = \f.\g.\x. f (g x);
-
-    trait Add a { (+) : a -> a -> a; };
-    trait Sub a { (-) : a -> a -> a; };
-    trait Mul a { (*) : a -> a -> a; };
-    trait Div a { (/) : a -> a -> a; };
-    trait Neg a { negate : a -> a; };
-};
+mod ops;
 use ops::*;
 
 // -------------------------------------------------------------
-mod cmp {
-    use ::core::Bool;
-
-    // === Eq ===
-    trait Eq a {
-        (==) : a -> a -> Bool;
-        (!=) : a -> a -> Bool;
-    };
-    // // Default implementation.
-    // impl Eq a {
-    //     // Override either or both members.
-    //     (==) = \x.\y. !(x != y);
-    //     (!=) = \x.\y. !(x == y);
-    // };
-
-    // === Ord ===
-    trait Ord a /* : Eq a */ {
-        (<=) : a -> a -> Bool;
-        (<)  : a -> a -> Bool;
-        (>=) : a -> a -> Bool;
-        (>)  : a -> a -> Bool;
-    };
-    // // Default implementation.
-    // impl Ord a {
-    //     (<)  = \x.\y. (x != y) && (x <= y);
-    //     (>=) = \x.\y. (x == y) || (x > y);
-    //     (>)  = \x.\y. !(x <= y);
-    // };
-};
+mod cmp;
 use cmp::*;
 
 // -------------------------------------------------------------
-mod control {
-    // === Functor ===
-    trait Functor f {
-        fmap: (a -> b) -> f a -> f b;
-    };
-
-    // === Applicative Functor ===
-    trait Applicative f {
-        pure : a -> f a;
-        afmap: f (a -> b) -> f a -> f b;
-    };
-
-    // === Monad ===
-    trait Monad m {
-        (?>) : m a -> (a -> m b) -> m b;
-    };
-};
+mod control;
 use control::*;
 
 // -------------------------------------------------------------
 // === () ===
-mod unit {
-    use ::core::*;
-
-    impl Eq () {
-        (==) = \x.\y. true;
-        (!=) = \x.\y. false;
-    };
-
-    impl Ord () {
-        (<=) = \x.\y. true;
-        (<)  = \x.\y. false;
-        (>=) = \x.\y. true;
-        (>)  = \x.\y. false;
-    };
-};
+mod unit;
 use unit::*;
 
 // -------------------------------------------------------------
 // === Bool ===
-mod bool {
-    use ::core::*;
-
-    impl Eq Bool {
-        (==) = \x.\y. if (x) y else !y;
-        (!=) = \x.\y. if (x) !y else y;
-    };
-
-    impl Ord Bool {
-        (<=) = \x.\y. if (x) y else true;
-        (<)  = \x.\y. if (!x) y else false;
-        (>)  = \x.\y. if (!y) x else false;
-        (>=) = \x.\y. if (y) x else true;
-    };
-};
+mod bool;
 use bool::*;
 
 // -------------------------------------------------------------
 // === Int ===
-mod i64 {
-    use ::core::*;
-
-    impl Eq Int {
-        (==) = \x.\y. __i64_eq__ (x, y);
-        (!=) = \x.\y. __i64_ne__ (x, y);
-    };
-
-    impl Ord Int {
-        (<=) = \x.\y. __i64_le__ (x, y);
-        (<)  = \x.\y. __i64_lt__ (x, y);
-        (>=) = \x.\y. __i64_ge__ (x, y);
-        (>)  = \x.\y. __i64_gt__ (x, y);
-    };
-
-    impl Add Int { (+) = \x.\y. __i64_add__ (x, y); };
-    impl Sub Int { (-) = \x.\y. __i64_sub__ (x, y); };
-    impl Mul Int { (*) = \x.\y. __i64_mul__ (x, y); };
-    impl Div Int { (/) = \x.\y. __i64_div__ (x, y); };
-    impl Neg Int { negate = \x. __i64_neg__ x; };
-};
+mod i64;
 use i64::*;
 
 // -------------------------------------------------------------
 // === Option ===
-mod option {
-    type Option a = None | Some a;
-
-    use ::core::*;
-
-    impl Functor Option {
-        fmap = \f.\x. match (x) {
-            Some a => Some (f a),
-            _ => None,
-        };
-    };
-
-    impl Applicative Option {
-        pure = \x. Some x;
-        afmap = \f.\x. match ((f, x)) {
-            (Some g, Some a) => Some (g a),
-            _ => None,
-        };
-    };
-
-    impl Monad Option {
-        (?>) = \x.\f. match (x) {
-            Some a => f a,
-            _ => None,
-        };
-    };
-};
+mod option;
 use option::*;
 
 // -------------------------------------------------------------
 // === Result ===
-mod result {
-    type Result e a = Err e | Ok a;
-
-    use ::core::*;
-
-    impl Functor (Result e) {
-        fmap = \f.\x. match (x) {
-            Ok a => Ok (f a),
-            Err err => Err err,
-        };
-    };
-
-    impl Applicative (Result e) {
-        pure = \x. Ok x;
-        afmap = \f.\x. match ((f, x)) {
-            (Ok g, Ok a) => Ok (g a),
-            (Err err, _) => Err err,
-            (_, Err err) => Err err,
-        };
-    };
-
-    impl Monad (Result e) {
-        (?>) = \x.\f. match (x) {
-            Ok a => f a,
-            Err err => Err err,
-        };
-    };
-};
+mod result;
 use result::*;
 
 // -------------------------------------------------------------
 // === List ===
-mod list {
-    type List a = Nil | Cons a (List a);
-
-    let rec append = \xs.\ys. match (xs) {
-        Cons z zs => Cons z (append zs ys),
-        _ => ys,
-    };
-
-    let rec join = \xss. match (xss) {
-        Cons xs xss_ => append xs (join xss_),
-        _ => Nil,
-    };
-
-    let rec fmap = \f.\xs. match (xs) {
-        Cons y ys => Cons (f y) (fmap f ys),
-        _ => Nil,
-    };
-
-    use fmap as map;
-
-    /// Cartesian product (not zip)
-    let rec afmap = \fs.\xs. match (fs) {
-        Nil => Nil,
-        Cons g gs => append (fmap g xs) (afmap gs xs),
-    };
-
-    use ::core::*;
-
-    impl Functor List {
-        fmap = ::core::list::fmap;
-    };
-
-    impl Applicative List {
-        pure = \x. Cons x Nil;
-        afmap = ::core::list::afmap;
-    };
-
-    impl Monad List {
-        (?>) = \xs.\f. join (::core::list::fmap f xs);
-    };
-
-};
+mod list;
 // re-export
 use list::{
     List,

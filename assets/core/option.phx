@@ -1,0 +1,25 @@
+type Option a = None | Some a;
+
+use ::core::*;
+
+impl Functor Option {
+    fmap = \f.\x. match (x) {
+        Some a => Some (f a),
+        _ => None,
+    };
+};
+
+impl Applicative Option {
+    pure = \x. Some x;
+    afmap = \f.\x. match ((f, x)) {
+        (Some g, Some a) => Some (g a),
+        _ => None,
+    };
+};
+
+impl Monad Option {
+    (?>) = \x.\f. match (x) {
+        Some a => f a,
+        _ => None,
+    };
+};
