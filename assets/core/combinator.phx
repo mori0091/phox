@@ -1,0 +1,57 @@
+/**
+ * S, K, I, B, C, Y combinators.
+ *
+ * - `S` ≡ `subst` ; substitution
+ * - `K` ≡ `const` ; constant
+ * - `I` ≡ `id`    ; identity
+ * - `B` ≡ `(<<)`  ; composition
+ * - `C` ≡ `flip`  ; flip
+ * - `Y` ≡ `fix`   ; fixpoint
+ */
+
+/// `S` combinator a.k.a. `subst` (`subst x y z` = `x z (y z)`).
+let s = \x.\y.\z. x z (y z);
+use s as subst;
+
+/// `K` combinator a.k.a. `const` (`const x y` = `x`).
+let k = \x.\y. x;
+use k as const;
+
+/// `I` combinator a.k.a. `id` (`id x` = `x`).
+// let i = s k k;
+let i = \x. x;
+use i as id;
+
+/// `B` combinator a.k.a. `(<<)` (`(f << g) x` = `f (g x)`).
+// let b = s (k s) k;
+let b = ::core::ops::(<<);
+
+/// `C` combinator a.k.a. `flip` (`flip f x y` = `f y x`).
+let c = \f.\x.\y. f y x;
+use c as flip;
+
+/// `Y` combinator a.k.a. `fix` (`fix f x` = `f (fix f) x`).
+///
+/// Note that function `f` in `fix f x` shall be tail-recursive.
+/// `fix` works by repeatedly applying `f` to itself.
+/// If `f` is not tail-recursive, each recursive call consumes stack frames,
+/// and `fix f x` eventually causes stack overflow.
+///
+/// for example:
+/// ```
+/// let f = \op.\fold.\(a, xs). match (xs) {
+///     Nil => a,
+///     Cons y ys => fold (op a y, ys),
+/// };
+///
+/// fix (f (+)) (0, Cons 10 <| Cons 20 <| Nil)
+/// => 30: Int
+///
+/// fix (f (*)) (1, Cons 10 <| Cons 20 <| Nil)
+/// => 200: Int
+/// ```
+// let m = s i i;   // cannot implement `M` combinator since it causes `RecursiveType` error.
+// let l = c b m;
+// let y = s l l;
+let rec y = \f.\x. f (y f) x;
+use y as fix;
