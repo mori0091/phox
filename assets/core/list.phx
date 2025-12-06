@@ -23,7 +23,7 @@ let rec afmap = \fs.\xs. match (fs) {
     Cons g gs => append (fmap g xs) (afmap gs xs),
 };
 
-use ::core::*;
+use ::core::control::*;
 
 impl Functor List {
     fmap = ::core::list::fmap;

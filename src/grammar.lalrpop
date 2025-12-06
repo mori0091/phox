@@ -267,6 +267,9 @@ PathGlobLeaf: PathGlobLeaf = {
     <p:ConIdent> <alias:("as" <ConIdent>)?> => {
         PathGlobLeaf::Elem(p, alias)
     },
+    "()" <alias:("as" <ConIdent>)?> => {
+        PathGlobLeaf::Elem("()".to_string(), alias)
+    },
     "*" => {
         PathGlobLeaf::Wildcard
     },

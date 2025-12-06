@@ -1,4 +1,8 @@
-use ::core::*;
+use ::core::();
+
+use ::core::ops::*;
+
+use ::core::cmp::*;
 
 impl Eq () {
     (==) = \x.\y. true;
@@ -10,4 +14,30 @@ impl Ord () {
     (<)  = \x.\y. false;
     (>=) = \x.\y. true;
     (>)  = \x.\y. false;
+};
+
+use ::core::option::*;
+
+let __eq_Option_unit__ = \x.\y. match ((x,y)) {
+    (None, None) => true,
+    (Some _, Some _) => true,
+    _ => false,
+};
+
+impl Eq (Option ()) {
+    (==) = __eq_Option_unit__;
+    (!=) = \x.\y. ! (x `__eq_Option_unit__` y);
+};
+
+let __le_Option_unit__ = \x.\y. match ((x,y)) {
+    (None, _) => true,
+    (Some _, Some _) => true,
+    _ => false,
+};
+
+impl Ord (Option ()) {
+    (<=) = __le_Option_unit__;
+    (<)  = \x.\y. x `@{Eq (Option ())}.(!=)` y && x `__le_Option_unit__` y;
+    (>=) = \x.\y. y `__le_Option_unit__` x;
+    (>)  = \x.\y. x `@{Eq (Option ())}.(!=)` y && y `__le_Option_unit__` x;
 };

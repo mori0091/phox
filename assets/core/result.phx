@@ -1,6 +1,6 @@
 type Result e a = Err e | Ok a;
 
-use ::core::*;
+use ::core::control::*;
 
 impl Functor (Result e) {
     fmap = \f.\x. match (x) {

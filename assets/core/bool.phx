@@ -1,4 +1,8 @@
-use ::core::*;
+use ::core::Bool;
+
+use ::core::ops::*;
+
+use ::core::cmp::*;
 
 impl Eq Bool {
     (==) = \x.\y. if (x) y else !y;
@@ -10,4 +14,30 @@ impl Ord Bool {
     (<)  = \x.\y. if (!x) y else false;
     (>)  = \x.\y. if (!y) x else false;
     (>=) = \x.\y. if (y) x else true;
+};
+
+use ::core::option::*;
+
+let __eq_Option_Bool__ = \x.\y. match ((x,y)) {
+    (None, None) => true,
+    (Some a, Some b) => @{Eq Bool}.(==) a b,
+    _ => false,
+};
+
+impl Eq (Option Bool) {
+    (==) = __eq_Option_Bool__;
+    (!=) = \x.\y. ! (x `__eq_Option_Bool__` y);
+};
+
+let __le_Option_Bool__ = \x.\y. match ((x,y)) {
+    (None, _) => true,
+    (Some a, Some b) => @{Ord Bool}.(<=) a b,
+    _ => false,
+};
+
+impl Ord (Option Bool) {
+    (<=) = __le_Option_Bool__;
+    (<)  = \x.\y. x `@{Eq (Option Bool)}.(!=)` y && x `__le_Option_Bool__` y;
+    (>=) = \x.\y. y `__le_Option_Bool__` x;
+    (>)  = \x.\y. x `@{Eq (Option Bool)}.(!=)` y && y `__le_Option_Bool__` x;
 };

@@ -1,6 +1,6 @@
 type Option a = None | Some a;
 
-use ::core::*;
+use ::core::control::*;
 
 impl Functor Option {
     fmap = \f.\x. match (x) {
