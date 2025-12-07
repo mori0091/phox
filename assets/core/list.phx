@@ -37,3 +37,64 @@ impl Applicative List {
 impl Monad List {
     (?>) = \xs.\f. join (::core::list::fmap f xs);
 };
+
+use ::core::ops::*;
+use ::core::combinator::*;
+
+// tail-recursive.
+let foldl = \op.\init.\xs.
+    (init, xs) |> fix (\f.\(a, xs). match (xs) {
+        Nil       => a,
+        Cons y ys => f (op a y, ys),
+    }
+);
+
+let reverse = foldl (flip Cons) Nil;
+
+// not tail-recursive.
+let rec foldr = \op.\init.\xs. match (xs) {
+    Nil       => init,
+    Cons y ys => op y (foldr op init ys),
+};
+
+// tail-recursive.
+let foldr_tr = \op.\init.\xs. reverse xs |> foldl op init;
+
+let filter_unordered = \pred.\xs. {
+    (xs, Nil) |> fix (\f.\(xs, res).
+    match (xs) {
+        Nil => res,
+        Cons y ys =>
+            if (pred y)
+                f (ys, Cons y res)
+            else
+                f (ys, res)
+        ,
+    })
+};
+
+let filter = \pred.\xs. filter_unordered pred xs |> reverse;
+
+let partition = \pred.\xs. {
+    (xs, Nil, Nil) |> fix (\f.\(xs, ls, rs).
+    match (xs) {
+        Nil       => (ls, rs),
+        Cons y ys =>
+            if (pred y)
+                f (ys, ls, (Cons y rs))
+            else
+                f (ys, (Cons y ls), rs)
+        ,
+    })
+};
+
+let qsort = \cmp. {
+    let rec sort = \xs. match (xs) {
+        Nil       => Nil,
+        Cons y ys => {
+            let (ls, rs) = partition (cmp y) ys;
+            append (sort ls) (Cons y (sort rs))
+        },
+    };
+    sort
+};
