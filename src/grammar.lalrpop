@@ -373,8 +373,7 @@ Expr1: Expr = {
 
 // 論理演算
 ExprBool: Expr = {
-    <l:Expr1> "&&" <r:Expr2> => Expr::app(Expr::app(Expr::unresolved_var("&&"), l), r),
-    <l:Expr1> "||" <r:Expr2> => Expr::app(Expr::app(Expr::unresolved_var("||"), l), r),
+    <l:Expr1> <op:LogicalOp> <r:Expr2> => Expr::app(Expr::app(Expr::unresolved_var(op), l), r),
 };
 
 Expr2: Expr = {
@@ -384,12 +383,7 @@ Expr2: Expr = {
 
 // 比較演算子 (infix)
 ExprCmp: Expr = {
-    <l:Expr3> "==" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("=="), l), r),
-    <l:Expr3> "!=" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("!="), l), r),
-    <l:Expr3> "<"  <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("<") , l), r),
-    <l:Expr3> "<=" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var("<="), l), r),
-    <l:Expr3> ">"  <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var(">") , l), r),
-    <l:Expr3> ">=" <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var(">="), l), r),
+    <l:Expr3> <op:CmpOp> <r:Expr3> => Expr::app(Expr::app(Expr::unresolved_var(op), l), r),
 };
 
 Expr3: Expr = {
@@ -399,8 +393,7 @@ Expr3: Expr = {
 
 // 加減算 (infixl)
 ExprAdd: Expr = {
-    <l:Expr3> "+" <r:Expr4> => Expr::app(Expr::app(Expr::unresolved_var("+"), l), r),
-    <l:Expr3> "-" <r:Expr4> => Expr::app(Expr::app(Expr::unresolved_var("-"), l), r),
+    <l:Expr3> <op:AddSubOp> <r:Expr4> => Expr::app(Expr::app(Expr::unresolved_var(op), l), r),
 };
 
 Expr4: Expr = {
@@ -411,8 +404,7 @@ Expr4: Expr = {
 
 // 乗除算 (infixl)
 ExprMul: Expr = {
-    <l:Expr4> "*" <r:Expr5> => Expr::app(Expr::app(Expr::unresolved_var("*"), l), r),
-    <l:Expr4> "/" <r:Expr5> => Expr::app(Expr::app(Expr::unresolved_var("/"), l), r),
+    <l:Expr4> <op:MulDivOp> <r:Expr5> => Expr::app(Expr::app(Expr::unresolved_var(op), l), r),
 };
 
 Expr5: Expr = {
@@ -444,7 +436,7 @@ Expr7: Expr = {
 };
 
 ExprPipeL: Expr = {
-    <f:Expr8> "<|" <x:Expr7> => Expr::app(Expr::app(Expr::unresolved_var("<|"), f), x),
+    <f:Expr8> <op:PipeLOp> <x:Expr7> => Expr::app(Expr::app(Expr::unresolved_var(op), f), x),
 };
 
 Expr8: Expr = {
@@ -453,7 +445,7 @@ Expr8: Expr = {
 };
 
 ExprPipeR: Expr = {
-    <x:Expr8> "|>" <f:Expr9> => Expr::app(Expr::app(Expr::unresolved_var("|>"), x), f),
+    <x:Expr8> <op:PipeROp> <f:Expr9> => Expr::app(Expr::app(Expr::unresolved_var(op), x), f),
 };
 
 Expr9: Expr = {
@@ -462,8 +454,7 @@ Expr9: Expr = {
 };
 
 ExprCompose: Expr = {
-    <f:Expr9> ">>" <g:Expr10> => Expr::app(Expr::app(Expr::unresolved_var(">>"), f), g),
-    <f:Expr9> "<<" <g:Expr10> => Expr::app(Expr::app(Expr::unresolved_var("<<"), f), g),
+    <f:Expr9> <op:CompositionOp> <g:Expr10> => Expr::app(Expr::app(Expr::unresolved_var(op), f), g),
 };
 
 Expr10: Expr = {
@@ -622,25 +613,61 @@ Ident: String = {
     <"identifier">,
 };
 
+PrefixOps: String = {
+    "!" => "not".to_string(),
+};
+
+LogicalOp: String = {
+    "&&" => "&&".to_string(),
+    "||" => "||".to_string(),
+};
+
+CmpOp: String = {
+    "==" => "==".to_string(),
+    "!=" => "!=".to_string(),
+    "<"  => "<".to_string(),
+    "<=" => "<=".to_string(),
+    ">"  => ">".to_string(),
+    ">=" => ">=".to_string(),
+};
+
+AddSubOp: String = {
+    "+"  => "+".to_string(),
+    "-"  => "-".to_string(),
+};
+
+MulDivOp: String = {
+    "*"  => "*".to_string(),
+    "/"  => "/".to_string(),
+};
+
+PipeLOp: String = {
+    "<|" => "<|".to_string(),
+};
+
+PipeROp: String = {
+    "|>" => "|>".to_string(),
+};
+
+CompositionOp: String = {
+    ">>" => ">>".to_string(),
+    "<<" => "<<".to_string(),
+};
+
+InfixOps: String = {
+    LogicalOp,
+    CmpOp,
+    AddSubOp,
+    MulDivOp,
+    <"infixOp">,
+    PipeLOp,
+    PipeROp,
+    CompositionOp,
+};
+
 IdentOps: String = {
-    "(" <"infixOp"> ")",
-    "(" "==" ")" => "==".to_string(),
-    "(" "!=" ")" => "!=".to_string(),
-    "(" "<" ")"  => "<".to_string(),
-    "(" "<=" ")" => "<=".to_string(),
-    "(" ">" ")"  => ">".to_string(),
-    "(" ">=" ")" => ">=".to_string(),
-    "(" "+" ")"  => "+".to_string(),
-    "(" "-" ")"  => "-".to_string(),
-    "(" "*" ")"  => "*".to_string(),
-    "(" "/" ")"  => "/".to_string(),
-    "(" "!" ")"  => "not".to_string(),
-    "(" "&&" ")" => "&&".to_string(),
-    "(" "||" ")" => "||".to_string(),
-    "(" "|>" ")" => "|>".to_string(),
-    "(" "<|" ")" => "<|".to_string(),
-    "(" ">>" ")" => ">>".to_string(),
-    "(" "<<" ")" => "<<".to_string(),
+    "(" <InfixOps> ")",
+    "(" <PrefixOps> ")",
 };
 
 ConIdent: String = {
