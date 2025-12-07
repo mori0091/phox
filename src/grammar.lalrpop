@@ -70,6 +70,7 @@ extern {
         "]"  =>  Token::RBracket,
         "|"  =>  Token::VerticalBar,
         "!"  =>  Token::ExclamationMark,
+        "#"  =>  Token::NumberSign,
 
         // --- 識別子・リテラル ---
         "mod_ident"   => Token::ModIdent(<String>),
@@ -480,6 +481,8 @@ ExprApp: Expr = {
 
 // 原子的な式
 Atom: Expr = {
+    ExprSectionL,
+    ExprSectionR,
     ExprParen,
     ExprVar,
     Lit => Expr::lit(<>),
@@ -489,6 +492,36 @@ Atom: Expr = {
     ExprBlock,
     ExprFieldAccess,
     ExprTupleAccess,
+};
+
+ExprSectionL: Expr = {
+    "#" "(" <l:Atom> "`" <op:Atom> "`" "_"? ")" => {
+        Expr::abs(
+            Pat::unresolved_var("__rhs__"),
+            Expr::app(Expr::app(op, l), Expr::unresolved_var("__rhs__"))
+        )
+    },
+    "#" "(" <l:Atom> <op:InfixOps> "_"? ")" => {
+        Expr::abs(
+            Pat::unresolved_var("__rhs__"),
+            Expr::app(Expr::app(Expr::unresolved_var(op), l), Expr::unresolved_var("__rhs__"))
+        )
+    },
+};
+
+ExprSectionR: Expr = {
+    "#" "(" "_"? "`" <op:Atom> "`" <r:Atom> ")" => {
+        Expr::abs(
+            Pat::unresolved_var("__lhs__"),
+            Expr::app(Expr::app(op, Expr::unresolved_var("__lhs__")), r)
+        )
+    },
+    "#" "(" "_"? <op:InfixOps> <r:Atom> ")" => {
+        Expr::abs(
+            Pat::unresolved_var("__lhs__"),
+            Expr::app(Expr::app(Expr::unresolved_var(op), Expr::unresolved_var("__lhs__")), r)
+        )
+    },
 };
 
 ExprParen: Expr = {

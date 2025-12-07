@@ -82,6 +82,7 @@ pub enum Token {
     #[token("]"    , priority = 3)]  RBracket,
     #[token("|"    , priority = 3)]  VerticalBar,
     #[token("!"    , priority = 3)]  ExclamationMark,
+    #[token("#"    , priority = 3)]  NumberSign,
 
     // --- 識別子・リテラル ---
     #[regex(r"[a-z_][a-zA-Z0-9_]*::", |lex| lex.slice().trim_end_matches("::").to_string())]
