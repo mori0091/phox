@@ -7,6 +7,23 @@ pub fn bootstrap(phox: &mut PhoxEngine, module: &RefModule) -> Result<(), Error>
     add_primitive_type(phox, module, "Bool")?;
     add_primitive_type(phox, module, "Int")?;
 
+    {
+        let a = Type::var(phox.ctx.fresh_type_var_id());
+        add_primitive_func(
+            phox,
+            module,
+            "__while__",
+            make_loop_func(),
+            Type::fun(
+                Type::Tuple(vec![
+                    Type::fun(a.clone(), Type::bool_()),
+                    Type::fun(a.clone(), a.clone()),
+                ]),
+                Type::fun(a.clone(), a.clone()),
+            ),
+        )?;
+    }
+
     add_primitive_func(
         phox,
         module,
@@ -111,18 +128,10 @@ fn add_primitive_type(phox: &mut PhoxEngine, module: &RefModule, name: &str) -> 
 
 fn add_primitive_func(phox: &mut PhoxEngine, module: &RefModule, name: &str, val: Value, ty: Type) -> Result<(), Error> {
     let symbol = make_top_level_symbol(phox, module, name)?;
-    phox.get_value_env(module).insert(
-        symbol.clone(),
-        val
-    );
-    phox.get_infer_ctx(module).put_type_scheme(
-        symbol,
-        TypeScheme {
-            vars: vec![],
-            constraints: vec![],
-            target: ty,
-        }
-    );
+    phox.get_value_env(module).insert(symbol.clone(), val);
+    let icx = &mut phox.get_infer_ctx(module);
+    let sch = generalize(&mut phox.ctx, icx, &ty);
+    icx.put_type_scheme(symbol, sch);
     Ok(())
 }
 
@@ -168,5 +177,20 @@ where
             }
         }
         panic!("type error in <builtin>");
+    }))
+}
+
+fn make_loop_func() -> Value
+{
+    Value::Builtin(Rc::new(move |arg: Value| {
+        if let Value::Tuple(xs) = arg {
+            if let [pred, next] = &xs[..] {
+                return Value::Loop {
+                    pred: Box::new(pred.clone()),
+                    next: Box::new(next.clone()),
+                }
+            }
+        }
+        panic!("type error in <loop>");
     }))
 }
