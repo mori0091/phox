@@ -9,12 +9,6 @@ use ::core::{
     __i64_neg__,
 };
 
-impl Add Int { (+) = \x.\y. __i64_add__ (x, y); };
-impl Sub Int { (-) = \x.\y. __i64_sub__ (x, y); };
-impl Mul Int { (*) = \x.\y. __i64_mul__ (x, y); };
-impl Div Int { (/) = \x.\y. __i64_div__ (x, y); };
-impl Neg Int { negate = \x. __i64_neg__ x; };
-
 use ::core::cmp::*;
 use ::core::{
     __i64_eq__,
@@ -25,11 +19,22 @@ use ::core::{
     __i64_gt__,
 };
 
+use ::core::control::for;
+use ::core::option::*;
+
+impl Add Int { (+) = \x.\y. __i64_add__ (x, y); };
+impl Sub Int { (-) = \x.\y. __i64_sub__ (x, y); };
+impl Mul Int { (*) = \x.\y. __i64_mul__ (x, y); };
+impl Div Int { (/) = \x.\y. __i64_div__ (x, y); };
+impl Neg Int { negate = \x. __i64_neg__ x; };
+
+// -------------------------------------------------------------
 impl Eq Int {
     (==) = \x.\y. __i64_eq__ (x, y);
     (!=) = \x.\y. __i64_ne__ (x, y);
 };
 
+// -------------------------------------------------------------
 impl Ord Int {
     (<=) = \x.\y. __i64_le__ (x, y);
     (<)  = \x.\y. __i64_lt__ (x, y);
@@ -37,8 +42,7 @@ impl Ord Int {
     (>)  = \x.\y. __i64_gt__ (x, y);
 };
 
-use ::core::option::*;
-
+// -------------------------------------------------------------
 let __eq_Option_i64__ = \x.\y. match ((x,y)) {
     (None, None) => true,
     (Some a, Some b) => @{Eq Int}.(==) a b,
@@ -50,6 +54,7 @@ impl Eq (Option Int) {
     (!=) = \x.\y. ! (x `__eq_Option_i64__` y);
 };
 
+// -------------------------------------------------------------
 let __le_Option_i64__ = \x.\y. match ((x,y)) {
     (None, _) => true,
     (Some a, Some b) => @{Ord Int}.(<=) a b,
@@ -61,4 +66,25 @@ impl Ord (Option Int) {
     (<)  = \x.\y. x `@{Eq (Option Int)}.(!=)` y && x `__le_Option_i64__` y;
     (>=) = \x.\y. y `__le_Option_i64__` x;
     (>)  = \x.\y. x `@{Eq (Option Int)}.(!=)` y && y `__le_Option_i64__` x;
+};
+
+// -------------------------------------------------------------
+/// Factorial
+let fact = \n. {
+    let (_, res) = for
+        (1,1)
+        (\(i,_). @{Ord Int}.(<) i n)
+        (\(i,x). (i + 1, x * (i + 1)))
+    ;
+    res
+};
+
+/// Fibonacci number
+let fib = \n. {
+    let (_, _, res) = for
+        (n, 1, 0)
+        (\(n,_,_). 0 < n)
+        (\(n,x,y). (n - 1, y, x + y))
+    ;
+    res
 };
