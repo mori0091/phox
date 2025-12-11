@@ -185,18 +185,11 @@ let qsort = \cmp.\xs. {
         (\(_, stack). not (empty? stack))
         (\(ys, Cons xs xss). match (xs) {
             Nil => (ys, xss),
-            Cons z zs => {
-                if (empty? zs)
-                    (Cons z ys, xss)
-                else {
-                    let (ls, rs) = partition (cmp z) zs;
-                    if (empty? ls)
-                        (Cons z ys, Cons rs xss)
-                    else if (empty? rs)
-                        (ys, Cons ls <| Cons (Cons z Nil) <| xss)
-                    else
-                        (ys, Cons ls <| Cons (Cons z Nil) <| Cons rs <| xss)
-                }
+            Cons z Nil => (Cons z ys, xss),
+            Cons z zs  => match (partition (cmp z) zs) {
+                (Nil, rs) => (Cons z ys, Cons rs xss),
+                (ls, Nil) => (ys, Cons ls (Cons (Cons z Nil) xss)),
+                (ls, rs)  => (ys, Cons ls (Cons (Cons z Nil) (Cons rs xss))),
             },
         })
     ;
