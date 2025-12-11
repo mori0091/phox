@@ -586,7 +586,12 @@ Pat0: Pat = {
 };
 
 PatCon: Pat = {
-    <name:PathCon> <args:PatAtom*> => Pat::unresolved_qcon(name, args),
+    <name:PathCon> <args:PatConArg*> => Pat::unresolved_qcon(name, args),
+};
+
+PatConArg: Pat = {
+    PatAtom,
+    <name:PathCon> => Pat::unresolved_qcon(name, vec![]),
 };
 
 PatAtom: Pat = {
