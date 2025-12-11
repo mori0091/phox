@@ -1,29 +1,272 @@
+use ::core::ops::*;
+use ::core::cmp::*;
+use ::core::combinator::*;
+use ::core::control::for;
+use ::core::Int;
+
 type List a = Nil | Cons a (List a);
 
-let rec append = \xs.\ys. match (xs) {
-    Cons z zs => Cons z (append zs ys),
-    _ => ys,
+/// empty? : ∀ a. List a -> Bool
+let empty? = \xs. match (xs) {
+    Nil => true,
+    _   => false,
 };
 
-let rec join = \xss. match (xss) {
-    Cons xs xss_ => append xs (join xss_),
-    _ => Nil,
+/// length: ∀ a. List a -> Int
+let length = \xs. {
+    let (_, len) = for
+        (xs, 0)
+        (\(xs, _). not (empty? xs))
+        (\(Cons y ys, len). (ys, len + 1))
+    ;
+    len
 };
 
-let rec fmap = \f.\xs. match (xs) {
-    Cons y ys => Cons (f y) (fmap f ys),
-    _ => Nil,
+/// Left-associative fold function. (tail-recursive)
+/// foldl: ∀ a b. (b -> a -> b) -> b -> List a -> b
+let foldl = \op.\init.\xs. {
+    let (a, _) = for
+        (init, xs)
+        (\(_, xs). not (empty? xs))
+        (\(a, Cons y ys). (op a y, ys))
+    ;
+    a
 };
+
+/// Reverses a list.
+/// reverse: ∀ a. List a -> List a
+let reverse = foldl (flip Cons) Nil;
+
+/// Right-associative fold function.
+/// foldr: ∀ a b. (a -> b -> b) -> b -> List a -> b
+// let rec foldr = \op.\init.\xs. match (xs) {
+//     Nil       => init,
+//     Cons y ys => op y (foldr op init ys),
+// };
+let foldr = \op.\init.\xs.
+    reverse xs |> foldl (flip op) init
+;
+
+/// append: ∀ a. List a -> List a -> List a
+// let rec append = \xs.\ys. match (xs) {
+//     Cons z zs => Cons z (append zs ys),
+//     _ => ys,
+// };
+let append = \xs.\ys.
+    if (empty? xs)
+        ys
+    else if (empty? ys)
+        xs
+    else {
+        let (_, res) = for
+            (reverse xs, ys)
+            (\(zs, _). not (empty? zs))
+            (\(Cons z zs, ys). (zs, Cons z ys))
+        ;
+        res
+    }
+;
+
+/// join: ∀ a. List (List a) -> List a
+// let rec join = \xss. match (xss) {
+//     Cons xs xss_ => append xs (join xss_),
+//     _ => Nil,
+// };
+let join = \xss.
+    if (empty? xss)
+        Nil
+    else {
+        let (_, ys) = for
+            (reverse xss, Nil)
+            (\(xss, _). not (empty? xss))
+            (\(Cons xs xss, ys). (xss, append xs ys))
+        ;
+        ys
+    }
+;
+
+/// fmap: ∀ a b. (a -> b) -> List a -> List b
+// let rec fmap = \f.\xs. match (xs) {
+//     Cons y ys => Cons (f y) (fmap f ys),
+//     _ => Nil,
+// };
+let fmap = \f.\xs.
+    if (empty? xs)
+        Nil
+    else {
+        let (_, res) = for
+            (reverse xs, Nil)
+            (\(zs, _). not (empty? zs))
+            (\(Cons z zs, ys). (zs, Cons (f z) ys))
+        ;
+        res
+    }
+;
 
 use fmap as map;
 
 /// Cartesian product (not zip)
-let rec afmap = \fs.\xs. match (fs) {
-    Nil => Nil,
-    Cons g gs => append (fmap g xs) (afmap gs xs),
+/// afmap: ∀ a b. List (a -> b) -> List a -> List b
+// let rec afmap = \fs.\xs. match (fs) {
+//     Nil => Nil,
+//     Cons g gs => append (fmap g xs) (afmap gs xs),
+// };
+let afmap = \fs.\xs.
+    if (empty? xs)
+        Nil
+    else {
+        let (_, res) = for
+            (reverse fs, Nil)
+            (\(fs, _). not (empty? fs))
+            (\(Cons f fs, ys). (fs, append (fmap f xs) ys))
+        ;
+        res
+    }
+;
+
+/// Filtering function (order-insensitive)
+/// filter_unordered: ∀ a. (a -> Bool) -> List a -> List a
+let filter_unordered = \pred.\xs.
+    if (empty? xs)
+        Nil
+    else {
+        let (_, res) = for
+            (xs, Nil)
+            ( \(xs, _). not (empty? xs) )
+            ( \(Cons y ys, zs).
+                if (pred y)
+                    (ys, Cons y zs)
+                else
+                    (ys, zs)
+            )
+        ;
+        res
+    }
+;
+
+/// Filtering function (preserves order)
+/// filter: ∀ a. (a -> Bool) -> List a -> List a
+let filter = \pred.\xs.
+    reverse <| filter_unordered pred xs
+;
+
+/// Divides into two groups.
+/// partition: ∀ a. (a -> Bool) -> List a -> (List a, List a)
+let partition = \pred.\xs. {
+    let (_, ls, rs) = for
+        (xs, Nil, Nil)
+        ( \(xs,_,_). not (empty? xs) )
+        ( \(Cons y ys, ls, rs).
+            if (pred y)
+                (ys, ls, (Cons y rs))
+            else
+                (ys, (Cons y ls), rs)
+        )
+    ;
+    (ls, rs)
 };
 
-use ::core::control::*;
+/// Quick sort.
+/// qsort: ∀ a. (a -> a -> Bool) -> List a -> List a
+// let qsort = \cmp. {
+//     let rec sort = \xs. match (xs) {
+//         Nil       => Nil,
+//         Cons y ys => {
+//             let (ls, rs) = partition (cmp y) ys;
+//             append (sort ls) (Cons y (sort rs))
+//         },
+//     };
+//     sort
+// };
+let qsort = \cmp.\xs. {
+    let cmp = flip cmp;
+    let (res, _) = for
+        (Nil, Cons xs Nil)
+        (\(_, stack). not (empty? stack))
+        (\(ys, Cons xs xss). match (xs) {
+            Nil => (ys, xss),
+            Cons z zs => {
+                if (empty? zs)
+                    (Cons z ys, xss)
+                else {
+                    let (ls, rs) = partition (cmp z) zs;
+                    if (empty? ls)
+                        (Cons z ys, Cons rs xss)
+                    else if (empty? rs)
+                        (ys, Cons ls <| Cons (Cons z Nil) <| xss)
+                    else
+                        (ys, Cons ls <| Cons (Cons z Nil) <| Cons rs <| xss)
+                }
+            },
+        })
+    ;
+    res
+};
+
+/// Constructs a list repeating `x` `n` times.
+/// replicate: ∀ a. Int -> a -> List a
+let replicate = \n.\x. {
+    let (_, xs) = for
+        (n, Nil)
+        (\(n, _). 0 < n )
+        (\(n, xs). (n - 1, Cons x xs) )
+    ;
+    xs
+};
+
+/// Constructs a list with the specified sequence reversed.
+/// sequence_reversed: ∀ a. a -> (a -> Bool) -> (a -> a) -> List a
+let sequence_reversed = \init.\pred.\next. {
+    let (_, xs) = for
+        (init, Nil)
+        (\(x, _). pred x)
+        (\(x, xs). (next x, Cons x xs))
+    ;
+    xs
+};
+
+/// Constructs a list with the specified sequence.
+/// sequence: ∀ a. a -> (a -> Bool) -> (a -> a) -> List a
+let sequence = \init.\pred.\next.
+    reverse <| sequence_reversed init pred next
+;
+
+/// Constructs a list of factorials in reverse order.
+/// fact_reversed: Int -> List Int
+let fact_reversed = \n. {
+    let (_,x,xs) = for
+        (1,1,Nil)
+        (\(i,_,_). @{Ord Int}.(<) i n)
+        (\(i,x,xs). (i + 1, x * (i + 1), Cons x xs))
+    ;
+    Cons x xs
+};
+
+/// Constructs a list of factorials.
+/// fact: Int -> List Int
+let fact = \n.
+    reverse <| fact_reversed n
+;
+
+/// Constructs a list of fibonacci numbers in reverse order.
+/// fib_reversed: Int -> List Int
+let fib_reversed = \n. {
+    let (_,_,y,ys) = for
+        (n,1,0,Nil)
+        (\(n,_,_,_). 0 < n)
+        (\(n,x,y,ys). (n - 1, y, x + y, Cons y ys))
+    ;
+    Cons y ys
+};
+
+/// Constructs a list of fibonacci numbers.
+/// fib: Int -> List Int
+let fib = \n.
+    reverse <| fib_reversed n
+;
+
+// -------------------------------------------------------------
+use ::core::control::{Functor, Applicative, Monad};
 
 impl Functor List {
     fmap = ::core::list::fmap;
@@ -36,65 +279,4 @@ impl Applicative List {
 
 impl Monad List {
     (?>) = \xs.\f. join (::core::list::fmap f xs);
-};
-
-use ::core::ops::*;
-use ::core::combinator::*;
-
-// tail-recursive.
-let foldl = \op.\init.\xs.
-    (init, xs) |> fix (\f.\(a, xs). match (xs) {
-        Nil       => a,
-        Cons y ys => f (op a y, ys),
-    }
-);
-
-let reverse = foldl (flip Cons) Nil;
-
-// not tail-recursive.
-let rec foldr = \op.\init.\xs. match (xs) {
-    Nil       => init,
-    Cons y ys => op y (foldr op init ys),
-};
-
-// tail-recursive.
-let foldr_tr = \op.\init.\xs. reverse xs |> foldl op init;
-
-let filter_unordered = \pred.\xs. {
-    (xs, Nil) |> fix (\f.\(xs, res).
-    match (xs) {
-        Nil => res,
-        Cons y ys =>
-            if (pred y)
-                f (ys, Cons y res)
-            else
-                f (ys, res)
-        ,
-    })
-};
-
-let filter = \pred.\xs. filter_unordered pred xs |> reverse;
-
-let partition = \pred.\xs. {
-    (xs, Nil, Nil) |> fix (\f.\(xs, ls, rs).
-    match (xs) {
-        Nil       => (ls, rs),
-        Cons y ys =>
-            if (pred y)
-                f (ys, ls, (Cons y rs))
-            else
-                f (ys, (Cons y ls), rs)
-        ,
-    })
-};
-
-let qsort = \cmp. {
-    let rec sort = \xs. match (xs) {
-        Nil       => Nil,
-        Cons y ys => {
-            let (ls, rs) = partition (cmp y) ys;
-            append (sort ls) (Cons y (sort rs))
-        },
-    };
-    sort
 };
