@@ -263,17 +263,17 @@ impl TypeContext {
             }
 
             Pat::Tuple(ps) => {
-                match ty {
-                    Type::Tuple(ts) => {
-                        if ps.len() != ts.len() {
-                            return Err(Error::TupleLengthMismatch(ps.len(), ts.len()));
-                        }
-                        for (p, t) in ps.iter().zip(ts.iter()) {
-                            self.match_pattern(icx, p, t, outer_icx, generalize_bindings)?;
-                        }
-                        Ok(())
+                let ty = ty.repr(self);
+                if let Type::Tuple(ts) = ty {
+                    if ps.len() != ts.len() {
+                        return Err(Error::TupleLengthMismatch(ps.len(), ts.len()));
                     }
-                    _ => Err(Error::ExpectedTuple(ty.clone())),
+                    for (p, t) in ps.iter().zip(ts.iter()) {
+                        self.match_pattern(icx, p, t, outer_icx, generalize_bindings)?;
+                    }
+                    Ok(())
+                } else {
+                    Err(Error::ExpectedTuple(ty.clone()))
                 }
             }
 
