@@ -1,5 +1,15 @@
 type Option a = None | Some a;
 
+let some? = \opt. match (opt) {
+    None => false,
+    _    => true,
+};
+
+let none? = \opt. match (opt) {
+    None => true,
+    _    => false,
+};
+
 use ::core::control::*;
 
 impl Functor Option {

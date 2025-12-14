@@ -1,5 +1,15 @@
 type Result e a = Err e | Ok a;
 
+let ok? = \res. match (res) {
+    Err _ => false,
+    Ok  _ => true,
+};
+
+let err? = \res. match (res) {
+    Err _ => true,
+    Ok  _ => false,
+};
+
 use ::core::control::*;
 
 impl Functor (Result e) {
