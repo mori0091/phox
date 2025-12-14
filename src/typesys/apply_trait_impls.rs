@@ -126,7 +126,7 @@ pub fn apply_trait_impls_expr(
                         // 通常の変数参照なら infer_expr 側で処理される
                     }
                     _ => {
-                        let (_, impl_expr) = matches.iter().min_by_key(|(c, _)| c.score()).unwrap();
+                        let (_, impl_expr) = matches.iter().next().unwrap();
                         let mut impl_expr = impl_expr.clone();
                         {
                             // NOTE:
@@ -142,6 +142,15 @@ pub fn apply_trait_impls_expr(
                             // calling environment.
                             let symbol_env = &mut phox.get_symbol_env(module);
                             resolve_expr(phox, module, symbol_env, &mut impl_expr)?;
+                            // Furthermore, since this expression may reference
+                            // member symbols of other traits, it must not only
+                            // be re-resolved in the calling context but also
+                            // re-inferred, requiring the trait implementation
+                            // to be recursively applied (baked) to the inner
+                            // expression.
+                            let icx = &mut phox.get_infer_ctx(module);
+                            infer_expr(phox, module, icx, &mut impl_expr)?;
+                            apply_trait_impls_expr(phox, module, &mut impl_expr)?;
                         }
                         expr.body = impl_expr.body;
                         // expr.ty は既に推論済みなのでそのままでOK
