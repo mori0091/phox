@@ -166,8 +166,8 @@ fn test_trait_member_conflict_error() {
     let err = eval(src).unwrap_err();
     assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
     assert!(format!("{}", err).contains("candidates:"));
-    assert!(format!("{}", err).contains("Bar Int => Int -> Int"));
-    assert!(format!("{}", err).contains("Foo Int => Int -> Int"));
+    assert!(format!("{}", err).contains("Int -> Int requires Bar Int."));
+    assert!(format!("{}", err).contains("Int -> Int requires Foo Int."));
     assert!(format!("{}", err).contains("solution:"));
     assert!(format!("{}", err).contains("@{Bar Int}.f"));
     assert!(format!("{}", err).contains("@{Foo Int}.f"));
@@ -186,8 +186,8 @@ fn test_trait_member_non_conflict_1() {
     let err = eval(src).unwrap_err();
     assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
     assert!(format!("{}", err).contains("candidates:"));
-    assert!(format!("{}", err).contains("Bar Int => Int -> Int"));
-    assert!(format!("{}", err).contains("Foo Int => Int -> Bool"));
+    assert!(format!("{}", err).contains("Int -> Int requires Bar Int."));
+    assert!(format!("{}", err).contains("Int -> Bool requires Foo Int."));
     assert!(format!("{}", err).contains("solution:"));
     assert!(format!("{}", err).contains("@{Bar Int}.f"));
     assert!(format!("{}", err).contains("@{Foo Int}.f"));
@@ -264,8 +264,8 @@ fn test_ambiguous_trait_type() {
     let err = eval(src).unwrap_err();
     assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
     assert!(format!("{}", err).contains("candidates:"));
-    assert!(format!("{}", err).contains("Foo Bool => Bool -> Bool"));
-    assert!(format!("{}", err).contains("Foo Int => Int -> Int"));
+    assert!(format!("{}", err).contains("Bool -> Bool requires Foo Bool."));
+    assert!(format!("{}", err).contains("Int -> Int requires Foo Int."));
     assert!(format!("{}", err).contains("solution:"));
     assert!(format!("{}", err).contains("@{Foo Bool}.f"));
     assert!(format!("{}", err).contains("@{Foo Int}.f"));

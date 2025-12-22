@@ -1,12 +1,12 @@
 use super::*;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PathComponent {
     Name(String),
     Wildcard,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Path {
     Absolute(Vec<PathComponent>), // ::foo::bar
     Relative(Vec<PathComponent>), // foo::bar, super::baz

@@ -3,14 +3,16 @@ use std::collections::{HashMap, HashSet};
 use crate::typesys::*;
 use crate::module::*;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TraitHead {
     pub name: Symbol,           // trait name (ex. Eq, Ord)
     pub params: Vec<Type>,      // type parameters
 }
 
 impl TraitHead {
-    pub fn from_trait_member(
+    /// Searches for all `trait`s that have members with the specified name and
+    /// type.
+    pub fn lookup_traits_by_member(
         ctx: &mut TypeContext,
         member_env: &TraitMemberEnv,
         member_name: &Symbol,
@@ -23,13 +25,13 @@ impl TraitHead {
         let mut out = Vec::new();
         for scheme_tmpl in entries {
             let scheme = scheme_tmpl.fresh_copy(ctx);
-            let (constraints, trait_ty) = scheme.instantiate(ctx);
-            if ctx.unify(&trait_ty, member_ty).is_ok() {
-                let resolved = constraints.into_iter().map(|mut c| {
-                    c.params = c.params.into_iter().map(|t| t.repr(ctx)).collect();
-                    c
-                });
-                out.extend(resolved);
+            let (constraints, ty) = scheme.instantiate(ctx);
+            if ctx.unify(&ty, member_ty).is_ok() {
+                if let Some(ref head) = constraints.primary {
+                    let mut head = *head.clone();
+                    head.params = head.params.into_iter().map(|t| t.repr(ctx)).collect();
+                    out.push(head);
+                }
             }
         }
         Ok(out)
@@ -112,7 +114,7 @@ impl Pretty for TraitHead {
 }
 
 impl ApplySubst for TraitHead {
-    fn apply_subst(&self, subst: &HashMap<TypeVarId, Type>) -> Self {
+    fn apply_subst(&self, subst: &Subst) -> Self {
         TraitHead {
             name: self.name.clone(),
             params: self.params.iter().map(|t| t.apply_subst(subst)).collect(),

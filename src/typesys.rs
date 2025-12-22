@@ -4,7 +4,7 @@ mod kind;
 pub use kind::Kind;
 
 mod apply_subst;
-pub use apply_subst::ApplySubst;
+pub use apply_subst::*;
 
 mod free_type_vars;
 pub use free_type_vars::FreeTypeVars;
@@ -21,6 +21,15 @@ pub use type_::{Type, TypeVarId};
 
 mod trait_head;
 pub use trait_head::TraitHead;
+
+mod constraint;
+pub use constraint::*;
+
+mod constraint_set;
+pub use constraint_set::*;
+
+mod solver;
+pub use solver::*;
 
 mod scheme;
 pub use scheme::Scheme;

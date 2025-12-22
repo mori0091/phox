@@ -1,6 +1,6 @@
 use super::{Path, PathComponent};
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Symbol {
     Unresolved(Path),   // `foo`, `foo::Foo`
     Local(String),      // `map`, `foo`, `bar`

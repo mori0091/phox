@@ -30,7 +30,10 @@ pub fn resolve_decl_trait(
         let sch_tmpl = SchemeTemplate::new(
             TypeScheme {
                 vars: vars.clone(),
-                constraints: vec![head.clone()],
+                constraints: ConstraintSet {
+                    primary: Some(Box::new(head.clone())),
+                    requires: vec![],
+                },
                 target: resolve_raw_type(
                     phox,
                     module,

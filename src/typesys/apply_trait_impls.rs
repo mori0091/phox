@@ -90,14 +90,14 @@ pub fn apply_trait_impls_expr(
 
             if phox.get_infer_ctx(module).is_trait_member(name) {
                 // このメンバに必要な制約を構築（型から導出）
-                let constraints = {
+                let trait_heads = {
                     let trait_member_env = phox
                         .get_infer_ctx(module)
                         .inner
                         .borrow()
                         .trait_member_env
                         .clone();
-                    TraitHead::from_trait_member(
+                    TraitHead::lookup_traits_by_member(
                         &mut phox.ctx,
                         &trait_member_env,
                         name, ty)?
@@ -105,16 +105,15 @@ pub fn apply_trait_impls_expr(
 
                 let mut matches = Vec::new();
                 for (impl_head, member_map) in phox.impl_env.iter() {
-                    // impl_sch: TraitScheme
                     let (_impl_constraints, impl_head) = impl_head.instantiate(&mut phox.ctx);
 
-                    for constraint in constraints.iter() {
-                        // impl_head と required constraint を unify
-                        if impl_head.name == constraint.name {
+                    for trait_head in trait_heads.iter() {
+                        // impl_head と照合
+                        if impl_head.name == trait_head.name {
                             let mut try_ctx = phox.ctx.clone();
-                            if constraint.unify(&mut try_ctx, &impl_head).is_ok() {
+                            if trait_head.unify(&mut try_ctx, &impl_head).is_ok() {
                                 if let Some(impl_expr) = member_map.get(name) {
-                                    matches.push((constraint.clone(), impl_expr.clone()));
+                                    matches.push((trait_head.clone(), impl_expr.clone()));
                                 }
                             }
                         }
@@ -149,7 +148,8 @@ pub fn apply_trait_impls_expr(
                             // to be recursively applied (baked) to the inner
                             // expression.
                             let icx = &mut phox.get_infer_ctx(module);
-                            infer_expr(phox, module, icx, &mut impl_expr)?;
+                            let (_ty, cs) = infer_expr(phox, module, icx, &mut impl_expr)?;
+                            solve(phox, cs)?;
                             apply_trait_impls_expr(phox, module, &mut impl_expr)?;
                         }
                         expr.body = impl_expr.body;

@@ -10,13 +10,13 @@ pub fn resolve_expr_trait_record(
     let base_score = impl_head.score();
     let mut matches = Vec::new();
     for (impl_sch, member_map) in phox.impl_env.iter() {
+        let dummy_ctx = &mut phox.ctx.clone();
         // impl_sch: TraitScheme
-        let (_impl_constraints, candidate_impl_head) = impl_sch.instantiate(&mut phox.ctx);
+        let (_impl_constraints, candidate_impl_head) = impl_sch.instantiate(dummy_ctx);
 
         // impl_head と required trait_head を unify
         if candidate_impl_head.name == impl_head.name && candidate_impl_head.score() == base_score {
-            let mut dummy_ctx = phox.ctx.clone();
-            if impl_head.unify(&mut dummy_ctx, &candidate_impl_head).is_ok() {
+            if impl_head.unify(dummy_ctx, &candidate_impl_head).is_ok() {
                 matches.push((impl_sch, member_map));
             }
         }
@@ -28,8 +28,14 @@ pub fn resolve_expr_trait_record(
         }
         1 => {
             let (impl_sch, impls) = matches[0];
-            let (_impl_constraints, impl_head) = impl_sch.instantiate(&mut phox.ctx);
-            impl_head.unify(&mut phox.ctx, &impl_head)?;
+            // let (impl_sch, impls) = (impl_sch.clone(), impls.clone());
+
+            let (_constraints, impl_head_inst) = impl_sch.instantiate(&mut phox.ctx);
+            // let mut cs = _constraints.into_vec();
+            // cs.push(Constraint::TraitBound(impl_head_inst.clone()));
+            // solve(phox, cs)?;
+
+            impl_head.unify(&mut phox.ctx, &impl_head_inst)?;
             let fields: Vec<(String, Expr)> = impls
                 .iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
             Ok(ExprBody::Record(fields))

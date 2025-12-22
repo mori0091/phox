@@ -481,6 +481,10 @@ ExprApp: Expr = {
 
 // 原子的な式
 Atom: Expr = {
+    <l:@L> <e:Atom0> <r:@R> => Expr { span: (l, r), body: e.body, ty: None },
+};
+
+Atom0: Expr = {
     ExprSectionL,
     ExprSectionR,
     ExprParen,
@@ -597,10 +601,14 @@ PatConArg: Pat = {
 PatAtom: Pat = {
     "_" => Pat::Wildcard,
     Lit => Pat::Lit(<>),
-    Ident => Pat::unresolved_var(<>),
+    PatVar,
     PatParen,
     PatTuple,
     PatRecord,
+};
+
+PatVar: Pat = {
+    Ident => Pat::unresolved_var(<>),
 };
 
 PatParen: Pat = {

@@ -3,7 +3,7 @@ use super::*;
 use crate::module::*;
 
 // ===== Types =====
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Type {
     Var(TypeVarId),             // 型変数
     Fun(Box<Type>, Box<Type>),  // 関数型
@@ -43,10 +43,39 @@ impl Type {
     }
 }
 
-use std::collections::HashMap;
+impl Type {
+    pub fn is_type_var(&self) -> bool {
+        match self {
+            Type::Var(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn contains_type_var(&self) -> bool {
+        match self {
+            Type::Var(_) => true,
+            Type::Con(_) => false,
+            Type::App(f, x) => {
+                f.contains_type_var() || x.contains_type_var()
+            },
+            Type::Fun(a, b) => {
+                a.contains_type_var() || b.contains_type_var()
+            },
+            Type::Record(fields) => {
+                fields.iter().any(|(_, t)| t.contains_type_var())
+            },
+            Type::Tuple(tys) => {
+                tys.iter().any(|t| t.contains_type_var())
+            },
+            Type::Overloaded(_sym, _sch_tmpls) => {
+                todo!()
+            },
+        }
+    }
+}
 
 impl ApplySubst for Type {
-    fn apply_subst(&self, subst: &HashMap<TypeVarId, Type>) -> Self {
+    fn apply_subst(&self, subst: &Subst) -> Self {
         match self {
             Type::Var(id) => subst.get(id).cloned().unwrap_or(Type::Var(*id)),
             Type::Con(name) => Type::Con(name.clone()),
@@ -216,6 +245,8 @@ impl fmt::Display for Type {
     }
 }
 
+use std::collections::HashMap;
+
 impl SchemePretty for Type {
     fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self {
         match self {
@@ -257,7 +288,7 @@ impl Pretty for Type {
    }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct TypeVarId(pub usize);
 
 impl fmt::Display for TypeVarId {

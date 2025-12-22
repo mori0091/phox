@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SchemeTemplate<T> {
     scheme: Scheme<T>,
 }

@@ -6,6 +6,7 @@ use crate::module::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Expr {
+    pub span: (usize, usize),
     pub body: ExprBody,
     pub ty: Option<Type>,
 }
@@ -30,7 +31,7 @@ pub enum ExprBody {
 
 impl Expr {
     pub fn lit(x: Lit) -> Self {
-        Expr { body: ExprBody::Lit(x), ty: None }
+        Expr { span:(0,0), body: ExprBody::Lit(x), ty: None }
     }
     pub fn unit() -> Self {
         Expr::lit(Lit::Unit)
@@ -42,8 +43,8 @@ impl Expr {
         Expr::lit(Lit::Bool(b))
     }
 
-    fn expr(e: ExprBody) -> Self {
-        Expr { body: e, ty: None }
+    pub fn expr(e: ExprBody) -> Self {
+        Expr { span:(0,0), body: e, ty: None }
     }
     pub fn unresolved_var<S: Into<String>>(s: S) -> Self {
         Expr::expr(ExprBody::Var(Symbol::unresolved(s)))

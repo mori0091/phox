@@ -139,7 +139,8 @@ impl PhoxEngine {
     pub fn infer_item(&mut self, module: &RefModule, item: &mut Item) -> Result<TypeScheme, Error> {
         self.resolve_item(module, item)?;
         let icx = &mut self.get_infer_ctx(module);
-        let ty = infer_item(self, module, icx, item)?;
+        let (ty, cs) = infer_item(self, module, icx, item)?;
+        solve(self, cs)?;
         apply_trait_impls_item(self, module, item)?;
         Ok(generalize(&mut self.ctx, icx, &ty))
     }

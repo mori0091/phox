@@ -106,7 +106,7 @@ impl fmt::Display for Error {
                 cands.sort();
                 let mut hints: Vec<_> = candidates
                     .iter()
-                    .map(|sch| format!("@{{{}}}.{}", sch.constraints[0].pretty(), name.pretty()))
+                    .map(|sch| format!("@{{{}}}.{}", sch.constraints.primary.clone().unwrap().pretty(), name.pretty()))
                     .collect();
                 hints.sort();
                 writeln!(f, "ambiguous variable `{}`", name.pretty())?;

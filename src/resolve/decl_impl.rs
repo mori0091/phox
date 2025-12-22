@@ -26,10 +26,10 @@ pub fn resolve_decl_impl(
     let icx = &mut phox.get_infer_ctx(module);
     for (_symbol, expr, sch_tmpl) in members.iter() {
         let icx2 = &mut icx.duplicate();
-        let ty = infer_expr(phox, module, icx2, &mut expr.clone())?;
+        let (ty, _cs) = infer_expr(phox, module, icx2, &mut expr.clone())?; // \TODO
         let sch = sch_tmpl.fresh_copy(&mut phox.ctx);
         let (_, ty_inst) = &sch.instantiate(&mut phox.ctx);
-        phox.ctx.unify(&ty, ty_inst)?;
+        phox.ctx.unify(&ty, ty_inst)?; // \TODO
     }
 
     // register
@@ -144,11 +144,16 @@ fn resolve_impl_member_scheme(
     // -------------------------------------------------
     let trait_scheme_tmpl = trait_scheme_tmpls
         .iter()
-        .find(|tmpl| tmpl.scheme_ref().constraints[0].name == impl_head_sch.target.name)
+        .find(|tmpl| {
+            match tmpl.scheme_ref().constraints.primary {
+                Some(ref head) => head.name == impl_head_sch.target.name,
+                None => false,
+            }
+        })
         .ok_or(Error::UnknownTrait(impl_head_sch.target.name.clone()))?;
 
     // -------------------------------------------------
-    let trait_head = &trait_scheme_tmpl.scheme_ref().constraints[0];
+    let trait_head = &*trait_scheme_tmpl.scheme_ref().constraints.primary.clone().unwrap();
     if impl_head_sch.target.params.len() != trait_head.params.len() {
         return Err(Error::TraitArityMismatch {
             trait_name: trait_head.name.clone(),
@@ -158,7 +163,7 @@ fn resolve_impl_member_scheme(
     }
 
     // -------------------------------------------------
-    let mut subst: HashMap<TypeVarId, Type> = HashMap::new();
+    let mut subst: Subst = Subst::new();
     for (t1, t2) in trait_head.params.iter().zip(impl_head_sch.target.params.iter()) {
         if let Type::Var(id) = t1 {
             subst.insert(*id, t2.clone());
@@ -171,7 +176,10 @@ fn resolve_impl_member_scheme(
 
     Ok(TypeScheme {
         vars: impl_head_sch.vars.clone(),
-        constraints: vec![impl_head_sch.target.clone()],
+        constraints: ConstraintSet {
+            primary: Some(Box::new(impl_head_sch.target.clone())),
+            requires: vec![],
+        },
         target: ty,
     })
 }
