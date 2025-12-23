@@ -12,8 +12,6 @@ pub enum Type {
 
     Tuple(Vec<Type>),
     Record(Vec<(String, Type)>),
-
-    Overloaded(Symbol, Vec<SchemeTemplate<Type>>),
 }
 
 impl Type {
@@ -67,9 +65,6 @@ impl Type {
             Type::Tuple(tys) => {
                 tys.iter().any(|t| t.contains_type_var())
             },
-            Type::Overloaded(_sym, _sch_tmpls) => {
-                todo!()
-            },
         }
     }
 }
@@ -92,9 +87,6 @@ impl ApplySubst for Type {
             Type::Record(fields) => {
                 let fields2 = fields.iter().map(|(name, t)| (name.clone(), t.apply_subst(subst))).collect();
                 Type::Record(fields2)
-            }
-            Type::Overloaded(_, _) => {
-                todo!()
             }
         }
     }
@@ -129,20 +121,6 @@ impl FreeTypeVars for Type {
                     field_ty.free_type_vars(ctx, acc);
                 }
             }
-            // Type::Overloaded(_, cands) => {
-            //     for sch in cands {
-            //         // sch.vars は束縛変数なので無視
-            //         for c in &sch.constraints {
-            //             for t in &c.params {
-            //                 t.free_type_vars(ctx, acc);
-            //             }
-            //         }
-            //         sch.target.free_type_vars(ctx, acc);
-            //     }
-            // }
-            Type::Overloaded(_, _cands) => {
-                todo!()
-            }
         }
     }
 }
@@ -176,23 +154,6 @@ impl Repr for Type {
                           .map(|(field, t)| (field.clone(), t.repr(ctx)))
                           .collect()
                 )
-            }
-            // Type::Overloaded(name, cands) => {
-            //     let mut new_cands = vec![];
-            //     for sch in cands.iter() {
-            //         // let vars = sch.vars.iter().map(|v| ctx.find(*v)).collect();
-            //         let vars = sch.vars.clone();
-            //         let constraints = sch.constraints.iter().map(|c| {
-            //             let params = c.params.iter().map(|t| t.repr(ctx)).collect();
-            //             Constraint { name: c.name.clone(), params }
-            //         }).collect();
-            //         let ty = &sch.target.repr(ctx);
-            //         new_cands.push(TypeScheme::new(vars, constraints, ty.clone()));
-            //     }
-            //     Type::Overloaded(name.clone(), new_cands)
-            // }
-            Type::Overloaded(_name, _cands) => {
-                todo!()
             }
         }
     }
@@ -238,9 +199,6 @@ impl fmt::Display for Type {
                     write!(f, "@{{ {} }}", s.join(", "))
                 }
             }
-            Type::Overloaded(_name, _) => {
-                write!(f, "<overloaded>")
-            }
         }
     }
 }
@@ -274,9 +232,6 @@ impl SchemePretty for Type {
                 Type::Record(
                     fields.iter().map(|(f, t)| (f.clone(), t.rename_type_var(map))).collect()
                 )
-            }
-            Type::Overloaded(_name, _cands) => {
-                unreachable!()
             }
         }
     }
@@ -329,9 +284,6 @@ impl Type {
                     ret.1 += g;
                 }
                 ret
-            }
-            Type::Overloaded(_, _) => {
-                unreachable!()
             }
         }
     }

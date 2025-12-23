@@ -67,9 +67,6 @@ impl TypeContext {
                 fields.iter().any(|(_, t)| self.occurs_in(tv, t))
             }
             Type::Con(_name) => false,
-            Type::Overloaded(_name, _cands) => {
-                todo!()
-            }
         }
     }
 }
@@ -127,10 +124,6 @@ impl TypeContext {
                 }
 
                 Ok(())
-            }
-
-            (Type::Overloaded(_, _), _) | (_, Type::Overloaded(_, _)) => {
-                unreachable!("Overloaded should be resolved before unify");
             }
 
             _ => {

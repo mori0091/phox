@@ -11,8 +11,8 @@ pub fn apply_trait_impls_item(
 ) -> Result<(), Error> {
     match item {
         Item::Decl(_) => Ok(()), // no need to apply trait impls
-        Item::Expr(expr) => apply_trait_impls_expr(phox, module, expr),
         Item::Stmt(stmt) => apply_trait_impls_stmt(phox, module, stmt),
+        Item::Expr(expr) => apply_trait_impls_expr(phox, module, expr),
     }
 }
 
@@ -74,19 +74,6 @@ pub fn apply_trait_impls_expr(
         ExprBody::Var(name) => {
             // 型情報が必要なので、型が推論済みであることを確認
             let ty = expr.ty.as_ref().ok_or(Error::MissingType(name.clone()))?;
-
-            // 推論器で解決しきれなかったエラーをここで拾う
-            if let Type::Overloaded(name, cands) = ty {
-                let mut ctx = phox.ctx.clone();
-                let candidates: Vec<_> = cands
-                    .into_iter()
-                    .map(|tmpl| tmpl.fresh_copy(&mut ctx))
-                    .collect();
-                return Err(Error::AmbiguousVariable {
-                    name: name.clone(), // 元の変数名
-                    candidates,
-                });
-            }
 
             if phox.get_infer_ctx(module).is_trait_member(name) {
                 // このメンバに必要な制約を構築（型から導出）
