@@ -15,8 +15,16 @@ pub fn resolve_decl(
         Decl::Trait(raw) => {
             resolve_decl_trait(phox, module, symbol_env, raw)
         }
-        Decl::Impl(raw) => {
-            resolve_decl_impl(phox, module, symbol_env, raw)
+        Decl::RawImpl(raw) => {
+            let named = resolve_decl_impl(phox, module, symbol_env, raw)?;
+            *decl = Decl::NamedImpl(named);
+            Ok(())
+        }
+        Decl::NamedImpl(_named) => {
+            Ok(())
+        }
+        Decl::SchImpl(_) => {
+            Ok(())
         }
     }
 }

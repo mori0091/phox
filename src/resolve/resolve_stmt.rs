@@ -1,4 +1,5 @@
 use crate::api::loader::*;
+use crate::api::parse;
 
 use super::*;
 
@@ -8,35 +9,55 @@ pub fn resolve_stmt(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
+    param_map: &mut HashMap<String, TypeVarId>,
     stmt: &mut Stmt,
 ) -> Result<(), Error> {
     match stmt {
-        Stmt::Mod(name, items) => {
-            let sub = &module.add_submod(name);
+        Stmt::Mod(name, opt_items) => {
+            let sub = &module.add_submod(&name);
             if is_prelude_required_by(sub) {
-                phox.eval_mod(sub, "use ::prelude::*;")?;
+                let mut xs = parse("use ::prelude::*;").unwrap();
+                for x in xs.iter_mut() {
+                    phox.resolve_item(sub, x)?;
+                }
             }
-
-            if let Some(items) = items {
-                phox.eval_items(sub, items)?;
+            let mut items = Vec::new();
+            if let Some(xs) = opt_items {
+                items.extend(xs.clone());
             }
             else {
-                let (_file, src) = load_module_src(&sub.borrow().path())?;
-                phox.eval_mod(sub, &src)?;
+                let (file, src) = load_module_src(&sub.borrow().path())?;
+                let xs = parse(&src).map_err(|e| {
+                    Error::Message(format!("parse error `{}` {:?}", file.display(), e))
+                })?;
+                items.extend(xs);
             }
-            phox.eval_mod(module, &format!("use {name};"))?;
+            // -------------------------------------------------
+            phox.run_items(sub, &mut items)?;
+
+            // -------------------------------------------------
+            // `use {name};` in the current module.
+            let mut xs = parse(&format!("use {name};")).unwrap();
+            for x in xs.iter_mut() {
+                phox.resolve_item(module, x)?;
+            }
+
+            // -------------------------------------------------
+            // Overwrite this `Stmt::Mod` node.
+            *opt_items = Some(items);
+
             Ok(())
         }
         Stmt::Use(pathglob) => {
             resolve_stmt_use(phox, module, symbol_env, pathglob)
         }
         Stmt::Let(pat, expr) => {
-            resolve_expr(phox, module, symbol_env, expr)?;
+            resolve_expr(phox, module, symbol_env, param_map, expr)?;
             resolve_pat(phox, module, symbol_env, pat)
         }
         Stmt::LetRec(pat, expr) => {
             resolve_pat(phox, module, symbol_env, pat)?;
-            resolve_expr(phox, module, symbol_env, expr)
+            resolve_expr(phox, module, symbol_env, param_map, expr)
         }
     }
 }

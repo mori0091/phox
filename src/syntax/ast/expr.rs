@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 
 use super::*;
-use crate::typesys::Type;
+use crate::typesys::*;
 use crate::module::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -20,13 +22,15 @@ pub enum ExprBody {
     Abs(Pat, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     Match(Box<Expr>, Vec<(Pat, Expr)>),
+    Block(Vec<Item>),               // ex. `{stmt; stmt; expr; expr}`
 
     Tuple(Vec<Expr>),               // ex. `(1,)`, `(1, true, ())`
-    Record(Vec<(String, Expr)>),    // ex. `@{ x:a, y:b }`
-    RawTraitRecord(RawTraitHead),   // ex. `@{ Eq Int }`
-    FieldAccess(Box<Expr>, String), // ex. `p.x`
     TupleAccess(Box<Expr>, usize),  // ex. `p.0`
-    Block(Vec<Item>),               // ex. `{stmt; stmt; expr; expr}`
+
+    RawTraitRecord(RawTraitHead),   // ex. `@{ Eq Int }`
+    TraitRecord(TraitHead),
+    Record(Vec<(String, Expr)>),    // ex. `@{ x:a, y:b }`
+    FieldAccess(Box<Expr>, String), // ex. `p.x`
 }
 
 impl Expr {
@@ -90,6 +94,211 @@ impl Expr {
     }
 }
 
+// ----------------------------------------------
+// FreeTypeVars
+impl FreeTypeVars for Expr {
+    fn free_type_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<TypeVarId>) {
+        match &self.ty {
+            Some(ty) => {
+                ty.free_type_vars(ctx, acc);
+            }
+            None => {}
+        }
+        match &self.body {
+            ExprBody::Lit(_) => {}
+            ExprBody::Var(_) => {}
+            ExprBody::App(f, x) => {
+                f.free_type_vars(ctx, acc);
+                x.free_type_vars(ctx, acc);
+            }
+
+            ExprBody::Abs(_pat, e) => {
+                e.free_type_vars(ctx, acc);
+            }
+            ExprBody::If(cond_expr, then_expr, else_expr) => {
+                cond_expr.free_type_vars(ctx, acc);
+                then_expr.free_type_vars(ctx, acc);
+                else_expr.free_type_vars(ctx, acc);
+            }
+            ExprBody::Match(expr, arms) => {
+                expr.free_type_vars(ctx, acc);
+                for (_pat, e) in arms {
+                    e.free_type_vars(ctx, acc);
+                }
+            }
+            ExprBody::Block(items) => {
+                for item in items {
+                    item.free_type_vars(ctx, acc);
+                }
+            }
+
+            ExprBody::Tuple(es) => {
+                for e in es {
+                    e.free_type_vars(ctx, acc);
+                }
+            }
+            ExprBody::TupleAccess(base, _index) => {
+                base.free_type_vars(ctx, acc);
+            }
+
+            ExprBody::RawTraitRecord(_) => {}
+            ExprBody::TraitRecord(head) => {
+                head.free_type_vars(ctx, acc);
+            }
+            ExprBody::Record(fields) => {
+                for (_name, e) in fields {
+                    e.free_type_vars(ctx, acc);
+                }
+            }
+            ExprBody::FieldAccess(base, _field_label) => {
+                base.free_type_vars(ctx, acc);
+            }
+        }
+    }
+}
+
+// ----------------------------------------------
+// Repr
+impl Repr for Expr {
+    fn repr(&self, ctx: &mut TypeContext) -> Self {
+        let span = self.span.clone();
+        let ty = match &self.ty {
+            Some(ty) => Some(ty.repr(ctx)),
+            None => None,
+        };
+        let Expr {body, ..} = match &self.body {
+            ExprBody::Lit(_) => { self.clone() }
+            ExprBody::Var(_) => { self.clone() }
+            ExprBody::App(f, x) => {
+                let f = f.repr(ctx);
+                let x = x.repr(ctx);
+                Expr::app(f, x)
+            }
+
+            ExprBody::Abs(pat, e) => {
+                let pat = pat.clone();
+                let e = e.repr(ctx);
+                Expr::abs(pat, e)
+            }
+            ExprBody::If(cond_expr, then_expr, else_expr) => {
+                let cond_expr = cond_expr.repr(ctx);
+                let then_expr = then_expr.repr(ctx);
+                let else_expr = else_expr.repr(ctx);
+                Expr::if_(cond_expr, then_expr, else_expr)
+            }
+            ExprBody::Match(expr, arms) => {
+                let expr = expr.repr(ctx);
+                let arms = arms.iter().map(|(p, e)| (p.clone(), e.repr(ctx))).collect();
+                Expr::match_(expr, arms)
+            }
+            ExprBody::Block(items) => {
+                let items = items.iter().map(|item| item.repr(ctx)).collect();
+                Expr::block(items)
+            }
+
+            ExprBody::Tuple(es) => {
+                let es = es.iter().map(|e| e.repr(ctx)).collect();
+                Expr::tuple(es)
+            }
+            ExprBody::TupleAccess(base, index) => {
+                let base = base.repr(ctx);
+                Expr::tuple_access(base, *index)
+            }
+
+            ExprBody::RawTraitRecord(_) => { self.clone() }
+            ExprBody::TraitRecord(head) => {
+                let head = head.repr(ctx);
+                Expr::expr(ExprBody::TraitRecord(head))
+            }
+            ExprBody::Record(fields) => {
+                let fields = fields.iter().map(|(name, e)| (name.clone(), e.repr(ctx))).collect();
+                Expr::record(fields)
+            }
+            ExprBody::FieldAccess(base, field_label) => {
+                let base = base.repr(ctx);
+                let field_label = field_label.clone();
+                Expr::field_access(base, field_label)
+            }
+        };
+        Expr { span, body, ty }
+    }
+}
+
+// ----------------------------------------------
+// ApplySubst
+impl ApplySubst for Expr {
+    fn apply_subst(&self, subst: &Subst) -> Self {
+        let span = self.span.clone();
+        let ty = match &self.ty {
+            Some(ty) => Some(ty.apply_subst(subst)),
+            None => None,
+        };
+        let Expr {body, ..} = match &self.body {
+            ExprBody::Lit(_) => { self.clone() }
+            ExprBody::Var(_) => { self.clone() }
+            ExprBody::App(f, x) => {
+                let f = f.apply_subst(subst);
+                let x = x.apply_subst(subst);
+                Expr::app(f, x)
+            }
+
+            ExprBody::Abs(pat, e) => {
+                let pat = pat.clone();
+                let e = e.apply_subst(subst);
+                Expr::abs(pat, e)
+            }
+            ExprBody::If(cond_expr, then_expr, else_expr) => {
+                let cond_expr = cond_expr.apply_subst(subst);
+                let then_expr = then_expr.apply_subst(subst);
+                let else_expr = else_expr.apply_subst(subst);
+                Expr::if_(cond_expr, then_expr, else_expr)
+            }
+            ExprBody::Match(expr, arms) => {
+                let expr = expr.apply_subst(subst);
+                let arms = arms.iter().map(|(p, e)| (p.clone(), e.apply_subst(subst))).collect();
+                Expr::match_(expr, arms)
+            }
+            ExprBody::Block(items) => {
+                let items = items.iter().map(|item| item.apply_subst(subst)).collect();
+                Expr::block(items)
+            }
+
+            ExprBody::Tuple(es) => {
+                let es = es.iter().map(|e| e.apply_subst(subst)).collect();
+                Expr::tuple(es)
+            }
+            ExprBody::TupleAccess(base, index) => {
+                let base = base.apply_subst(subst);
+                Expr::tuple_access(base, *index)
+            }
+
+            ExprBody::RawTraitRecord(_) => { self.clone() }
+            ExprBody::TraitRecord(head) => {
+                let head = head.apply_subst(subst);
+                Expr::expr(ExprBody::TraitRecord(head))
+            }
+            ExprBody::Record(fields) => {
+                let fields = fields.iter().map(|(name, e)| (name.clone(), e.apply_subst(subst))).collect();
+                Expr::record(fields)
+            }
+            ExprBody::FieldAccess(base, field_label) => {
+                let base = base.apply_subst(subst);
+                let field_label = field_label.clone();
+                Expr::field_access(base, field_label)
+            }
+        };
+        Expr { span, body, ty }
+    }
+}
+
+// ----------------------------------------------
+// SchemePretty
+
+// ----------------------------------------------
+// Pretty
+
+// ----------------------------------------------
+// fmt::Display
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.body {
@@ -138,12 +347,15 @@ impl fmt::Display for Expr {
             ExprBody::RawTraitRecord(raw_constraint) => {
                 write!(f, "@{{ {:?} }}", raw_constraint)
             }
+            ExprBody::TraitRecord(head) => {
+                write!(f, "@{{{}}}", head.pretty())
+            }
             ExprBody::FieldAccess(base, field) => {
                 match base.body {
                     ExprBody::Abs(_,_) | ExprBody::App(_,_) | ExprBody::If(_,_,_) => {
-                        write!(f, "({}).{}", base, field)
+                        write!(f, "({}).{}", base, Symbol::local(field).pretty())
                     }
-                    _ => write!(f, "{}.{}", base, field)
+                    _ => write!(f, "{}.{}", base, Symbol::local(field).pretty())
                 }
             }
             ExprBody::TupleAccess(base, index) => {
@@ -159,5 +371,72 @@ impl fmt::Display for Expr {
                 write!(f, "{{{}}}", s.join("; "))
             }
         }
+    }
+}
+
+// ----------------------------------------------
+// SchemePretty
+impl SchemePretty for Expr {
+    fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self {
+        let span = self.span.clone();
+        let ty = match &self.ty {
+            Some(ty) => Some(ty.rename_type_var(map)),
+            None => None,
+        };
+        let Expr {body, ..} = match &self.body {
+            ExprBody::Lit(_) => { self.clone() }
+            ExprBody::Var(_) => { self.clone() }
+            ExprBody::App(f, x) => {
+                let f = f.rename_type_var(map);
+                let x = x.rename_type_var(map);
+                Expr::app(f, x)
+            }
+
+            ExprBody::Abs(pat, e) => {
+                let pat = pat.clone();
+                let e = e.rename_type_var(map);
+                Expr::abs(pat, e)
+            }
+            ExprBody::If(cond_expr, then_expr, else_expr) => {
+                let cond_expr = cond_expr.rename_type_var(map);
+                let then_expr = then_expr.rename_type_var(map);
+                let else_expr = else_expr.rename_type_var(map);
+                Expr::if_(cond_expr, then_expr, else_expr)
+            }
+            ExprBody::Match(expr, arms) => {
+                let expr = expr.rename_type_var(map);
+                let arms = arms.iter().map(|(p, e)| (p.clone(), e.rename_type_var(map))).collect();
+                Expr::match_(expr, arms)
+            }
+            ExprBody::Block(items) => {
+                let items = items.iter().map(|item| item.rename_type_var(map)).collect();
+                Expr::block(items)
+            }
+
+            ExprBody::Tuple(es) => {
+                let es = es.iter().map(|e| e.rename_type_var(map)).collect();
+                Expr::tuple(es)
+            }
+            ExprBody::TupleAccess(base, index) => {
+                let base = base.rename_type_var(map);
+                Expr::tuple_access(base, *index)
+            }
+
+            ExprBody::RawTraitRecord(_) => { self.clone() }
+            ExprBody::TraitRecord(head) => {
+                let head = head.rename_type_var(map);
+                Expr::expr(ExprBody::TraitRecord(head))
+            }
+            ExprBody::Record(fields) => {
+                let fields = fields.iter().map(|(name, e)| (name.clone(), e.rename_type_var(map))).collect();
+                Expr::record(fields)
+            }
+            ExprBody::FieldAccess(base, field_label) => {
+                let base = base.rename_type_var(map);
+                let field_label = field_label.clone();
+                Expr::field_access(base, field_label)
+            }
+        };
+        Expr { span, body, ty }
     }
 }

@@ -61,18 +61,6 @@ impl fmt::Display for Pat {
                     write!(f, "@{{ {} }}", s.join(", "))
                 }
             }
-            // Pat::Struct(name, fields) => {
-            //     if fields.is_empty() {
-            //         write!(f, "{}@{{}}", name)
-            //     }
-            //     else {
-            //         let s: Vec<String>
-            //             = fields.iter()
-            //                     .map(|(k, v)| format!("{}: {}", k, v))
-            //                     .collect();
-            //         write!(f, "{}@{{ {} }}", name, s.join(", "))
-            //     }
-            // }
         }
     }
 }

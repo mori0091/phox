@@ -44,6 +44,3 @@ use decl_impl::*;
 
 mod stmt_use;
 use stmt_use::*;
-
-mod expr_trait_record;
-use expr_trait_record::*;

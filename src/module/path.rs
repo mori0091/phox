@@ -42,6 +42,22 @@ impl Path {
             Path::Absolute(ps) | Path::Relative(ps) => ps.last()
         }
     }
+
+    pub fn parent(&self) -> Option<Path> {
+        match self {
+            Path::Absolute(ps) if ps.len() > 0 => {
+                let mut ps = ps.clone();
+                ps.pop();
+                Some(Path::Absolute(ps))
+            }
+            Path::Relative(ps) if ps.len() > 0 => {
+                let mut ps = ps.clone();
+                ps.pop();
+                Some(Path::Relative(ps))
+            }
+            _ => None,
+        }
+    }
 }
 
 // -------------------------------------------------------------

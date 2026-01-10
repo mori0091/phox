@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::api::PhoxEngine;
 use crate::resolve::resolve_expr;
 use crate::syntax::ast::*;
@@ -9,10 +11,10 @@ pub fn apply_trait_impls_item(
     module: &RefModule,
     item: &mut Item,
 ) -> Result<(), Error> {
-    match item {
-        Item::Decl(_) => Ok(()), // no need to apply trait impls
-        Item::Stmt(stmt) => apply_trait_impls_stmt(phox, module, stmt),
-        Item::Expr(expr) => apply_trait_impls_expr(phox, module, expr),
+    match &mut item.body {
+        ItemBody::Decl(_) => Ok(()), // no need to apply trait impls
+        ItemBody::Stmt(stmt) => apply_trait_impls_stmt(phox, module, stmt),
+        ItemBody::Expr(expr) => apply_trait_impls_expr(phox, module, expr),
     }
 }
 
@@ -22,7 +24,15 @@ pub fn apply_trait_impls_stmt(
     stmt: &mut Stmt,
 ) -> Result<(), Error> {
     match stmt {
-        Stmt::Use(_) | Stmt::Mod(_, _) => Ok(()),
+        Stmt::Use(_) => Ok(()),
+        Stmt::Mod(name, opt_items) => {
+            let Some(items) = opt_items else { unreachable!() };
+            let sub = &module.get_submod(name).unwrap();
+            for item in items.iter_mut() {
+                apply_trait_impls_item(phox, sub, item)?;
+            }
+            Ok(())
+        }
         Stmt::Let(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
         Stmt::LetRec(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
     }
@@ -33,6 +43,11 @@ pub fn apply_trait_impls_expr(
     module: &RefModule,
     expr: &mut Expr,
 ) -> Result<(), Error> {
+    let ty = expr.ty.as_ref().ok_or_else(|| Error::MissingType(Symbol::Local(expr.to_string())))?;
+    // {
+    //     eprintln!("[apply] {}: {}", expr, ty.repr(&mut phox.ctx));
+    // }
+
     // 再帰的に子ノードを処理
     match &mut expr.body {
         ExprBody::App(f, a) => {
@@ -72,38 +87,18 @@ pub fn apply_trait_impls_expr(
             }
         }
         ExprBody::Var(name) => {
-            // 型情報が必要なので、型が推論済みであることを確認
-            let ty = expr.ty.as_ref().ok_or(Error::MissingType(name.clone()))?;
-
             if phox.get_infer_ctx(module).is_trait_member(name) {
-                // このメンバに必要な制約を構築（型から導出）
-                let trait_heads = {
-                    let trait_member_env = phox
-                        .get_infer_ctx(module)
-                        .inner
-                        .borrow()
-                        .trait_member_env
-                        .clone();
-                    TraitHead::lookup_traits_by_member(
-                        &mut phox.ctx,
-                        &trait_member_env,
-                        name, ty)?
-                };
-
                 let mut matches = Vec::new();
-                for (impl_head, member_map) in phox.impl_env.iter() {
-                    let (_impl_constraints, impl_head) = impl_head.instantiate(&mut phox.ctx);
-
-                    for trait_head in trait_heads.iter() {
-                        // impl_head と照合
-                        if impl_head.name == trait_head.name {
-                            let mut try_ctx = phox.ctx.clone();
-                            if trait_head.unify(&mut try_ctx, &impl_head).is_ok() {
-                                if let Some(impl_expr) = member_map.get(name) {
-                                    matches.push((trait_head.clone(), impl_expr.clone()));
-                                }
-                            }
-                        }
+                for tmpl in phox.impl_env.iter() {
+                    if !tmpl.scheme_ref().target.members.iter().any(|(sym, _e, _ty)| sym == name) {
+                        continue;
+                    }
+                    let mut try_ctx = phox.ctx.clone();
+                    let sch = tmpl.fresh_copy(&mut try_ctx);
+                    let (_constraints, typed_impl) = sch.instantiate(&mut try_ctx);
+                    let (_sym, _e, ty_inst) = typed_impl.members.iter().find(|(sym, _e, _ty)| sym == name).unwrap();
+                    if try_ctx.unify(ty_inst, ty).is_ok() {
+                        matches.push(tmpl.clone());
                     }
                 }
                 match matches.len() {
@@ -111,9 +106,16 @@ pub fn apply_trait_impls_expr(
                         // 実装が見つからない → 何もしない
                         // 通常の変数参照なら infer_expr 側で処理される
                     }
-                    _ => {
-                        let (_, impl_expr) = matches.iter().next().unwrap();
-                        let mut impl_expr = impl_expr.clone();
+                    1 => {
+                        let tmpl = matches.iter().next().unwrap();
+                        let sch = tmpl.fresh_copy(&mut phox.ctx);
+                        let (constraints, typed_impl) = sch.instantiate(&mut phox.ctx);
+                        let (_sym, expr_inst, ty_inst) = typed_impl.members.iter().find(|(sym, _e, _ty)| sym == name).unwrap();
+                        let mut cs = constraints.into_vec();
+                        cs.push(Constraint::type_eq(ty_inst, ty));
+                        solve(phox, cs)?;
+                        // This `expr_inst` would be a type-solved expression!
+                        let mut expr_inst = expr_inst.clone();
                         {
                             // NOTE:
                             //
@@ -127,20 +129,19 @@ pub fn apply_trait_impls_expr(
                             // it currently needs to be resolved again in the
                             // calling environment.
                             let symbol_env = &mut phox.get_symbol_env(module);
-                            resolve_expr(phox, module, symbol_env, &mut impl_expr)?;
-                            // Furthermore, since this expression may reference
-                            // member symbols of other traits, it must not only
-                            // be re-resolved in the calling context but also
-                            // re-inferred, requiring the trait implementation
-                            // to be recursively applied (baked) to the inner
-                            // expression.
-                            let icx = &mut phox.get_infer_ctx(module);
-                            let (_ty, cs) = infer_expr(phox, module, icx, &mut impl_expr)?;
-                            solve(phox, cs)?;
-                            apply_trait_impls_expr(phox, module, &mut impl_expr)?;
+                            let param_map = &mut HashMap::new();
+                            resolve_expr(phox, module, symbol_env, param_map, &mut expr_inst)?;
+
+                            apply_trait_impls_expr(phox, module, &mut expr_inst)?;
                         }
-                        expr.body = impl_expr.body;
+                        expr.body = expr_inst.body;
                         // expr.ty は既に推論済みなのでそのままでOK
+                    }
+                    _ => {
+                        for tmpl in &matches {
+                            eprintln!("{}", tmpl.scheme_ref().pretty());
+                        }
+                        panic!();
                     }
                 }
             }
@@ -148,8 +149,90 @@ pub fn apply_trait_impls_expr(
         ExprBody::RawTraitRecord(_) => {
             unreachable!()
         }
+        ExprBody::TraitRecord(head) => {
+            // eprintln!("[apply] @{{{}}}: {}", head, ty.repr(&mut phox.ctx));
+
+            let body = make_record_from_trait(phox, head, &ty.clone())?;
+            expr.body = body;
+
+            let symbol_env = &mut phox.get_symbol_env(module);
+            let param_map = &mut HashMap::new();
+            resolve_expr(phox, module, symbol_env, param_map, expr)?;
+
+            apply_trait_impls_expr(phox, module, expr)?;
+        }
         ExprBody::Lit(_) => {}
     }
+    // eprintln!("apply_trait_impls_expr (done)");
 
     Ok(())
+}
+
+pub fn make_record_from_trait(
+    phox: &mut PhoxEngine,
+    head: &TraitHead,
+    ty: &Type,
+) -> Result<ExprBody, Error> {
+    let mut matches = Vec::new();
+    for tmpl in &phox.impl_env.get_by_name(&head.name) {
+        let dummy_ctx = &mut phox.ctx.clone();
+        let sch = tmpl.fresh_copy(dummy_ctx);
+        let (_constraints, imp) = sch.instantiate(dummy_ctx);
+        let fields: Vec<(String, Type)> = imp
+            .members
+            .iter()
+            .map(|(sym, _e, t)| (sym.to_string(), t.clone()))
+            .collect();
+        let ty_inst = Type::Record(fields);
+        if dummy_ctx.unify(&ty_inst, ty).is_ok() {
+            matches.push(tmpl.clone());
+        }
+    }
+    match matches.len() {
+        0 => {
+            // 実装が見つからない
+            Err(Error::MissingImpl(head.clone()))
+        }
+        1 => {
+            let sch = matches[0].fresh_copy(&mut phox.ctx);
+            let (constraints, imp) = sch.instantiate(&mut phox.ctx);
+
+            let fields_ty: Vec<(String, Type)> = imp
+                .members
+                .iter()
+                .map(|(sym, _e, t)| (sym.to_string(), t.clone()))
+                .collect();
+            let ty_inst = Type::Record(fields_ty);
+
+            let mut cs = constraints.into_vec();
+            cs.push(Constraint::type_eq(&ty_inst, ty));
+            solve(phox, cs)?;
+
+            let fields: Vec<(String, Expr)> = imp
+                .members
+                .iter()
+                .map(|(sym, e, _t)| (sym.to_string(), e.clone()))
+                .collect();
+
+            Ok(ExprBody::Record(fields))
+        }
+        _ => {
+            eprintln!("** make_record_from_trait ** {:?}", head);
+            let dummy_ctx = &mut phox.ctx.clone();
+            let cands: Vec<_> = matches.into_iter().map(
+                |tmpl| {
+                    let sch = tmpl.fresh_copy(dummy_ctx);
+                    Scheme {
+                        vars: vec![],
+                        constraints: sch.constraints,
+                        target: sch.target.head,
+                    }
+                }
+            ).collect();
+            Err(Error::AmbiguousTrait {
+                trait_head: head.clone(),
+                candidates: cands,
+            })
+        }
+    }
 }
