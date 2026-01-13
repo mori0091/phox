@@ -1,5 +1,10 @@
-use super::{Item, Expr, Pat};
-use crate::module::PathGlob;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fmt;
+
+use crate::module::*;
+use crate::typesys::*;
+use super::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Stmt {
@@ -9,8 +14,130 @@ pub enum Stmt {
     LetRec(Pat, Box<Expr>),     // `let rec p = e;`
 }
 
-use std::fmt;
+// ----------------------------------------------
+// FreeTypeVars
+impl FreeTypeVars for Stmt {
+    fn free_type_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<TypeVarId>) {
+        match self {
+            Stmt::Mod(_name, opt_itmes) => {
+                match opt_itmes {
+                    Some(items) => {
+                        for item in items {
+                            item.free_type_vars(ctx, acc);
+                        }
+                    }
+                    None => {}
+                }
+            }
+            Stmt::Use(_) => {}
+            Stmt::Let(_pat, expr) => {
+                expr.free_type_vars(ctx, acc);
+            }
+            Stmt::LetRec(_pat, expr) => {
+                expr.free_type_vars(ctx, acc);
+            }
+        }
+    }
+}
 
+// ----------------------------------------------
+// Repr
+impl Repr for Stmt {
+    fn repr(&self, ctx: &mut TypeContext) -> Self {
+        match self {
+            Stmt::Mod(name, opt_itmes) => {
+                let name = name.clone();
+                let opt_itmes = match opt_itmes {
+                    Some(items) => {
+                        let items = items.iter().map(|item| item.repr(ctx)).collect();
+                        Some(items)
+                    }
+                    None => None,
+                };
+                Stmt::Mod(name, opt_itmes)
+            }
+            Stmt::Use(_) => { self.clone() }
+            Stmt::Let(pat, expr) => {
+                let pat = pat.clone();
+                let expr = expr.repr(ctx);
+                Stmt::Let(pat, Box::new(expr))
+            }
+            Stmt::LetRec(pat, expr) => {
+                let pat = pat.clone();
+                let expr = expr.repr(ctx);
+                Stmt::LetRec(pat, Box::new(expr))
+            }
+        }
+    }
+}
+
+// ----------------------------------------------
+// ApplySubst
+impl ApplySubst for Stmt {
+    fn apply_subst(&self, subst: &Subst) -> Self {
+        match self {
+            Stmt::Mod(name, opt_itmes) => {
+                let name = name.clone();
+                let opt_itmes = match opt_itmes {
+                    Some(items) => {
+                        let items = items.iter().map(|item| item.apply_subst(subst)).collect();
+                        Some(items)
+                    }
+                    None => None,
+                };
+                Stmt::Mod(name, opt_itmes)
+            }
+            Stmt::Use(_) => { self.clone() }
+            Stmt::Let(pat, expr) => {
+                let pat = pat.clone();
+                let expr = expr.apply_subst(subst);
+                Stmt::Let(pat, Box::new(expr))
+            }
+            Stmt::LetRec(pat, expr) => {
+                let pat = pat.clone();
+                let expr = expr.apply_subst(subst);
+                Stmt::LetRec(pat, Box::new(expr))
+            }
+        }
+    }
+}
+
+// ----------------------------------------------
+// SchemePretty
+impl SchemePretty for Stmt {
+    fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self {
+        match self {
+            Stmt::Mod(name, opt_itmes) => {
+                let name = name.clone();
+                let opt_itmes = match opt_itmes {
+                    Some(items) => {
+                        let items = items.iter().map(|item| item.rename_type_var(map)).collect();
+                        Some(items)
+                    }
+                    None => None,
+                };
+                Stmt::Mod(name, opt_itmes)
+            }
+            Stmt::Use(_) => { self.clone() }
+            Stmt::Let(pat, expr) => {
+                let pat = pat.clone();
+                let expr = expr.rename_type_var(map);
+                Stmt::Let(pat, Box::new(expr))
+            }
+            Stmt::LetRec(pat, expr) => {
+                let pat = pat.clone();
+                let expr = expr.rename_type_var(map);
+                Stmt::LetRec(pat, Box::new(expr))
+            }
+        }
+    }
+}
+
+// ----------------------------------------------
+// Pretty
+
+// ----------------------------------------------
+// fmt::Display
 impl fmt::Display for Stmt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

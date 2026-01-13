@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::api;
 use crate::typesys::*;
 
@@ -37,13 +39,11 @@ pub fn repl() {
             }
         }
         match api::parse(&buffer) {
-            Ok(items) => {
+            Ok(mut items) => {
                 let mut module = phox.roots.get(api::DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
-                for mut item in items {
-                    match phox.eval_item(&mut module, &mut item) {
-                        Err(e)         => println!("{}", e),
-                        Ok((val, sch)) => println!("=> {}: {}", val, sch.pretty()),
-                    }
+                match phox.run_items(&mut module, &mut items) {
+                    Err(e)         => println!("{}", e),
+                    Ok((val, sch)) => println!("=> {}: {}", val, sch.pretty()),
                 }
                 println!();
                 buffer.clear();
@@ -155,33 +155,28 @@ fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
                 }
                 println!();
             }
-            // println!("EXTERN");
-            // for (path, symbol_env) in phox.extern_symbol_envs.iter() {
-            //     println!("mod {};", path.pretty());
-            //     let map = symbol_env.clone_map();
-            //     let mut syms = map.iter().collect::<Vec<_>>();
-            //     syms.sort_by_key(|(path, _)| path.pretty());
-            //     for (path, symbol) in syms.iter() {
-            //         println!("  {:<30} {:?}", path.pretty(), symbol);
-            //     }
-            //     println!();
-            // }
             CommandResult::Continue
         }
 
         ["impls"] => {
-            for (impl_head, _members) in phox.impl_env.iter() {
-                println!("impl {}", impl_head.pretty());
+            for tmpl in phox.impl_env.iter() {
+                let sch = tmpl.scheme_ref();
+                let map = &mut HashMap::new();
+                let requires = sch.constraints.rename_type_var(map);
+                let head = sch.target.head.rename_type_var(map);
+                if requires.is_empty() {
+                    println!("impl {}", head.pretty());
+                }
+                else {
+                    println!("impl {} {}", head.pretty(), requires.pretty());
+                }
             }
             CommandResult::Continue
         }
         ["impls", "--verbose"] | ["impls", "-v"] => {
-            for (impl_head, members) in phox.impl_env.iter() {
-                println!("impl {} {{", impl_head.pretty());
-                for (sym, expr) in members.iter() {
-                    println!("  {} = {};", sym.pretty(), expr);
-                }
-                println!("}};");
+            for tmpl in phox.impl_env.iter() {
+                let sch = tmpl.scheme_ref();
+                println!("{}", sch.pretty());
                 println!();
             }
             CommandResult::Continue

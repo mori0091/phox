@@ -2,7 +2,7 @@ mod top;
 pub use top::Program;
 
 mod item;
-pub use item::Item;
+pub use item::*;
 
 mod decl;
 pub use decl::*;

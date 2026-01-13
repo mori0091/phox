@@ -29,6 +29,12 @@ impl ConstraintSet {
         cs.extend(xs);
         cs
     }
+
+    pub fn into_vec_for_trait_record(&self) -> Vec<Constraint> {
+        let mut xs = self.requires.iter().cloned().collect::<Vec<_>>();
+        xs.sort();
+        xs
+    }
 }
 
 impl ApplySubst for ConstraintSet {
@@ -71,6 +77,10 @@ impl Pretty for ConstraintSet {
 
 impl fmt::Display for ConstraintSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.pretty())
+        let cs = self.into_vec();
+        if cs.is_empty() {
+            return write!(f, "")
+        }
+        write!(f, "requires {}.", cs.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", "))
     }
 }

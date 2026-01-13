@@ -1,34 +1,33 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 use crate::syntax::ast::*;
 use crate::module::*;
 use super::*;
 
 // ===== Impl Environment =====
-// maps instance of trait to dictionary of its implementations.
-// ex.
-// impl_env: ImplEnv = {
-//   (Monad Option): {
-//     "pure": \a. Some a,
-//     "bind": \a.\f. match (a) {
-//       None => None,
-//       Some x => f x,
-//     },
-//   },
-//
-//   (Monad (Result ())): {
-//     "pure": \a. Ok a,
-//     "bind": \a.\f. match (a) {
-//       Err () => Err (),
-//       Ok ok  => f ok,
-//     },
-//   },
-//
-//   (∀ e. Monad (Result e)): {
-//     "pure": \a. Ok a,
-//     "bind": \a.\f. match (a) {
-//       Err err => Err err,
-//       Ok ok  => f ok,
-//     },
-//   },
-// }
-pub type ImplEnv = HashMap<TraitScheme, HashMap<Symbol, Expr>>;
+// set of typed impls.
+pub struct ImplEnv {
+    impls: HashSet<SchemeTemplate<TypedImpl>>,
+}
+
+impl ImplEnv {
+    pub fn new() -> Self {
+        ImplEnv {
+            impls: HashSet::new(),
+        }
+    }
+    pub fn insert(&mut self, tmpl: SchemeTemplate<TypedImpl>) -> bool {
+        self.impls.insert(tmpl)
+    }
+    pub fn iter(&self) -> impl Iterator<Item = &SchemeTemplate<TypedImpl>> {
+        self.impls.iter()
+    }
+    pub fn get_by_name(&self, trait_name: &Symbol) -> Vec<SchemeTemplate<TypedImpl>> {
+        let mut tmpls = Vec::new();
+        for tmpl in &self.impls {
+            if tmpl.scheme_ref().target.head.name == *trait_name {
+                tmpls.push(tmpl.clone());
+            }
+        }
+        tmpls
+    }
+}

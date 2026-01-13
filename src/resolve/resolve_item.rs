@@ -6,17 +6,18 @@ pub fn resolve_item(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
+    param_map: &mut HashMap<String, TypeVarId>,
     item: &mut Item,
 ) -> Result<(), Error> {
-    match item {
-        Item::Decl(decl) => {
+    match &mut item.body {
+        ItemBody::Decl(decl) => {
             resolve_decl(phox, module, symbol_env, decl)
         }
-        Item::Stmt(stmt) => {
-            resolve_stmt(phox, module, symbol_env, stmt)
+        ItemBody::Stmt(stmt) => {
+            resolve_stmt(phox, module, symbol_env, param_map, stmt)
         }
-        Item::Expr(expr) => {
-            resolve_expr(phox, module, symbol_env, expr)
+        ItemBody::Expr(expr) => {
+            resolve_expr(phox, module, symbol_env, param_map, expr)
         }
     }
 }

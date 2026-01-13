@@ -31,6 +31,9 @@ pub use constraint_set::*;
 mod solver;
 pub use solver::*;
 
+mod solve_item;
+pub use solve_item::*;
+
 mod scheme;
 pub use scheme::Scheme;
 pub use scheme::generalize;
@@ -63,11 +66,10 @@ pub use infer::{
 };
 
 mod impl_env;
-pub use impl_env::ImplEnv;
+pub use impl_env::*;
+
+mod register;
+pub use register::*;
 
 mod apply_trait_impls;
-pub use apply_trait_impls::{
-    apply_trait_impls_item,
-    apply_trait_impls_stmt,
-    apply_trait_impls_expr,
-};
+pub use apply_trait_impls::*;

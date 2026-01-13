@@ -16,13 +16,13 @@ pub fn eval_item(
     env: &mut ValueEnv,
     item: &Item,
 ) -> Result<Value, Error> {
-    match item {
-        Item::Decl(_) => Ok(Value::Lit(Lit::Unit)),
-        Item::Stmt(stmt) => {
+    match &item.body {
+        ItemBody::Decl(_) => Ok(Value::Lit(Lit::Unit)),
+        ItemBody::Stmt(stmt) => {
             eval_stmt(phox, module, env, stmt)?;
             Ok(Value::Lit(Lit::Unit))
         }
-        Item::Expr(expr) => {
+        ItemBody::Expr(expr) => {
             eval_expr(phox, module, env, expr)
         }
     }
@@ -109,6 +109,8 @@ pub fn eval_expr(
                         env2.extend(&bindings);
                         eval_expr(phox, module, env2, &body)
                     } else {
+                        eprintln!("pat = {}", pat);
+                        eprintln!("arg_val = {}", arg_val);
                         Err(error(format!("function argument pattern match failed")))
                     }
                 }
@@ -240,6 +242,9 @@ pub fn eval_expr(
             }
         }
         ExprBody::RawTraitRecord(_) => {
+            unreachable!()
+        }
+        ExprBody::TraitRecord(_) => {
             unreachable!()
         }
     }

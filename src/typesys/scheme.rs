@@ -77,11 +77,13 @@ impl <T: ApplySubst> Scheme<T> {
 
 impl <T: fmt::Display> fmt::Display for Scheme<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.vars.is_empty() {
-            // 量化変数がなければそのまま型のみ
+        if !self.vars.is_empty() {
+            write!(f, "∀ {}. ", TypeVarList(&self.vars))?;
+        }
+        if self.constraints.is_empty() {
             write!(f, "{}", self.target)
         } else {
-            write!(f, "∀ {}. {}", TypeVarList(&self.vars), self.target)
+            write!(f, "{} {}", self.target, self.constraints)
         }
     }
 }

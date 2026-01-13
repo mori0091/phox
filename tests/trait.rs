@@ -108,7 +108,7 @@ fn test_unimplemented_trait_error() {
         eq true false
     "#;
     let err = eval(src).unwrap_err();
-    assert!(format!("{}", err).contains("infer error: unbound variable"));
+    assert!(format!("{}", err).contains("unbound variable"));
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn test_unbound_trait_record_error() {
         @{Eq2 Bool}
     "#;
     let err = eval(src).unwrap_err();
-    assert!(format!("{}", err).contains("infer error: no implementation for `Eq2 Bool`"));
+    assert!(format!("{}", err).contains("no implementation for `Eq2 Bool`"));
 }
 
 #[test]
@@ -138,7 +138,7 @@ fn test_field_access_on_var_error() {
         f @{Eq2 Int} 1 2
     "#;
     let err = eval(src).unwrap_err();
-    assert!(format!("{}", err).contains("infer error: expected a record"));
+    assert!(format!("{}", err).contains("expected a record"));
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn test_trait_member_conflict_error() {
         f 100
     "#;
     let err = eval(src).unwrap_err();
-    assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
+    assert!(format!("{}", err).contains("ambiguous variable `f`"));
     assert!(format!("{}", err).contains("candidates:"));
     assert!(format!("{}", err).contains("Int -> Int requires Bar Int."));
     assert!(format!("{}", err).contains("Int -> Int requires Foo Int."));
@@ -184,7 +184,7 @@ fn test_trait_member_non_conflict_1() {
         f 100
     "#;
     let err = eval(src).unwrap_err();
-    assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
+    assert!(format!("{}", err).contains("ambiguous variable `f`"));
     assert!(format!("{}", err).contains("candidates:"));
     assert!(format!("{}", err).contains("Int -> Int requires Bar Int."));
     assert!(format!("{}", err).contains("Int -> Bool requires Foo Int."));
@@ -262,7 +262,7 @@ fn test_ambiguous_trait_type() {
         f
     "#;
     let err = eval(src).unwrap_err();
-    assert!(format!("{}", err).contains("infer error: ambiguous variable `f`"));
+    assert!(format!("{}", err).contains("ambiguous variable `f`"));
     assert!(format!("{}", err).contains("candidates:"));
     assert!(format!("{}", err).contains("Bool -> Bool requires Foo Bool."));
     assert!(format!("{}", err).contains("Int -> Int requires Foo Int."));

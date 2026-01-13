@@ -194,7 +194,7 @@ impl fmt::Display for Type {
                 else {
                     let s: Vec<String>
                         = fields.iter()
-                                .map(|(k, v)| format!("{}: {}", k, v))
+                                .map(|(k, v)| format!("{}: {}", PathComponent::Name(k.clone()).pretty(), v))
                                 .collect();
                     write!(f, "@{{ {} }}", s.join(", "))
                 }

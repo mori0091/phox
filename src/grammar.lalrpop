@@ -99,19 +99,19 @@ pub Program: Vec<Item> = {
 // === items ===
 pub ItemList: Vec<Item> = {
     <mut v:(<Item> ";")*> <tail:Expr> => {
-        v.push(Item::Expr(tail));
+        v.push(Item::expr(tail));
         v
     },
     <mut v:(<Item> ";")+> => {
-        v.push(Item::Expr(Expr::unit()));
+        v.push(Item::expr(Expr::unit()));
         v
     },
 };
 
 pub Item: Item = {
-    Decl => Item::Decl(<>),
-    Stmt => Item::Stmt(<>),
-    Expr => Item::Expr(<>),
+    Decl => Item::decl(<>),
+    Stmt => Item::stmt(<>),
+    Expr => Item::expr(<>),
 };
 
 // ----------------------------------------------
@@ -119,7 +119,7 @@ pub Item: Item = {
 Decl: Decl = {
     DeclType => Decl::Type(<>),
     DeclTrait => Decl::Trait(<>),
-    DeclImpl => Decl::Impl(<>),
+    DeclImpl => Decl::RawImpl(<>),
 }
 
 // ----------------------------------------------
@@ -571,7 +571,7 @@ ExprTupleAccess: Expr = {
 
 ExprBlock: Expr = {
     "{" "}" => {
-        Expr::block(vec![Item::Expr(Expr::unit())])
+        Expr::block(vec![Item::expr(Expr::unit())])
     },
     "{" <items:ItemList> "}" => {
         Expr::block(items)

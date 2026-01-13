@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::*;
 use crate::syntax::ast::*;
 
@@ -5,12 +7,25 @@ use crate::syntax::ast::*;
 #[derive(Clone)]
 pub struct TypeContext {
     parent: Vec<TypeVarId>,    // union-find parent pointers
-    binding: Vec<Option<Type>>, // representative binding (Some if bound to a type)
+    pub binding: Vec<Option<Type>>, // representative binding (Some if bound to a type)
+    pub non_touchable: HashSet<TypeVarId>,
 }
 
 impl TypeContext {
     pub fn new() -> Self {
-        Self { parent: Vec::new(), binding: Vec::new() }
+        Self {
+            parent: Vec::new(),
+            binding: Vec::new(),
+            non_touchable: HashSet::new(),
+        }
+    }
+
+    pub fn set_non_touchable(&mut self, non_touchable: &HashSet<TypeVarId>) {
+        self.non_touchable.extend(non_touchable);
+    }
+
+    pub fn clear_non_touchable(&mut self) {
+        self.non_touchable.clear();
     }
 
     pub fn fresh_type_var_id(&mut self) -> TypeVarId {
@@ -153,12 +168,20 @@ impl TypeContext {
         // t 側が Var で束縛があるなら連結（Var vs Var の統合）
         if let Type::Var(w) = t {
             let rw = self.find(*w);
+
             if let Some(bound_w) = self.binding[rw.0].clone() {
                 return self.unify(&Type::Var(r), &bound_w);
             }
+
             // どちらも未束縛 → 代表を連結
-            self.parent[r.0] = rw;
-            return Ok(());
+            if self.non_touchable.contains(&r) && !self.non_touchable.contains(&rw) {
+                self.parent[rw.0] = r;
+                return Ok(());
+            }
+            else {
+                self.parent[r.0] = rw;
+                return Ok(());
+            }
         }
 
         // occurs check を生の t に対して実施
@@ -166,7 +189,22 @@ impl TypeContext {
             return Err(Error::RecursiveType);
         }
 
+        {
+            if self.non_touchable.contains(&r) {
+                panic!("[BUG] non-touchable var is about to be bound: r={:?}, t={:?}", r, t);
+            }
+            if let Type::Var(w) = t {
+                let rw = self.find(*w);
+                if self.non_touchable.contains(&rw) {
+                    panic!("[BUG] non-touchable target var in Var-Var binding: r={:?}, rw={:?}", r, rw);
+                }
+            }
+        }
+
         // ★ ここで repr はかけず、そのまま束縛。必要なら clone。
+        // {
+        //     eprintln!("[unify_var] BIND r={:?} := {:?}", r, t);
+        // }
         self.binding[r.0] = Some(t.clone());
         Ok(())
     }
