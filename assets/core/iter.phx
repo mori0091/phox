@@ -1,0 +1,204 @@
+use ::core::{(), Bool, Int};
+use ::core::cmp::*;
+use ::core::combinator::{subst, const, id, flip, fix};
+use ::core::control::*;
+use ::core::ops::*;
+use ::core::option::*;
+// use ::core::result::*;
+// use ::core::list;
+// use ::core::list::{List, Nil, Cons};
+
+// -------------------------------------------------------------
+trait Iter s a {
+    next: s a -> Option (a, s a);
+};
+
+// -------------------------------------------------------------
+// impl Iter List a {
+//     next = \xs. match (xs) {
+//         Nil       => None,
+//         Cons y ys => Some (y, ys),
+//     };
+// };
+
+
+// -------------------------------------------------------------
+// type Empty a = Empty a;
+
+// impl Iter Empty a {
+//     next = \Empty _. None;
+// };
+
+// -------------------------------------------------------------
+type Seq a = Seq (a -> a) a;
+
+impl Iter Seq a {
+    next = \Seq f x. Some(x, Seq f (f x));
+};
+
+/// seq : ∀ a. (a -> a) -> a -> s a
+///     requires Iter s, s == Seq.
+let seq = Seq;
+
+/// repeat : ∀ a. a -> s a
+///     requires Iter s, s == Seq
+let repeat = Seq id;
+
+/// zeors : s Int
+///     requires Iter s, s == Seq
+let zeros = repeat 0;
+
+/// ones : s Int
+///     requires Iter s, s == Seq
+let ones = repeat 1;
+
+/// counter : Int -> s Int
+///     requires Iter s, s == Seq.
+let counter = Seq #(1 +);
+
+// -------------------------------------------------------------
+type Map s a b = Map (a -> b) (s a);
+
+impl Iter (Map s a) b {
+    next = \Map f it. {
+        let r = @{Iter s a};
+        match (r.next it) {
+            None => None,
+            Some (x, it') => Some (f x, Map f it'),
+        }
+    };
+};
+
+/// map : ∀ s a b. (a -> b) -> s a -> t b
+///     requires Iter s, Iter t, t == Map s a.
+let map = Map;
+
+// -------------------------------------------------------------
+type TakeWhile s a = TakeWhile (a -> Bool) (s a);
+
+impl Iter (TakeWhile s) a {
+    next = \TakeWhile p it. {
+        let @{next} = @{Iter s a};
+        match (next it) {
+            None => None,
+            Some (x, it') =>
+                if (p x)
+                    Some (x, TakeWhile p it')
+                else
+                    None
+            ,
+        }
+    };
+};
+
+/// take_while : ∀ s a. (a -> Bool) -> s a -> s' a
+///     requires Iter s, Iter s', s' == TakeWhile s.
+let take_while = TakeWhile;
+
+// -------------------------------------------------------------
+type Take s a = Take Int (s a);
+
+impl Iter (Take s) a {
+    next = \Take n it. {
+        let @{next} = @{Iter s a};
+        if (0 >= n)
+            None
+        else match (next it) {
+            None => None,
+            Some (x, it') => Some (x, Take (n - 1) it'),
+        }
+    };
+};
+
+/// take : ∀ s a. Int -> s a -> s' a
+///     requires Iter s, Iter s', s' == Take s.
+let take = Take;
+
+// -------------------------------------------------------------
+// /// fold : ∀ s a b. (a -> b -> a) -> a -> s a -> a
+// ///     requires Iter s.
+// let fold = \op.\init.\it. {
+//     let @{next} = @{Iter s};
+//     // let @{next} = @{Iter (Take s)};
+//     let (res,_,_) = for
+//         (init,true,it)
+//         (\(_,flag,_). flag)
+//         (\(a,_,it). match (next it) {
+//             None          => (a,false,it),
+//             Some (x, it') => (op a x, true, it'),
+//         })
+//     ;
+//     res
+// };
+trait FoldFunc s a b {
+    fold : (a -> b -> a) -> a -> s b -> a;
+};
+impl FoldFunc s a b {
+    fold = \op.\init.\it. {
+        let @{next} = @{Iter s b};
+        let (res,_,_) = for
+            (init,true,it)
+            (\(_,flag,_). flag)
+            (\(a,_,it). match (next it) {
+                None          => (a,false,it),
+                Some (x, it') => (op a x, true, it'),
+            })
+        ;
+        res
+    };
+};
+
+// -------------------------------------------------------------
+trait Sink ci a co {
+    update: ci -> a -> ci;
+    finish: ci -> co;
+};
+
+// impl Sink (List a) a (List a) {
+//     update = flip Cons;
+//     finish = list::reverse;
+// };
+
+type Fold a b = Fold (a -> b -> a) a;
+
+impl Sink (Fold a b) b a {
+    update = \Fold f a.\x. Fold f (f a x);
+    finish = \Fold _ a. a;
+};
+
+// -------------------------------------------------------------
+// /// collect : ∀ a. ci -> s a -> co
+// ///     requires Sink ci a co, Iter s.
+// let collect = \sink.\it. {
+//     let @{next} = @{Iter s a};
+//     let @{update, finish} = @{Sink ci a co};
+//     let (acc,_,_) = for
+//         (sink,true,it)
+//         (\(_,flag,_). flag)
+//         (\(sink,_,it). match (next it) {
+//             None          => (sink,false,it),
+//             Some (x, it') => (update sink x, true, it'),
+//         })
+//     ;
+//     finish acc
+// };
+
+trait CollectFunc ci s a co {
+    collect : ci -> s a -> co;
+};
+
+impl CollectFunc ci s a co {
+    collect = \sink.\it. {
+        let @{next} = @{Iter s a};
+        let @{update, finish} = @{Sink ci a co};
+        let (acc,_,_) = for
+            (sink,true,it)
+            (\(_,flag,_). flag)
+            (\(sink,_,it). match (next it) {
+                None          => (sink,false,it),
+                Some (x, it') => (update sink x, true, it'),
+            })
+        ;
+        finish acc
+    };
+};

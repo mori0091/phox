@@ -44,3 +44,7 @@ mod i64;
 mod list;
 // re-export
 use list::{List, Cons, Nil};
+
+// -------------------------------------------------------------
+mod iter;
+use iter::*;
