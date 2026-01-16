@@ -162,19 +162,24 @@ pub fn infer_stmt(
         Stmt::Use(_) => Ok((Type::unit(), vec![])),
         Stmt::Mod(_, _) => Ok((Type::unit(), vec![])),
         Stmt::Let(pat, expr) => {
-            let mut cs = Vec::new();
+            let mut css = Vec::new();
             let (t_expr, c_expr) = infer_expr(phox, module, icx, expr)?;
-
-            // let should_generalize = c_expr.iter().all(|c| c.is_generalize_safe());
-            let should_generalize = true;
-
             let t_pat = phox.ctx.fresh_type_for_pattern(pat);
-            cs.extend(c_expr);
-            cs.push(Constraint::type_eq(&t_expr, &t_pat));
-            // ★ need to solve here. (since `match_pattern` requires)
-            let pending = solve_with_residual(phox, cs)?;
-            let ref_icx = icx.duplicate(); // snapshot for reference
-            phox.ctx.match_pattern(icx, pat, &t_pat, &ref_icx, should_generalize)?;
+            css.extend(c_expr);
+            css.push(Constraint::type_eq(&t_expr, &t_pat));
+            let monotype_bindings = false;
+            let mut bindings = Vec::new();
+            let cs = phox.ctx.match_pattern(icx, pat, &t_pat, monotype_bindings, &mut bindings)?;
+            css.extend(cs);
+
+            // ★ need to solve here. (since `generalize` requires)
+            let pending = solve_with_residual(phox, css)?;
+
+            for (sym, t) in bindings {
+                let t = t.repr(&mut phox.ctx);
+                let sch = generalize(&mut phox.ctx, icx, &t);
+                icx.put_type_scheme(sym, sch);
+            }
 
             Ok((Type::unit(), pending))
         }
@@ -185,12 +190,15 @@ pub fn infer_stmt(
                     let mut icx2 = icx.duplicate();
                     icx2.put_type_scheme(x.clone(), TypeScheme::mono(tv.clone()));
 
-                    let mut cs = Vec::new();
+                    let mut css = Vec::new();
                     let (t_expr, c_expr) = infer_expr(phox, module, &mut icx2, expr)?;
-                    cs.extend(c_expr);
-                    cs.push(Constraint::type_eq(&tv, &t_expr));
+                    css.extend(c_expr);
+                    css.push(Constraint::type_eq(&tv, &t_expr));
+
                     // ★ need to solve here. (since `generalize` requires)
-                    let pending = solve_with_residual(phox, cs)?;
+                    let pending = solve_with_residual(phox, css)?;
+                    let tv = tv.repr(&mut phox.ctx);
+
                     let sch = generalize(&mut phox.ctx, icx, &tv);
                     icx.put_type_scheme(x.clone(), sch);
 
@@ -270,10 +278,13 @@ pub fn infer_expr(
 
             // 環境を拡張
             let mut icx2 = icx.duplicate();
-            phox.ctx.match_pattern(&mut icx2, &pat, &t_pat, icx, false)?;
+            let monotype_bindings = true;
+            let mut binndings = Vec::new();
+            let mut cs = phox.ctx.match_pattern(&mut icx2, &pat, &t_pat, monotype_bindings, &mut binndings)?;
 
             // 本体を推論
-            let (t_body, cs) = infer_expr(phox, module, &mut icx2, body)?;
+            let (t_body, cbody) = infer_expr(phox, module, &mut icx2, body)?;
+            cs.extend(cbody);
 
             // 関数型を返す
             (Type::fun(t_pat, t_body), cs)
@@ -304,41 +315,41 @@ pub fn infer_expr(
         }
 
         ExprBody::Match(scrutinee, arms) => {
+            let mut css = Vec::new();
+
             // 判別対象式の型を推論
             let (t_scrut, c_scrut) = infer_expr(phox, module, icx, scrutinee)?;
-            let mut pending = solve_with_residual(phox, c_scrut)?;
+            css.extend(c_scrut);
 
             // 各アームの式型を集める
             let mut result_types = vec![];
-            let mut cs = Vec::new();
             for (pat, body) in arms.iter_mut() {
                 // パターンに対応する型を生成（型変数を含む構造）
                 let t_pat = phox.ctx.fresh_type_for_pattern(&pat);
 
                 // scrutinee の型とパターン型を unify
-                // ★ need to solve here.
-                // Why: Same as `let` pattern binding needs the concrete shape.
-                let ps = solve_with_residual(phox, vec![Constraint::type_eq(&t_scrut, &t_pat)])?;
-                cs.extend(ps);
+                css.push(Constraint::type_eq(&t_scrut, &t_pat));
 
                 // 束縛環境を構築
-                let mut env2 = icx.duplicate();
-                phox.ctx.match_pattern(&mut env2, &pat, &t_pat, icx, false)?;
+                let mut icx2 = icx.duplicate();
+                let monotype_bindings = true;
+                let mut binndings = Vec::new();
+                let cs = phox.ctx.match_pattern(&mut icx2, &pat, &t_pat, monotype_bindings, &mut binndings)?;
+                css.extend(cs);
 
                 // アーム本体の型を推論
-                let (t_body, c_body) = infer_expr(phox, module, &mut env2, body)?;
+                let (t_body, c_body) = infer_expr(phox, module, &mut icx2, body)?;
                 result_types.push(t_body);
-                cs.extend(c_body);
+                css.extend(c_body);
             }
 
             let mut result_types = result_types.into_iter();
             let t_result = result_types.next().ok_or(Error::EmptyMatch)?;
             for ty in result_types {
-                cs.push(Constraint::type_eq(&t_result, &ty));
+                css.push(Constraint::type_eq(&t_result, &ty));
             }
 
-            pending.extend(cs);
-            (t_result, pending)
+            (t_result, css)
         }
 
         ExprBody::Lit(Lit::Unit) => (Type::unit(), vec![]),
@@ -372,6 +383,7 @@ pub fn infer_expr(
             let mut css = Vec::new();
             let (t_base, c_base) = infer_expr(phox, module, icx, base)?;
             css.extend(c_base);
+
             match t_base {
                 Type::Record(fields) => {
                     if let Some((_, ty)) = fields.iter().find(|(fname, _)| fname == field) {

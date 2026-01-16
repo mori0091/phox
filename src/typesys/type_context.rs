@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use super::*;
+use crate::module::*;
 use crate::syntax::ast::*;
 
 // ===== Type context: union-find + binding =====
@@ -242,11 +243,12 @@ impl TypeContext {
         icx: &mut InferCtx,
         pat: &Pat,
         ty: &Type,
-        outer_icx: &InferCtx,
-        generalize_bindings: bool,
-    ) -> Result<(), Error> {
+        monotype_bindings: bool,
+        bindings: &mut Vec<(Symbol, Type)>,
+    ) -> Result<Vec<Constraint>, Error> {
+        let mut constraints = Vec::new();
         match pat {
-            Pat::Wildcard => Ok(()), // 束縛なし
+            Pat::Wildcard => {}, // 束縛なし
 
             Pat::Lit(lit) => {
                 let expected = match lit {
@@ -254,22 +256,23 @@ impl TypeContext {
                     Lit::Bool(_) => Type::bool_(),
                     Lit::Int(_) => Type::int(),
                 };
-                self.unify(&expected, ty)
+                constraints.push(Constraint::type_eq(&expected, ty));
             }
 
             Pat::Var(x) => {
-                let sch = if generalize_bindings {
-                    generalize(self, &outer_icx, ty) // let の場合
-                } else {
-                    TypeScheme::mono(ty.clone()) // Abs や match の場合は単相
-                };
-                icx.put_type_scheme(x.clone(), sch);
-                Ok(())
+                if monotype_bindings {
+                    let sch = TypeScheme::mono(ty.clone());
+                    icx.put_type_scheme(x.clone(), sch);
+                }
+                else {
+                    bindings.push((x.clone(), ty.clone()));
+                }
             }
 
             Pat::Con(name, args) => {
                 let scheme = icx.get_type_scheme(name).ok_or(Error::UnknownConstructor(name.clone()))?;
-                let (_constraints, con_ty) = scheme.instantiate(self);
+                let (cs, con_ty) = scheme.instantiate(self);
+                let mut css = cs.into_vec();
 
                 let mut arg_types = Vec::new();
                 let mut ty_fun = con_ty;
@@ -284,45 +287,83 @@ impl TypeContext {
                     }
                 }
 
-                self.unify(&ty_fun, ty)?;
+                css.push(Constraint::type_eq(&ty_fun, ty));
 
                 for (p, t) in args.iter().zip(arg_types.iter()) {
-                    self.match_pattern(icx, p, t, outer_icx, generalize_bindings)?;
+                    let cs = self.match_pattern(icx, p, t, monotype_bindings, bindings)?;
+                    css.extend(cs);
                 }
 
-                Ok(())
+                constraints.extend(css.drain(..));
             }
 
             Pat::Tuple(ps) => {
-                let ty = ty.repr(self);
-                if let Type::Tuple(ts) = ty {
-                    if ps.len() != ts.len() {
-                        return Err(Error::TupleLengthMismatch(ps.len(), ts.len()));
+                match ty.repr(self) {
+                    Type::Tuple(existing_elems) => {
+                        if existing_elems.len() != ps.len() {
+                            return Err(Error::TupleLengthMismatch(ps.len(), existing_elems.len()));
+                        }
+
+                        for (p, elem_ty) in ps.iter().zip(existing_elems.iter()) {
+                            let cs = self.match_pattern(icx, p, elem_ty, monotype_bindings, bindings)?;
+                            constraints.extend(cs);
+                        }
                     }
-                    for (p, t) in ps.iter().zip(ts.iter()) {
-                        self.match_pattern(icx, p, t, outer_icx, generalize_bindings)?;
+                    _ => {
+                        let mut ts = Vec::new();
+                        for _p in ps {
+                            ts.push(Type::Var(self.fresh_type_var_id()));
+                        }
+
+                        let mut css = Vec::new();
+                        css.push(Constraint::type_eq(&Type::Tuple(ts.clone()), ty));
+                        for (p, t) in ps.iter().zip(ts.iter()) {
+                            let cs = self.match_pattern(icx, p, t, monotype_bindings, bindings)?;
+                            css.extend(cs);
+                        }
+
+                        constraints.extend(css.drain(..));
                     }
-                    Ok(())
-                } else {
-                    Err(Error::ExpectedTuple(ty.clone()))
                 }
             }
 
             Pat::Record(fields) => {
-                let ty = ty.repr(self);
-                if let Type::Record(ref tys) = ty {
-                    for (fname, p) in fields {
-                        let ft = tys.iter()
-                                    .find(|(n, _)| n == fname)
-                                    .ok_or_else(|| Error::UnknownField(fname.clone(), ty.clone()))?
-                                    .1.clone();
-                        self.match_pattern(icx, p, &ft, outer_icx, generalize_bindings)?;
+                match ty.repr(self) {
+                    Type::Record(existing_fields) => {
+                        for (fname, p) in fields {
+                            let (_, field_ty) = existing_fields
+                                .iter()
+                                .find(|(n, _)| n == fname)
+                                .ok_or_else(|| Error::UnknownField(fname.clone(), ty.clone()))?;
+
+                            // ここで field_ty をそのまま使う
+                            let cs = self.match_pattern(icx, p, field_ty, monotype_bindings, bindings)?;
+                            constraints.extend(cs);
+                        }
                     }
-                    Ok(())
-                } else {
-                    Err(Error::ExpectedRecord(ty.clone()))
+
+                    _ => {
+                        let mut tys = Vec::new();
+                        for (n, _p) in fields {
+                            tys.push((n.clone(), Type::Var(self.fresh_type_var_id())));
+                        }
+
+                        let mut css = Vec::new();
+                        css.push(Constraint::type_eq(&Type::Record(tys.clone()), ty));
+                        for (fname, p) in fields {
+                            let ft = tys.iter()
+                                        .find(|(n, _)| n == fname)
+                                        .ok_or_else(|| Error::UnknownField(fname.clone(), ty.clone()))?
+                                        .1.repr(self);
+                            let cs = self.match_pattern(icx, p, &ft, monotype_bindings, bindings)?;
+                            css.extend(cs);
+                        }
+
+                        constraints.extend(css.drain(..));
+                    }
                 }
             }
         }
+        Ok(constraints)
     }
 }
