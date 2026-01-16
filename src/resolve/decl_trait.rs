@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use super::*;
 
 // -------------------------------------------------------------
@@ -32,7 +34,7 @@ pub fn resolve_decl_trait(
                 vars: vars.clone(),
                 constraints: ConstraintSet {
                     primary: Some(Box::new(head.clone())),
-                    requires: vec![],
+                    requires: BTreeSet::new(),
                 },
                 target: resolve_raw_type(
                     phox,

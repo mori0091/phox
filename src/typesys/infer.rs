@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use crate::api::PhoxEngine;
@@ -145,7 +146,10 @@ fn infer_decl_named_impl(
 
     let scheme = Scheme::new(
         scheme_vars.into_iter().collect(),
-        ConstraintSet { primary: None, requires },
+        ConstraintSet {
+            primary: None,
+            requires: requires.into_iter().collect::<BTreeSet<_>>(),
+        },
         typed,
     );
 

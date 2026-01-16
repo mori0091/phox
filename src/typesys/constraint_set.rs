@@ -1,17 +1,18 @@
 use std::fmt;
+use std::collections::BTreeSet;
 use super::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ConstraintSet {
     pub primary: Option<Box<TraitHead>>,
-    pub requires: Vec<Constraint>,
+    pub requires: BTreeSet<Constraint>,
 }
 
 impl ConstraintSet {
     pub fn new() -> ConstraintSet {
         ConstraintSet {
             primary: None,
-            requires: vec![],
+            requires: BTreeSet::new(),
         }
     }
 
@@ -43,7 +44,7 @@ impl ApplySubst for ConstraintSet {
             None => None,
             Some(ref head) => Some(Box::new(head.apply_subst(subst))),
         };
-        let requires = self.requires.iter().map(|c| c.apply_subst(subst)).collect::<Vec<_>>();
+        let requires = self.requires.iter().map(|c| c.apply_subst(subst)).collect::<BTreeSet<_>>();
         ConstraintSet {
             primary,
             requires,
@@ -57,7 +58,7 @@ impl SchemePretty for ConstraintSet {
             None => None,
             Some(ref head) => Some(Box::new(head.rename_type_var(map))),
         };
-        let requires = self.requires.iter().map(|c| c.rename_type_var(map)).collect::<Vec<_>>();
+        let requires = self.requires.iter().map(|c| c.rename_type_var(map)).collect::<BTreeSet<_>>();
         ConstraintSet {
             primary,
             requires,
