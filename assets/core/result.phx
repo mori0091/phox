@@ -10,6 +10,51 @@ let err? = \res. match (res) {
     Ok  _ => false,
 };
 
+// -------------------------------------------------------------
+use ::core::cmp::*;
+
+impl Eq (Result e a) {
+    (==) = \x.\y. match ((x,y)) {
+        (Err x, Err y) => @{Eq e}.(==) x y,
+        (Ok  x, Ok  y) => @{Eq a}.(==) x y,
+        _ => false,
+    };
+    (!=) = \x.\y. match ((x,y)) {
+        (Err x, Err y) => @{Eq e}.(!=) x y,
+        (Ok  x, Ok  y) => @{Eq a}.(!=) x y,
+        _ => true,
+    };
+};
+
+// -------------------------------------------------------------
+impl Ord (Result e a) {
+    (<=) = \x.\y. match ((x,y)) {
+        (Err x, Err y) => @{Ord e}.(<=) x y,
+        (Err _, Ok  _) => true,
+        (Ok  x, Ok  y) => @{Ord a}.(<=) x y,
+        _ => false,
+    };
+    (<) = \x.\y. match ((x,y)) {
+        (Err x, Err y) => @{Ord e}.(<) x y,
+        (Err _, Ok  _) => true,
+        (Ok  x, Ok  y) => @{Ord a}.(<) x y,
+        _ => false,
+    };
+    (>=) = \x.\y. match ((x,y)) {
+        (Err x, Err y) => @{Ord e}.(>=) x y,
+        (Ok  _, Err _) => true,
+        (Ok  x, Ok  y) => @{Ord a}.(>=) x y,
+        _ => false,
+    };
+    (>) = \x.\y. match ((x,y)) {
+        (Err x, Err y) => @{Ord e}.(>) x y,
+        (Ok  _, Err _) => true,
+        (Ok  x, Ok  y) => @{Ord a}.(>) x y,
+        _ => false,
+    };
+};
+
+// -------------------------------------------------------------
 use ::core::control::*;
 
 impl Functor (Result e) {

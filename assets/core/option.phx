@@ -10,6 +10,47 @@ let none? = \opt. match (opt) {
     _    => false,
 };
 
+// -------------------------------------------------------------
+use ::core::cmp::*;
+
+impl Eq (Option a) {
+    (==) = \x.\y. match ((x,y)) {
+        (Some x, Some y) => @{Eq a}.(==) x y,
+        (None, None) => true,
+        _ => false,
+    };
+    (!=) = \x.\y. match ((x,y)) {
+        (Some x, Some y) => @{Eq a}.(!=) x y,
+        (None, None) => false,
+        _ => true,
+    };
+};
+
+// -------------------------------------------------------------
+impl Ord (Option a) {
+    (<=) = \x.\y. match ((x,y)) {
+        (Some x, Some y) => @{Ord a}.(<=) x y,
+        (None, _) => true,
+        _ => false,
+    };
+    (<) = \x.\y. match ((x,y)) {
+        (Some x, Some y) => @{Ord a}.(<) x y,
+        (None, Some _) => true,
+        _ => false,
+    };
+    (>=) = \x.\y. match ((x,y)) {
+        (Some x, Some y) => @{Ord a}.(>=) x y,
+        (_, None) => true,
+        _ => false,
+    };
+    (>) = \x.\y. match ((x,y)) {
+        (Some x, Some y) => @{Ord a}.(>) x y,
+        (Some _, None) => true,
+        _ => false,
+    };
+};
+
+// -------------------------------------------------------------
 use ::core::control::*;
 
 impl Functor Option {
