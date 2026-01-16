@@ -307,11 +307,13 @@ impl fmt::Display for Expr {
             ExprBody::Var(x)            => write!(f, "{}", x.pretty()),
             ExprBody::Abs(x, e)         => write!(f, "λ{}.{}", x, e),
             ExprBody::App(e1, e2) => {
-                if let ExprBody::App(_, _) = e2.body {
-                    write!(f, "{} ({})", e1, e2)
-                }
-                else {
-                    write!(f, "{} {}", e1, e2)
+                match e2.body {
+                    ExprBody::Abs(_, _) | ExprBody::App(_, _) => {
+                        write!(f, "{} ({})", e1, e2)
+                    }
+                    _ => {
+                        write!(f, "{} {}", e1, e2)
+                    }
                 }
             }
             ExprBody::If(e1, e2, e3)    => write!(f, "if ({}) {} else {}", e1, e2, e3),
@@ -367,8 +369,8 @@ impl fmt::Display for Expr {
                 }
             }
             ExprBody::Block(items) => {
-                let s: Vec<_> = items.iter().map(|e| format!("{}", e)).collect();
-                write!(f, "{{{}}}", s.join("; "))
+                let s: Vec<_> = items.iter().map(|e| format!("  {}", e)).collect();
+                write!(f, "{{\n{}\n}}", s.join(";\n"))
             }
         }
     }

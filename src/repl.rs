@@ -159,7 +159,9 @@ fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
         }
 
         ["impls"] => {
-            for tmpl in phox.impl_env.iter() {
+            let mut tmpls = phox.impl_env.iter().collect::<Vec<_>>();
+            tmpls.sort_by(|a,b| a.scheme_ref().target.head.partial_cmp(&b.scheme_ref().target.head).unwrap());
+            for tmpl in tmpls {
                 let sch = tmpl.scheme_ref();
                 let map = &mut HashMap::new();
                 let requires = sch.constraints.rename_type_var(map);
@@ -174,7 +176,9 @@ fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
             CommandResult::Continue
         }
         ["impls", "--verbose"] | ["impls", "-v"] => {
-            for tmpl in phox.impl_env.iter() {
+            let mut tmpls = phox.impl_env.iter().collect::<Vec<_>>();
+            tmpls.sort_by(|a,b| a.scheme_ref().target.head.partial_cmp(&b.scheme_ref().target.head).unwrap());
+            for tmpl in tmpls {
                 let sch = tmpl.scheme_ref();
                 println!("{}", sch.pretty());
                 println!();
