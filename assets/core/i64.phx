@@ -43,32 +43,6 @@ impl Ord Int {
 };
 
 // -------------------------------------------------------------
-let __eq_Option_i64__ = \x.\y. match ((x,y)) {
-    (None, None) => true,
-    (Some a, Some b) => @{Eq Int}.(==) a b,
-    _ => false,
-};
-
-impl Eq (Option Int) {
-    (==) = __eq_Option_i64__;
-    (!=) = \x.\y. ! (x `__eq_Option_i64__` y);
-};
-
-// -------------------------------------------------------------
-let __le_Option_i64__ = \x.\y. match ((x,y)) {
-    (None, _) => true,
-    (Some a, Some b) => @{Ord Int}.(<=) a b,
-    _ => false,
-};
-
-impl Ord (Option Int) {
-    (<=) = __le_Option_i64__;
-    (<)  = \x.\y. x `@{Eq (Option Int)}.(!=)` y && x `__le_Option_i64__` y;
-    (>=) = \x.\y. y `__le_Option_i64__` x;
-    (>)  = \x.\y. x `@{Eq (Option Int)}.(!=)` y && y `__le_Option_i64__` x;
-};
-
-// -------------------------------------------------------------
 /// Factorial
 let fact = \n. {
     let (_, res) = for
