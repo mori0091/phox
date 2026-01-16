@@ -23,11 +23,23 @@ trait Iter s a {
 
 
 // -------------------------------------------------------------
-// type Empty a = Empty a;
+type Empty a = Empty;
 
-// impl Iter Empty a {
-//     next = \Empty _. None;
-// };
+impl Iter Empty a {
+    next = \Empty. None;
+};
+
+let empty = Empty;
+
+// -------------------------------------------------------------
+impl Iter Option a {
+    next = \o. match (o) {
+        Some a => Some (a, None),
+        None => None,
+    };
+};
+
+let single = Some;
 
 // -------------------------------------------------------------
 type Seq a = Seq (a -> a) a;
@@ -74,6 +86,34 @@ impl Iter (Map s a) b {
 let map = Map;
 
 // -------------------------------------------------------------
+type Filter s a = Filter (a -> Bool) (s a);
+
+impl Iter (Filter s) a {
+    next = \Filter p xs. {
+        let @{next} = @{Iter s a};
+        let (res, _) = for
+            (next xs, true)
+            (\(_, flag). flag)
+            (\(opt, _). match (opt) {
+                None => (None, false),
+                Some (x, xs') =>
+                    if (p x)
+                        (opt, false)
+                    else
+                        (next xs', true),
+                }
+            )
+        ;
+        match (res) {
+            None => None,
+            Some (y, ys) => Some (y, Filter p ys),
+        }
+    };
+};
+
+let filter = Filter;
+
+// -------------------------------------------------------------
 type TakeWhile s a = TakeWhile (a -> Bool) (s a);
 
 impl Iter (TakeWhile s) a {
@@ -113,6 +153,26 @@ impl Iter (Take s) a {
 /// take : ∀ s a. Int -> s a -> s' a
 ///     requires Iter s, Iter s', s' == Take s.
 let take = Take;
+
+// -------------------------------------------------------------
+type ZipWith s a t b c = ZipWith (a -> b -> c) (s a) (t b);
+
+impl Iter (ZipWith s a t b) c {
+    next = \ZipWith f xs ys. {
+        let @{next: next_s} = @{Iter s a};
+        let @{next: next_t} = @{Iter t b};
+        match ((next_s xs, next_t ys)) {
+            (Some (x, xs'), Some (y, ys')) => Some (f x y, ZipWith f xs' ys'),
+            _ => None,
+        }
+    };
+};
+
+let zip_with = ZipWith;
+
+let zip = zip_with (\x.\y. (x,y));
+
+let enumerate = zip (counter 0);
 
 // -------------------------------------------------------------
 // /// fold : ∀ s a b. (a -> b -> a) -> a -> s a -> a
@@ -168,7 +228,7 @@ impl Sink (Fold a b) b a {
 
 // -------------------------------------------------------------
 // /// collect : ∀ a. ci -> s a -> co
-// ///     requires Sink ci a co, Iter s.
+// ///     requires Sink ci a co, Iter s a.
 // let collect = \sink.\it. {
 //     let @{next} = @{Iter s a};
 //     let @{update, finish} = @{Sink ci a co};

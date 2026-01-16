@@ -84,6 +84,19 @@ fn test_user_defined_record_variant_nested_field_access() {
 }
 
 #[test]
+fn test_user_defined_tuple_variant_nested_tuple_access() {
+    let (val, sch) = eval(
+        "type Wrapper = W ( (Int,), );
+         let w = W ( (42,), );
+         match (w) {
+             W ( inner, ) => inner.0
+         }"
+    ).unwrap();
+    assert_eq!(format!("{}", val), "42");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
 fn test_user_defined_record_variant_direct_field_access() {
     let (val, sch) = eval(
         "type Point = P @{ x: Int, y: Int };
