@@ -38,6 +38,7 @@ pub fn resolve_stmt_use(
                     PathComponent::Name(name) => {
                         let other_symbol_env = phox.get_symbol_env(&m);
                         if let Some(_sym) = other_symbol_env.get(&rem) {
+                            let path = &m.borrow().path().concat_path(&rem); // normalize to absolute path
                             module.borrow_mut().add_alias(&alias, path)?;
                             make_symbol(phox, module, symbol_env, &alias)?;
                         }
