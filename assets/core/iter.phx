@@ -8,13 +8,16 @@ trait Iter s a {
 // -------------------------------------------------------------
 type Empty a = Empty;
 
+/// impl Iter Empty a
 impl Iter Empty a {
     next = \Empty. None;
 };
 
+/// ∀ a. Empty a
 let empty = Empty;
 
 // -------------------------------------------------------------
+/// impl Iter Option a
 impl Iter Option a {
     next = \o. match (o) {
         Some a => Some (a, None),
@@ -22,9 +25,11 @@ impl Iter Option a {
     };
 };
 
+/// ∀ a. a -> Option a
 let single = Some;
 
 // -------------------------------------------------------------
+/// impl Iter List a
 impl Iter List a {
     next = \xs. match (xs) {
         Nil       => None,
@@ -35,33 +40,30 @@ impl Iter List a {
 // -------------------------------------------------------------
 type Seq a = Seq (a -> a) a;
 
+/// impl Iter Seq a
 impl Iter Seq a {
     next = \Seq f x. Some(x, Seq f (f x));
 };
 
-/// seq : ∀ a. (a -> a) -> a -> s a
-///     requires Iter s, s == Seq.
+/// seq : ∀ a. (a -> a) -> a -> Seq a
 let seq = Seq;
 
-/// repeat : ∀ a. a -> s a
-///     requires Iter s, s == Seq
+/// repeat : ∀ a. a -> Seq a
 let repeat = Seq id;
 
-/// zeors : s Int
-///     requires Iter s, s == Seq
+/// zeros : Seq Int
 let zeros = repeat 0;
 
-/// ones : s Int
-///     requires Iter s, s == Seq
+/// ones : Seq Int
 let ones = repeat 1;
 
-/// counter : Int -> s Int
-///     requires Iter s, s == Seq.
+/// counter : Int -> Seq Int
 let counter = Seq #(1 +);
 
 // -------------------------------------------------------------
 type Map s a b = Map (a -> b) (s a);
 
+/// impl Iter (Map a b) c requires Iter a b.
 impl Iter (Map s a) b {
     next = \Map f it. {
         let r = @{Iter s a};
@@ -72,13 +74,13 @@ impl Iter (Map s a) b {
     };
 };
 
-/// map : ∀ s a b. (a -> b) -> s a -> t b
-///     requires Iter s, Iter t, t == Map s a.
+/// map : ∀ a b c. (b -> c) -> a b -> Map a b c
 let map = Map;
 
 // -------------------------------------------------------------
 type Filter s a = Filter (a -> Bool) (s a);
 
+/// impl Iter (Filter a) b requires Iter a b.
 impl Iter (Filter s) a {
     next = \Filter p xs. {
         let @{next} = @{Iter s a};
@@ -102,11 +104,13 @@ impl Iter (Filter s) a {
     };
 };
 
+/// filter : ∀ a b. (b -> Bool) -> a b -> Filter a b
 let filter = Filter;
 
 // -------------------------------------------------------------
 type TakeWhile s a = TakeWhile (a -> Bool) (s a);
 
+/// impl Iter (TakeWhile a) b requires Iter a b.
 impl Iter (TakeWhile s) a {
     next = \TakeWhile p it. {
         let @{next} = @{Iter s a};
@@ -122,13 +126,13 @@ impl Iter (TakeWhile s) a {
     };
 };
 
-/// take_while : ∀ s a. (a -> Bool) -> s a -> s' a
-///     requires Iter s, Iter s', s' == TakeWhile s.
+/// take_while : ∀ a b. (b -> Bool) -> a b -> TakeWhile a b
 let take_while = TakeWhile;
 
 // -------------------------------------------------------------
 type Take s a = Take Int (s a);
 
+/// impl Iter (Take a) b requires Iter a b.
 impl Iter (Take s) a {
     next = \Take n it. {
         let @{next} = @{Iter s a};
@@ -141,13 +145,13 @@ impl Iter (Take s) a {
     };
 };
 
-/// take : ∀ s a. Int -> s a -> s' a
-///     requires Iter s, Iter s', s' == Take s.
+/// take : ∀ a b. Int -> a b -> Take a b
 let take = Take;
 
 // -------------------------------------------------------------
 type ZipWith s a t b c = ZipWith (a -> b -> c) (s a) (t b);
 
+/// impl Iter (ZipWith a b c d) e requires Iter a b, Iter c d.
 impl Iter (ZipWith s a t b) c {
     next = \ZipWith f xs ys. {
         let @{next: next_s} = @{Iter s a};
@@ -159,15 +163,17 @@ impl Iter (ZipWith s a t b) c {
     };
 };
 
+/// zip_with : ∀ a b c d e. (b -> d -> e) -> a b -> c d -> ZipWith a b c d e
 let zip_with = ZipWith;
 
+/// zip : ∀ a b c d. c a -> d b -> ZipWith c a d b (a, b)
 let zip = zip_with (\x.\y. (x,y));
 
+/// enumerate : ∀ a b. b a -> ZipWith Seq Int b a (Int, a)
 let enumerate = zip (counter 0);
 
 // -------------------------------------------------------------
-// /// fold : ∀ s a b. (a -> b -> a) -> a -> s a -> a
-// ///     requires Iter s.
+// /// fold : ∀ s a b. (a -> b -> a) -> a -> s b -> a requires Iter s b.
 // let fold = \op.\init.\it. {
 //     let @{next} = @{Iter s};
 //     // let @{next} = @{Iter (Take s)};
@@ -181,10 +187,12 @@ let enumerate = zip (counter 0);
 //     ;
 //     res
 // };
+
 trait FoldFunc s a b {
     fold : (a -> b -> a) -> a -> s b -> a;
 };
 
+/// impl FoldFunc a c b requires Iter a b.
 impl FoldFunc s a b {
     fold = \op.\init.\it. {
         let @{next} = @{Iter s b};
@@ -209,20 +217,21 @@ trait Sink ci a co {
 // -------------------------------------------------------------
 type Fold a b = Fold (a -> b -> a) a;
 
+/// impl Sink (Fold a b) b a
 impl Sink (Fold a b) b a {
     update = \Fold f a.\x. Fold f (f a x);
     finish = \Fold _ a. a;
 };
 
 // -------------------------------------------------------------
+/// impl Sink (List a) a (List a)
 impl Sink (List a) a (List a) {
     update = flip Cons;
     finish = list::reverse;
 };
 
 // -------------------------------------------------------------
-// /// collect : ∀ a. ci -> s a -> co
-// ///     requires Sink ci a co, Iter s a.
+// /// collect : ∀ ci s a co. ci -> s a -> co requires Iter s a, Sink ci a co.
 // let collect = \sink.\it. {
 //     let @{next} = @{Iter s a};
 //     let @{update, finish} = @{Sink ci a co};
@@ -237,6 +246,7 @@ impl Sink (List a) a (List a) {
 //     finish acc
 // };
 
+/// impl CollectFunc c a b d requires Iter a b, Sink c b d.
 trait CollectFunc ci s a co {
     collect : ci -> s a -> co;
 };
