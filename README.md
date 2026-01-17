@@ -52,7 +52,7 @@ _New to Phox? Start with [🚀 Getting Started](#-getting-started)._
 - Each item is evaluated in order; only the last expression's value is returned.
 - If a block or top-level input ends with `;`, an implicit `()` is added.
 
-``` ml
+``` rust
 // Multiple items in a block
 {
     let x = 1; // => (): ()  (discarded)
@@ -63,7 +63,7 @@ _New to Phox? Start with [🚀 Getting Started](#-getting-started)._
 // => 4: Int
 ```
 
-``` ml
+``` rust
 // Multiple items in the top level
 let x = 1; // => (): ()  (discarded)
 let y = 2; // => (): ()  (discarded)
@@ -72,7 +72,7 @@ x + y;     // => 3: Int  (discarded)
 // => 4: Int
 ```
 
-``` ml
+``` rust
 // Items in a block ends with `;`
 {
     1 + 2; // => 3: Int  (discarded)
@@ -80,20 +80,20 @@ x + y;     // => 3: Int  (discarded)
 // => (): ()
 ```
 
-``` ml
+``` rust
 // Items in the top level ends with `;`
 1 + 2; // => 3: Int  (discarded)
 // => (): ()
 ```
 
-``` ml
+``` rust
 // No items in a block
 {}
 // => (): ()
 ```
 
 ### Type definitions
-```ml
+``` rust
 type Option a = Some a | None;
 type Pair a b = Pair a b;
 type Result e a = Ok a | Err e;
@@ -105,7 +105,7 @@ type Result e a = Ok a | Err e;
   - The type name and constructor name are the same, and
   - The variant has exactly one tuple or one record argument.
 
-```ml
+``` rust
 // Normal form
 type Point a = Point @{ x: a, y: a };
 
@@ -115,7 +115,7 @@ type Wrapper a = (a,);
 ```
 
 ### Pattern matching
-```ml
+``` rust
 match (opt) {
   Some x => x,
   None   => 0
@@ -123,7 +123,7 @@ match (opt) {
 ```
 
 ### Tuples and records
-```ml
+``` rust
 let t = (1, true, ());
 let r = @{ x: 10, y: 20 };
 (t.1, r.x)   // tuple index is 0-based
@@ -132,7 +132,7 @@ let r = @{ x: 10, y: 20 };
 
 👉 Field access is also available for **newtype shorthand** types.
 
-```ml
+``` rust
 type Point a = @{ x: a, y: a };
 
 let p = Point @{ x: 3, y: 4 };
@@ -140,7 +140,7 @@ p.x + p.y
 // => 7: Int
 ```
 
-```ml
+``` rust
 type Point a = (a, a);
 
 let p = Point (3, 4);
@@ -151,14 +151,14 @@ p.0 + p.1
 ### Functions as operators
 Function `f(x) = x + x` can be defined like this:
 
-``` ml
+``` rust
 let f = λx. x + x;
 // let f = \x. x + x;    // same as the above.
 f 3
 // => 6: Int
 ```
 
-``` ml
+``` rust
 let normSq = λx.λy. x * x + y * y;
 (normSq 2 3, 3 `normSq` 4)
 // => (13, 25): (Int, Int)
@@ -167,7 +167,7 @@ let normSq = λx.λy. x * x + y * y;
 - Infix notation with backticks allows any function to be used as an operator.
 
 ### Operators as functions / User-defined operators
-```ml
+``` rust
 // User-defined operator
 let rec (**) = λx.λy.
     if (0 >= y) 1
@@ -210,7 +210,7 @@ They allow you to express nested calls as a clear flow of data or a sequence of 
 - `f <| x` is also the same as `f x`.  
 - Use `|>` when you want to read left‑to‑right, and `<|` when you prefer right‑to‑left.
 
-```ml
+``` rust
 x |> f |> g    // g (f x)
 g <| f <| x    // g (f x)
 ```
@@ -219,7 +219,7 @@ g <| f <| x    // g (f x)
 - `f >> g` creates a function that applies `f` first, then `g`.  
 - `f << g` creates a function that applies `g` first, then `f`.
 
-```ml
+``` rust
 (f >> g) x    // g (f x)
 (f << g) x    // f (g x)
 ```
@@ -228,12 +228,12 @@ g <| f <| x    // g (f x)
 - Composition operators `>>` / `<<` bind more tightly than pipeline operators.  
 - Among pipelines, `|>` binds more tightly than `<|`.
 
-```ml
+``` rust
 x |> f >> g    // x |> (f >> g)
 f <| x |> g    // f <| (x |> g)
 ```
 
-``` ml
+``` rust
 let f = \x. x + 1;
 let g = \x. x * 2;
 let h = \x. x * x;
@@ -249,7 +249,7 @@ f >> g >> h <| 1 |> f;  // => 36: Int  ; h (g (f (f 1)))
 ### Traits and Implementations
 Phox supports **traits** (`trait`; similar to type classes) to define shared behavior across types.
 
-```ml
+``` rust
 trait Eq2 a {
   eq  : a -> a -> Bool;
   neq : a -> a -> Bool;
@@ -258,7 +258,7 @@ trait Eq2 a {
 
 An **implementation** (`impl`) provides concrete definitions for a trait and a type:
 
-```ml
+``` rust
 impl Eq2 Int {
   eq  = λx.λy. @{Eq Int}.(==) x y;
   neq = λx.λy. @{Eq Int}.(!=) x y;
@@ -272,7 +272,7 @@ impl Eq2 Bool {
 
 Now you can use `eq` and `neq` with `Int` or `Bool` values:
 
-```ml
+``` rust
 eq 2 2        // => true
 eq 2 3        // => false
 neq 2 3       // => true
@@ -289,7 +289,7 @@ neq true true // => false
 A **trait record** is a first-class value representing a trait implementation.  
 You can explicitly pass or select an implementation:
 
-```ml
+``` rust
 let eqInt = @{Eq Int};   // trait record for `Eq Int`
 
 eqInt.(==) 2 3     // => false
@@ -307,14 +307,14 @@ If multiple candidates exist, ambiguity is reported as an error, and you can dis
 ## 💡 Sample Programs
 
 ### Identity
-```ml
+``` rust
 let id = λx. x;
 id 42
 // => 42: Int
 ```
 
 ### Factorial
-```ml
+``` rust
 let rec fact = λn.
   if (0 == n) 1 else n * fact (n - 1);
 
@@ -323,7 +323,7 @@ fact 5
 ```
 
 ### Option
-```ml
+``` rust
 type Option a = Some a | None;
 
 let getOrZero = λopt.
@@ -337,7 +337,7 @@ getOrZero (Some 42)
 ```
 
 ### Result
-```ml
+``` rust
 type Result e a = Ok a | Err e;
 
 let unwrapOr = λr. λdefault.
@@ -435,10 +435,26 @@ Example programs are available in the `examples/` directory.
 
 ## 🧭 Roadmap
 
+### REPL
 - [X] REPL with type inference output
-- [ ] Standard library (currently `Option`/`List` are built-in types as a temporary measure; will be moved out as a library)
+
+### Core language
+- [X] Standard library (see `assets/` directory)
+- [X] Trait system (multi-parameter type classes)
 - [X] Module system
-- [X] Constraint-based type classes (future; Haskell-style type classes)
+- [ ] Function template (headless `impl`)
+- [ ] Row polymorphism
+- [ ] Nat kind (type-level natural numbers)
+
+### Trait system
+- [X] Constraint-based multi-parameter type classes (`trait`/`impl`)
+- [X] Automatic requrirements inference for `impl`s
+- [X] Higher order trait-record inference (e.g. `@{Iter s a}`)
+
+### Record system
+- [X] Trait record
+- [ ] Split/Merge operators
+- [ ] Row polymorphism
 
 ---
 

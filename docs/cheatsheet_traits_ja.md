@@ -7,14 +7,16 @@
 トレイトの定義と実装、そしてそれを使う基本的な方法を示します。  
 `Eq` を例に、Int や Bool に対する利用やトレイトレコードの扱い方を確認できます。
 
+ここでは例として、`::core::cmp::Eq`とほぼ同じトレイト`Eq2`を定義しています。
+
 ### トレイトとインスタンス
-```ml
-trait Eq a {
+```rust
+trait Eq2 a {
   eq  : a -> a -> Bool;
   neq : a -> a -> Bool;
 };
 
-impl Eq Int {
+impl Eq2 Int {
   eq  = \a.\b. a == b;
   neq = \a.\b. a != b;
 };
@@ -24,29 +26,29 @@ eq 1 1
 ```
 
 ### トレイトレコード
-```ml
-let d = @{Eq Int};
+```rust
+let d = @{Eq2 Int};
 d.eq 1 2
 // => false : Bool
 ```
 
 ### 中置記法
-```ml
-let d = @{Eq Int};
+```rust
+let d = @{Eq2 Int};
 1 `d.eq` 1
 // => true : Bool
 ```
 
 ### ファーストクラスな利用
-```ml
+```rust
 let f = \@{eq, neq}.\x.\y. eq x y;
-f @{Eq Int} 3 4
+f @{Eq2 Int} 3 4
 // => false : Bool
 ```
 
 ### 多相性
-```ml
-impl Eq Bool {
+```rust
+impl Eq2 Bool {
   eq  = \a.\b. a == b;
   neq = \a.\b. a != b;
 };
@@ -62,17 +64,17 @@ eq true false
 暗黙のフォールバックはなく、必ず明示的な実装が必要になります。
 
 ### 未実装のトレイトを使うとエラー
-```ml
-trait Eq a { eq : a -> a -> Bool; };
+```rust
+trait Eq2 a { eq : a -> a -> Bool; };
 eq true false
-// infer error: UnboundVariable
+// infer error: unbound variable `eq`
 ```
 
 ### 未実装のトレイトレコードを作ろうとするとエラー
-```ml
-trait Eq a { eq : a -> a -> Bool; };
-@{Eq Bool}
-// resolve error: no implementation for Eq Bool
+```rust
+trait Eq2 a { eq : a -> a -> Bool; };
+@{Eq2 Bool}
+// no implementation for Eq2 Bool
 ```
 
 ---
@@ -82,7 +84,7 @@ trait Eq a { eq : a -> a -> Bool; };
 その場合はトレイトレコードを明示的に指定することで解決できます。
 
 ### メンバ名の衝突による曖昧さ
-```ml
+```rust
 trait Foo a { f : a -> a; };
 trait Bar a { f : a -> a; };
 
@@ -96,7 +98,7 @@ f 100
 ```
 
 ### 明示的に disambiguation
-```ml
+```rust
 @{Bar Int}.f 100
 // => 100 : Int
 
@@ -105,7 +107,7 @@ f 100
 ```
 
 ### 型が曖昧な場合のエラー
-```ml
+```rust
 trait Foo a { f : a -> a; };
 impl Foo Bool { f = \x. x; };
 impl Foo Int  { f = \x. x; };
