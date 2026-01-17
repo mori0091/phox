@@ -66,8 +66,8 @@ type Map s a b = Map (a -> b) (s a);
 /// impl Iter (Map a b) c requires Iter a b.
 impl Iter (Map s a) b {
     next = \Map f it. {
-        let r = @{Iter s a};
-        match (r.next it) {
+        let @{next} = @{Iter s a};
+        match (next it) {
             None => None,
             Some (x, it') => Some (f x, Map f it'),
         }
