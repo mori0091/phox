@@ -442,7 +442,7 @@ Example programs are available in the `examples/` directory.
 - [X] Standard library (see `assets/` directory)
 - [X] Trait system (multi-parameter type classes)
 - [X] Module system
-- [ ] Function template (headless `impl`)
+- [X] Function template `*let`
 - [ ] Row polymorphism
 - [ ] Nat kind (type-level natural numbers)
 
