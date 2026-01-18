@@ -42,5 +42,8 @@ use decl_trait::*;
 mod decl_impl;
 use decl_impl::*;
 
+mod decl_starlet;
+use decl_starlet::*;
+
 mod stmt_use;
 use stmt_use::*;

@@ -64,15 +64,24 @@ impl InnerInferCtx {
 pub struct InferCtx {
     pub inner: Rc<RefCell<InnerInferCtx>>,
     local: bool,
+    in_template_body: bool,
 }
 
 impl InferCtx {
     pub fn new() -> Self {
-        Self { inner: Rc::new(RefCell::new(InnerInferCtx::new())), local: false }
+        Self {
+            inner: Rc::new(RefCell::new(InnerInferCtx::new())),
+            local: false,
+            in_template_body: false,
+        }
     }
 
     pub fn duplicate(&self) -> InferCtx {
-        InferCtx { inner: Rc::new(RefCell::new(self.clone_inner())), local: true, }
+        InferCtx {
+            inner: Rc::new(RefCell::new(self.clone_inner())),
+            local: true,
+            in_template_body: self.in_template_body,
+        }
     }
 
     pub fn clone_inner(&self) -> InnerInferCtx {
@@ -81,6 +90,16 @@ impl InferCtx {
 
     pub fn is_local(&self) -> bool {
         self.local
+    }
+
+    pub fn is_in_template_body(&self) -> bool {
+        self.in_template_body
+    }
+    pub fn enter_template_body(&mut self) {
+        self.in_template_body = true;
+    }
+    pub fn leave_template_body(&mut self) {
+        self.in_template_body = false;
     }
 }
 

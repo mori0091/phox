@@ -16,6 +16,7 @@ extern {
         "type"  => Token::Type,
         "trait" => Token::Trait,
         "impl"  => Token::Impl,
+        "*let"  => Token::Starlet,
         "let"   => Token::Let,
         "rec"   => Token::Rec,
         "if"    => Token::If,
@@ -120,6 +121,7 @@ Decl: Decl = {
     DeclType => Decl::Type(<>),
     DeclTrait => Decl::Trait(<>),
     DeclImpl => Decl::RawImpl(<>),
+    DeclStarlet => Decl::RawStarlet(<>),
 }
 
 // ----------------------------------------------
@@ -241,6 +243,12 @@ DeclImpl: RawImpl = {
 DeclImplMember: RawImplMember = {
     <name:Ident> "=" <expr:Expr> ";"
         => RawImplMember { name: name, expr: Box::new(expr) },
+};
+
+// ----------------------------------------------
+DeclStarlet: RawStarlet = {
+    "*let" <name:Ident> "=" <expr:Expr>
+        => RawStarlet { name: name, expr: Box::new(expr) },
 };
 
 // ----------------------------------------------

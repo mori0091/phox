@@ -173,39 +173,18 @@ let zip = zip_with (\x.\y. (x,y));
 let enumerate = zip (counter 0);
 
 // -------------------------------------------------------------
-// /// fold : ∀ s a b. (a -> b -> a) -> a -> s b -> a requires Iter s b.
-// let fold = \op.\init.\it. {
-//     let @{next} = @{Iter s};
-//     // let @{next} = @{Iter (Take s)};
-//     let (res,_,_) = for
-//         (init,true,it)
-//         (\(_,flag,_). flag)
-//         (\(a,_,it). match (next it) {
-//             None          => (a,false,it),
-//             Some (x, it') => (op a x, true, it'),
-//         })
-//     ;
-//     res
-// };
-
-trait FoldFunc s a b {
-    fold : (a -> b -> a) -> a -> s b -> a;
-};
-
-/// impl FoldFunc a c b requires Iter a b.
-impl FoldFunc s a b {
-    fold = \op.\init.\it. {
-        let @{next} = @{Iter s b};
-        let (res,_,_) = for
-            (init,true,it)
-            (\(_,flag,_). flag)
-            (\(a,_,it). match (next it) {
-                None          => (a,false,it),
-                Some (x, it') => (op a x, true, it'),
-            })
-        ;
-        res
-    };
+/// fold : ∀ s a b. (a -> b -> a) -> a -> s b -> a requires Iter s b.
+*let fold = \op.\init.\it. {
+    let @{next} = @{Iter s b};
+    let (res,_,_) = for
+        (init,true,it)
+        (\(_,flag,_). flag)
+        (\(a,_,it). match (next it) {
+            None          => (a,false,it),
+            Some (x, it') => (op a x, true, it'),
+        })
+    ;
+    res
 };
 
 // -------------------------------------------------------------
@@ -231,38 +210,17 @@ impl Sink (List a) a (List a) {
 };
 
 // -------------------------------------------------------------
-// /// collect : ∀ ci s a co. ci -> s a -> co requires Iter s a, Sink ci a co.
-// let collect = \sink.\it. {
-//     let @{next} = @{Iter s a};
-//     let @{update, finish} = @{Sink ci a co};
-//     let (acc,_,_) = for
-//         (sink,true,it)
-//         (\(_,flag,_). flag)
-//         (\(sink,_,it). match (next it) {
-//             None          => (sink,false,it),
-//             Some (x, it') => (update sink x, true, it'),
-//         })
-//     ;
-//     finish acc
-// };
-
-/// impl CollectFunc c a b d requires Iter a b, Sink c b d.
-trait CollectFunc ci s a co {
-    collect : ci -> s a -> co;
-};
-
-impl CollectFunc ci s a co {
-    collect = \sink.\it. {
-        let @{next} = @{Iter s a};
-        let @{update, finish} = @{Sink ci a co};
-        let (acc,_,_) = for
-            (sink,true,it)
-            (\(_,flag,_). flag)
-            (\(sink,_,it). match (next it) {
-                None          => (sink,false,it),
-                Some (x, it') => (update sink x, true, it'),
-            })
-        ;
-        finish acc
-    };
+/// collect : ∀ ci s a co. ci -> s a -> co requires Iter s a, Sink ci a co.
+*let collect = \sink.\it. {
+    let @{next} = @{Iter s a};
+    let @{update, finish} = @{Sink ci a co};
+    let (acc,_,_) = for
+        (sink,true,it)
+        (\(_,flag,_). flag)
+        (\(sink,_,it). match (next it) {
+            None          => (sink,false,it),
+            Some (x, it') => (update sink x, true, it'),
+        })
+    ;
+    finish acc
 };

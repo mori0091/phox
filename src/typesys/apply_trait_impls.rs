@@ -145,6 +145,68 @@ pub fn apply_trait_impls_expr(
                     }
                 }
             }
+            else if phox.starlet_env.is_starlet(&name) {
+                let mut matches = Vec::new();
+                let tmpls = phox.starlet_env.get_by_name(&name);
+                for tmpl in tmpls.iter() {
+                    let mut try_ctx = phox.ctx.clone();
+                    let sch = tmpl.fresh_copy(&mut try_ctx);
+                    let (_constraints, typed_starlet) = sch.instantiate(&mut try_ctx);
+                    let ty_inst = &typed_starlet.ty;
+                    if try_ctx.unify(ty_inst, ty).is_ok() {
+                        matches.push(tmpl.clone());
+                    }
+                }
+                match matches.len() {
+                    0 => {
+                        return Err(Error::NoMatchingOverload(expr.clone()));
+                    }
+                    1 => {
+                        let tmpl = matches.first().unwrap();
+                        let sch = tmpl.fresh_copy(&mut phox.ctx);
+                        let (constraints, typed_starlet) = sch.instantiate(&mut phox.ctx);
+                        let expr_inst = &typed_starlet.expr;
+                        let ty_inst = &typed_starlet.ty;
+                        let mut cs = constraints.into_vec();
+                        cs.push(Constraint::type_eq(ty_inst, ty));
+                        solve(phox, cs)?;
+                        // This `expr_inst` would be a type-solved expression!
+                        let mut expr_inst = expr_inst.clone();
+                        {
+                            // NOTE:
+                            //
+                            // The inference and application (baking) of `impl`
+                            // member implementations occurs within the
+                            // environment of the module where the
+                            // implementation is defined.
+                            //
+                            // However, since the expression may reference
+                            // symbols not exported to the calling environment,
+                            // it currently needs to be resolved again in the
+                            // calling environment.
+                            let symbol_env = &mut phox.get_symbol_env(module);
+                            let param_map = &mut HashMap::new();
+                            resolve_expr(phox, module, symbol_env, param_map, &mut expr_inst)?;
+
+                            apply_trait_impls_expr(phox, module, &mut expr_inst)?;
+                        }
+                        expr.body = expr_inst.body;
+                        // expr.ty は既に推論済みなのでそのままでOK
+                    }
+                    _ => {
+                        let name = name.clone();
+                        let candidates = matches.iter().map(|tmpl| {
+                            let sch = tmpl.scheme_ref();
+                            Scheme {
+                                vars: sch.vars.clone(),
+                                constraints: sch.constraints.clone(),
+                                target: sch.target.ty.clone(),
+                            }
+                        }).collect::<Vec<_>>();
+                        return Err(Error::AmbiguousVariable { name, candidates });
+                    }
+                }
+            }
         }
         ExprBody::RawTraitRecord(_) => {
             unreachable!()
@@ -229,7 +291,7 @@ pub fn make_record_from_trait(
                     }
                 }
             ).collect();
-            Err(Error::AmbiguousTrait {
+            Err(Error::AmbiguousImpl {
                 trait_head: head.clone(),
                 candidates: cands,
             })

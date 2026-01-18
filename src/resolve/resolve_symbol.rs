@@ -100,6 +100,12 @@ fn resolve_symbol_absolute(
             if let Some(target_sym) = phox.get_symbol_env(&m).get(&rem) {
                 let extern_sym = target_sym.clone();
 
+                // is Starlet (`*let`) ?
+                if phox.starlet_env.is_starlet(&target_sym) {
+                    phox.get_extern_symbol_env(module).insert(path, extern_sym.clone());
+                    return Ok(extern_sym)
+                }
+
                 // is Data constructor or Variable ?
                 if let Some(ty_sch) = phox.get_infer_ctx(&m).get_type_scheme(&target_sym) {
                     phox.get_infer_ctx(module).put_type_scheme(extern_sym.clone(), ty_sch);

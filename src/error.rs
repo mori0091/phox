@@ -12,7 +12,6 @@ pub enum Error {
     UnknownTrait(Symbol),
     UnknownTraitMember(String),
 
-    ConflictImpl { it: TraitHead, other: TraitHead },
     ConflictAlias { name: String, other: Path },
 
     TraitArityMismatch { trait_name: Symbol, expected: usize, actual: usize },
@@ -26,10 +25,14 @@ pub enum Error {
     UnboundVariable(Symbol),
     AmbiguousVariable { name: Symbol, candidates: Vec<TypeScheme> },
 
+    // ---- from `register`
+    ConflictImpl { it: TraitHead },
+    ConflictStarlet { it: Scheme<TypedStarlet> },
+
     // ---- from `apply_trait_impls_*`
     MissingType(Symbol),
     MissingImpl(TraitHead),
-    AmbiguousTrait { trait_head: TraitHead, candidates: Vec<TraitScheme> },
+    AmbiguousImpl { trait_head: TraitHead, candidates: Vec<TraitScheme> },
 
     // --- data constructor pattern ---
     UnknownConstructor(Symbol),
@@ -74,9 +77,6 @@ impl fmt::Display for Error {
             Error::UnknownTraitMember(name) => {
                 write!(f, "unknown trait member `{}`", name)
             }
-            Error::ConflictImpl { it, other } => {
-                write!(f, "impl `{}` conflicts with `{}`", it.pretty(), other.pretty())
-            }
             Error::ConflictAlias { name, other } => {
                 write!(f, "name `{}` is already used as `{}`", name, other.pretty())
             }
@@ -106,7 +106,14 @@ impl fmt::Display for Error {
                 cands.sort();
                 let mut hints: Vec<_> = candidates
                     .iter()
-                    .map(|sch| format!("@{{{}}}.{}", sch.constraints.primary.clone().unwrap().pretty(), name.pretty()))
+                    .map(|sch| {
+                        if sch.constraints.primary.is_some() {
+                            format!("@{{{}}}.{}", sch.constraints.primary.clone().unwrap().pretty(), name.pretty())
+                        }
+                        else {
+                            format!("{}", sch.pretty())
+                        }
+                    })
                     .collect();
                 hints.sort();
                 writeln!(f, "ambiguous variable `{}`", name.pretty())?;
@@ -119,7 +126,7 @@ impl fmt::Display for Error {
             Error::MissingImpl(head) => {
                 write!(f, "no implementation for `{}`", head.pretty())
             }
-            Error::AmbiguousTrait { trait_head, candidates } => {
+            Error::AmbiguousImpl { trait_head, candidates } => {
                 let mut cands: Vec<_> = candidates
                     .iter().map(|sch| sch.pretty()).collect();
                 cands.sort();
@@ -131,6 +138,14 @@ impl fmt::Display for Error {
                 writeln!(f, "ambiguous impl `{}`", trait_head.pretty())?;
                 writeln!(f, "candidates:\n  {}", cands.join("\n  "))?;
                 write!(f, "solution:\n  {}", hints.join("\n  "))
+            }
+
+            // ---- register errors
+            Error::ConflictImpl { it } => {
+                write!(f, "impl `{}` conflicts with previously defined", it.pretty())
+            }
+            Error::ConflictStarlet { it } => {
+                write!(f, "*let `{}` conflicts with previously defined", it.pretty())
             }
 
             // --- patterns

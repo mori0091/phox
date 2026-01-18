@@ -12,9 +12,14 @@ use crate::typesys::*;
 pub enum Decl {
     Type(RawTypeDef),           // parsed, "raw" type decl.
     Trait(RawTrait),            // parsed, "raw" trait decl.
+
     RawImpl(RawImpl),           // parsed, "raw" impl decl.
     NamedImpl(NamedImpl),       // resolved, "named" impl decl.
     SchImpl(Scheme<TypedImpl>), // resolved, "annotated" impl decl.
+
+    RawStarlet(RawStarlet),           // parsed, "raw" *let decl.
+    NamedStarlet(NamedStarlet),       // resolved, "named" *let decl.
+    SchStarlet(Scheme<TypedStarlet>), // resolved, "annotated" *let decl.
 }
 
 impl fmt::Display for Decl {
@@ -22,9 +27,14 @@ impl fmt::Display for Decl {
         match self {
             Decl::Type(raw) => write!(f, "{:?}", raw),
             Decl::Trait(raw) => write!(f, "{:?}", raw),
+
             Decl::RawImpl(raw) => write!(f, "{:?}", raw),
             Decl::NamedImpl(named) => write!(f, "{:?}", named),
             Decl::SchImpl(scheme) => write!(f, "{:?}", scheme),
+
+            Decl::RawStarlet(raw) => write!(f, "{:?}", raw),
+            Decl::NamedStarlet(named) => write!(f, "{:?}", named),
+            Decl::SchStarlet(scheme) => write!(f, "{:?}", scheme),
         }
     }
 }

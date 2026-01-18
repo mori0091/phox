@@ -68,6 +68,9 @@ pub use infer::{
 mod impl_env;
 pub use impl_env::*;
 
+mod starlet_env;
+pub use starlet_env::*;
+
 mod register;
 pub use register::*;
 
