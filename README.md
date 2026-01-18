@@ -4,7 +4,18 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Rust](https://img.shields.io/badge/rust-1.80+-orange)
 
-Phox is a small functional programming language with **Hindley–Milner type inference**, **algebraic data types**, and **pattern matching**.  
+Phox is a small functional programming language with:
+- **Hindley–Milner type inference**,
+- **algebraic data types**,
+- **pattern matching**,
+- **multi-parameter typeclasses (`trait`/`impl`)**,
+- **requires (trait-bounds) inference**,
+- **generic function template (`*let`)**,
+- **automatic type/trait resolution without type-annotation**,
+- **iterator / generator pipeline**,
+- Rust-like **module system**,
+- and more.
+
 It aims to be a simple yet expressive tool — your clever companion for exploring type theory and practical programming.
 
 > Note: Phox currently has no string type or I/O.  
@@ -27,7 +38,7 @@ _New to Phox? Start with [🚀 Getting Started](#-getting-started)._
 ## ✨ Features
 
 - **Hindley–Milner type inference**  
-  No need to annotate types in most cases.
+  No need to annotate types in most cases. (In fact, Phox has no type-annotation syntax)
 - **Algebraic data types (ADT)**  
   Define expressive data structures with variants.
 - **Pattern matching**  
@@ -36,6 +47,14 @@ _New to Phox? Start with [🚀 Getting Started](#-getting-started)._
   Cleaner syntax for single-constructor wrapper types.
 - **First-class functions**  
   Functions are values, operators are functions too.
+- **Generic function temlates**  
+  Non-first class / overloadable generic function templates.
+- **Multi-parameter typeclasses (`trait`/`impl`)**  
+  Define the relationship between multiple methods and multiple types.
+- **Trait record**  
+  Typeclasses (`trait`/`impl`) can be instansiated as a first-class record value, with a simple syntax.
+- **Module system**  
+  Rust like module / namespace definition.
 - **Simple syntax**  
   Inspired by ML-family languages, with a focus on clarity.
 
