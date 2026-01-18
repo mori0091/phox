@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::api;
 use crate::typesys::*;
 
@@ -163,16 +161,16 @@ fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
             tmpls.sort_by(|a,b| a.scheme_ref().target.head.partial_cmp(&b.scheme_ref().target.head).unwrap());
             for tmpl in tmpls {
                 let sch = tmpl.scheme_ref();
-                let map = &mut HashMap::new();
-                let requires = sch.constraints.rename_type_var(map);
-                let head = sch.target.head.rename_type_var(map);
-                if requires.is_empty() {
-                    println!("impl {}", head.pretty());
-                }
-                else {
-                    println!("impl {} {}", head.pretty(), requires.pretty());
-                }
+                println!("{}", sch.pretty());
             }
+
+            let mut tmpls = phox.starlet_env.iter().collect::<Vec<_>>();
+            tmpls.sort_by(|a,b| a.scheme_ref().target.name.partial_cmp(&b.scheme_ref().target.name).unwrap());
+            for tmpl in tmpls {
+                let sch = tmpl.scheme_ref();
+                println!("{}", sch.pretty());
+            }
+
             CommandResult::Continue
         }
         ["impls", "--verbose"] | ["impls", "-v"] => {
@@ -180,9 +178,19 @@ fn handle_command(phox: &mut api::PhoxEngine, input: &str) -> CommandResult {
             tmpls.sort_by(|a,b| a.scheme_ref().target.head.partial_cmp(&b.scheme_ref().target.head).unwrap());
             for tmpl in tmpls {
                 let sch = tmpl.scheme_ref();
-                println!("{}", sch.pretty());
+                println!("{};", sch.prettry_all());
                 println!();
             }
+
+
+            let mut tmpls = phox.starlet_env.iter().collect::<Vec<_>>();
+            tmpls.sort_by(|a,b| a.scheme_ref().target.name.partial_cmp(&b.scheme_ref().target.name).unwrap());
+            for tmpl in tmpls {
+                let sch = tmpl.scheme_ref();
+                println!("{};", sch.pretty_all());
+                println!();
+            }
+
             CommandResult::Continue
         }
         ["impls", _unknown] => {

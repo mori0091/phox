@@ -14,16 +14,6 @@ pub enum Constraint {
 }
 
 impl Constraint {
-    pub fn is_generalize_safe(&self) -> bool {
-        match self {
-            Self::TraitBound(_)       => false,
-            Self::TypeEq(_, _)        => true,
-            Self::Overloaded(_, _, _) => false,
-        }
-    }
-}
-
-impl Constraint {
     pub fn trait_bound(head: &TraitHead) -> Self {
         Constraint::TraitBound(head.clone())
     }

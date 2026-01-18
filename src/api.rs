@@ -31,6 +31,7 @@ pub struct PhoxEngine {
     pub module_symbol_envs: HashMap<Path, SymbolEnv>, // local symbol table for each modules
     pub module_infer_ctxs: HashMap<Path, InferCtx>,   // kind_env, type_env, and trait_member_env for each modules
     pub module_value_envs: HashMap<Path, ValueEnv>,   // value_env for each modules
+    pub starlet_env: StarletEnv,                      // starlet_env ; the set of `SchemeTeamplate<TypedStarlet>`s for each defined `*let`.
     pub impl_env: ImplEnv,                            // impl_env ; the set of `SchemeTeamplate<TypedImpl>`s for each defined `impl`.
 }
 
@@ -43,6 +44,7 @@ impl PhoxEngine {
             module_symbol_envs: HashMap::new(),
             module_infer_ctxs: HashMap::new(),
             module_value_envs: HashMap::new(),
+            starlet_env: StarletEnv::new(),
             impl_env: ImplEnv::new(),
         };
 

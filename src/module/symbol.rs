@@ -70,6 +70,7 @@ impl Symbol {
             }
             Symbol::Unique(path) => {
                 path.last().unwrap().pretty()
+                // path.pretty()
             }
             other => other.to_string()
         }

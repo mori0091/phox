@@ -42,10 +42,7 @@ fn check_impl_conflict(
             }
         }
         if same {
-            return Err(Error::ConflictImpl {
-                it: impl_head.clone(),
-                other: head.clone(),
-            });
+            return Err(Error::ConflictImpl { it: impl_head.clone() });
         }
     };
     Ok(())

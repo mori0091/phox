@@ -83,6 +83,13 @@ impl RawImpl {
 }
 
 // ----------------------------------------------
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RawStarlet {
+    pub name: String,
+    pub expr: Box<Expr>,
+}
+
+// ----------------------------------------------
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RawTraitHead {
     pub name: Symbol,           // trait name (ex. Eq)

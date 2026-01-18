@@ -30,6 +30,7 @@ pub fn register_decl(
         Decl::Type(_) | Decl::Trait(_) => {
             Ok(())
         }
+
         Decl::RawImpl(_) => {
             unreachable!();
         }
@@ -40,8 +41,22 @@ pub fn register_decl(
             let sch_tmpl = SchemeTemplate::new(scheme.clone());
             if !phox.impl_env.insert(sch_tmpl.clone()) {
                 let it = sch_tmpl.scheme_ref().target.head.clone();
-                let other = phox.impl_env.get_by_name(&it.name).first().unwrap().scheme_ref().target.head.clone();
-                return Err(Error::ConflictImpl { it, other });
+                return Err(Error::ConflictImpl { it });
+            }
+            Ok(())
+        }
+
+        Decl::RawStarlet(_) => {
+            unreachable!();
+        }
+        Decl::NamedStarlet(_) => {
+            unreachable!();
+        }
+        Decl::SchStarlet(scheme) => {
+            let sch_tmpl = SchemeTemplate::new(scheme.clone());
+            if !phox.starlet_env.insert(sch_tmpl.clone()) {
+                let it = sch_tmpl.scheme_ref().clone();
+                return Err(Error::ConflictStarlet { it });
             }
             Ok(())
         }

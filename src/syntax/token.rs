@@ -28,6 +28,7 @@ pub enum Token {
     #[token("type" , priority = 10)] Type,
     #[token("trait", priority = 10)] Trait,
     #[token("impl" , priority = 10)] Impl,
+    #[token("*let" , priority = 10)] Starlet,
     #[token("let"  , priority = 10)] Let,
     #[token("rec"  , priority = 10)] Rec,
     #[token("if"   , priority = 10)] If,

@@ -34,6 +34,29 @@ pub enum ExprBody {
 }
 
 impl Expr {
+    pub fn is_value(&self) -> bool {
+        match &self.body {
+            // values
+            ExprBody::Lit(_)            => true,
+            ExprBody::Abs(_, _)         => true,
+            ExprBody::Tuple(_)          => true,
+            ExprBody::RawTraitRecord(_) => true,
+            ExprBody::TraitRecord(_)    => true,
+            ExprBody::Record(_)         => true,
+
+            // non-values (expr may be sustituted by evaluation)
+            ExprBody::Var(_)            => false,
+            ExprBody::App(_, _)         => false,
+            ExprBody::If(_, _, _)       => false,
+            ExprBody::Match(_, _)       => false,
+            ExprBody::Block(_)          => false,
+            ExprBody::TupleAccess(_, _) => false,
+            ExprBody::FieldAccess(_, _) => false,
+        }
+    }
+}
+
+impl Expr {
     pub fn lit(x: Lit) -> Self {
         Expr { span:(0,0), body: ExprBody::Lit(x), ty: None }
     }

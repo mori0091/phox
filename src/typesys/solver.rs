@@ -96,7 +96,7 @@ pub fn solve_error(
                             }
                         }
                     ).collect();
-                    Error::AmbiguousTrait {
+                    Error::AmbiguousImpl {
                         trait_head: head,
                         candidates: cands,
                     }
@@ -159,7 +159,7 @@ fn solve_trait_bound(
                     }
                 }
             ).collect();
-            Err(Error::AmbiguousTrait {
+            Err(Error::AmbiguousImpl {
                 trait_head: head.clone(),
                 candidates: cands,
             })
