@@ -22,6 +22,8 @@ It aims to be a simple yet expressive tool — your clever companion for explori
 > That means you can’t even write “Hello, World!” yet —  
 > but you can prove that `fact 5 = 120` with full type safety 😉
 
+See also <https://mori0091.github.io/phox-book/>
+
 ## 📑 Table of Contents
 
 - ✨ [Features](#-features)
@@ -64,8 +66,6 @@ _New to Phox? Start with [🚀 Getting Started](#-getting-started)._
 
 > - In code examples, `// => ` shows the result as a comment.
 > - In REPL examples, `=>` shows the evaluated result.
-
-See also <https://mori0091.github.io/phox-book/>
 
 ### Semicolons
 
