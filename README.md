@@ -65,6 +65,8 @@ _New to Phox? Start with [🚀 Getting Started](#-getting-started)._
 > - In code examples, `// => ` shows the result as a comment.
 > - In REPL examples, `=>` shows the evaluated result.
 
+See also <https://mori0091.github.io/phox-book/>
+
 ### Semicolons
 
 - `;` separates multiple items (type declarations / statements / expressions) in a block or at the top level.
