@@ -43,6 +43,7 @@ pub enum Token {
 
     #[token("*"    , priority = 6)]  Star,
     #[token("/"    , priority = 6)]  Slash,
+    #[token("%"    , priority = 6)]  Percent,
 
     #[token("+"    , priority = 5)]  Plus,
     #[token("-"    , priority = 5)]  Minus,

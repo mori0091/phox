@@ -31,6 +31,7 @@ extern {
 
         "*"  =>  Token::Star,
         "/"  =>  Token::Slash,
+        "%"  =>  Token::Percent,
 
         "+"  =>  Token::Plus,
         "-"  =>  Token::Minus,
@@ -693,6 +694,7 @@ AddSubOp: String = {
 MulDivOp: String = {
     "*"  => "*".to_string(),
     "/"  => "/".to_string(),
+    "%"  => "%".to_string(),
 };
 
 PipeLOp: String = {

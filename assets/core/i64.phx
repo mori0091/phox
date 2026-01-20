@@ -6,6 +6,7 @@ use ::core::{
     __i64_sub__,
     __i64_mul__,
     __i64_div__,
+    __i64_mod__,
     __i64_neg__,
 };
 
@@ -26,6 +27,7 @@ impl Add Int { (+) = \x.\y. __i64_add__ (x, y); };
 impl Sub Int { (-) = \x.\y. __i64_sub__ (x, y); };
 impl Mul Int { (*) = \x.\y. __i64_mul__ (x, y); };
 impl Div Int { (/) = \x.\y. __i64_div__ (x, y); };
+impl Mod Int { (%) = \x.\y. __i64_mod__ (x, y); };
 impl Neg Int { negate = \x. __i64_neg__ x; };
 
 // -------------------------------------------------------------

@@ -11,4 +11,5 @@ trait Add a { (+) : a -> a -> a; };
 trait Sub a { (-) : a -> a -> a; };
 trait Mul a { (*) : a -> a -> a; };
 trait Div a { (/) : a -> a -> a; };
+trait Mod a { (%) : a -> a -> a; };
 trait Neg a { negate : a -> a; };

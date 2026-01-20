@@ -112,6 +112,19 @@ pub fn bootstrap(phox: &mut PhoxEngine, module: &RefModule) -> Result<(), Error>
     add_primitive_func(
         phox,
         module,
+        "__i64_mod__",
+        make_i64_arith_op(|a, b| {
+            if b == 0 {
+                panic!("division by zero");
+            }
+            a % b
+        }),
+        Type::fun(Type::Tuple(vec![Type::int(), Type::int()]), Type::int()), // (Int, Int) -> Int
+    )?;
+
+    add_primitive_func(
+        phox,
+        module,
         "__i64_neg__",
         make_i64_unary_op(|x| -x),
         Type::fun(Type::int(), Type::int()),
