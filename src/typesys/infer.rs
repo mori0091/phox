@@ -631,7 +631,7 @@ fn trait_members(
 
 fn is_tycon(mut t: &Type) -> Option<Symbol> {
     while let Type::App(a, _) = t {
-        t = a;
+        t = a.as_ref_type();
     }
     match t {
         Type::Con(con) => Some(con.clone()),

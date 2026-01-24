@@ -123,7 +123,7 @@ pub fn resolve_raw_type(
         RawType::App(f, x) => {
             let f2 = resolve_raw_type(phox, module, symbol_env, f, param_map)?;
             let x2 = resolve_raw_type(phox, module, symbol_env, x, param_map)?;
-            Type::App(Box::new(f2), Box::new(x2))
+            Type::App(Box::new(TypeExpr::Ty(f2)), Box::new(TypeExpr::Ty(x2)))
         }
         RawType::Fun(l, r) => {
             let l2 = resolve_raw_type(phox, module, symbol_env, l, param_map)?;

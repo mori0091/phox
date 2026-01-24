@@ -23,6 +23,12 @@ pub use kind::*;
 mod type_;
 pub use type_::*;
 
+mod type_var_id;
+pub use type_var_id::*;
+
+mod type_expr;
+pub use type_expr::*;
+
 mod trait_head;
 pub use trait_head::*;
 
