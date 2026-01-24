@@ -224,3 +224,14 @@ impl Sink (List a) a (List a) {
     ;
     finish acc
 };
+
+// -------------------------------------------------------------
+/// impl Sink Int a Int
+impl Sink Int a Int {
+    update = \a.\_. a + 1;
+    finish = \a. a;
+};
+
+*let count = collect 0;
+*let count_if = \p.\xs. xs |> filter p |> count;
+*let count_while = \p.\xs. xs |> take_while p |> count;
