@@ -9,24 +9,28 @@ use super::*;
 fn filter_residual(
     phox: &mut PhoxEngine,
     residual: Vec<Constraint>,
-    scheme_vars: HashSet<TypeVarId>,
+    scheme_vars: HashSet<Var>,
 ) -> (Vec<Constraint>, Vec<Constraint>) {
     let mut requires = Vec::new();
     let mut errors = Vec::new();
 
-    for c in residual {
-        let c = c.repr(&mut phox.ctx);
-        match &c {
-            Constraint::TraitBound(head) => {
-                let fv = &mut HashSet::new();
-                head.free_type_vars(&mut phox.ctx, fv);
-                if fv.iter().all(|v| scheme_vars.contains(v)) {
-                    requires.push(c);
-                } else {
-                    errors.push(c);
+    for constraint in residual {
+        match &constraint {
+            Constraint::Ty(c) => {
+                let c = c.repr(&mut phox.ctx.ty);
+                match c {
+                    TypeConstraint::TraitBound(ref head) => {
+                        let fv = &mut HashSet::new();
+                        head.free_vars(&mut phox.ctx.ty, fv);
+                        if fv.iter().all(|v| scheme_vars.contains(v)) {
+                            requires.push(Constraint::Ty(c));
+                        } else {
+                            errors.push(Constraint::Ty(c));
+                        }
+                    }
+                    _ => errors.push(Constraint::Ty(c)),
                 }
             }
-            _ => errors.push(c),
         }
     }
 
@@ -69,15 +73,16 @@ pub fn infer_decl(
         }
         Decl::NamedImpl(named) => {
             let mut headvars = HashSet::new();
-            named.head.free_type_vars(&mut phox.ctx, &mut headvars);
+            named.head.free_vars(&mut phox.ctx.ty, &mut headvars);
+            let headvars = headvars.into_iter().map(|v| { let Var::Ty(t) = v; t }).collect();
             // ----------------------------------------------------------------------
-            phox.ctx.set_non_touchable(&headvars);
+            phox.ctx.ty.set_non_touchable(&headvars);
             // ----------------------------------------------------------------------
             icx.enter_template_body();
             let res = infer_decl_named_impl(phox, module, icx, named);
             icx.leave_template_body();
             // ----------------------------------------------------------------------
-            phox.ctx.clear_non_touchable();
+            phox.ctx.ty.clear_non_touchable();
             // ----------------------------------------------------------------------
             let scheme = res?;
             *decl = Decl::SchImpl(scheme);
@@ -128,10 +133,10 @@ fn infer_decl_named_impl(
             .ok_or(Error::UnknownTraitMember(sym.pretty()))?;
         let icx2 = &mut icx.duplicate();
         let (ty, _cs) = infer_expr(phox, module, icx2, &mut expr.clone())?;
-        let dummy_ctx = &mut phox.ctx.clone();
-        let sch = sch_tmpl.fresh_copy(dummy_ctx);
-        let (_, ty_inst) = &sch.instantiate(dummy_ctx);
-        dummy_ctx.unify(&ty, ty_inst)?;
+        let mut dummy_ctx = phox.ctx.clone();
+        let sch = sch_tmpl.fresh_copy(&mut dummy_ctx.ty);
+        let (_, ty_inst) = &sch.instantiate(&mut dummy_ctx.ty);
+        dummy_ctx.ty.unify(&ty, ty_inst)?;
     }
 
     // infer type
@@ -139,14 +144,14 @@ fn infer_decl_named_impl(
     let mut members = Vec::new();
     for (sym, expr) in named.members.iter() {
         let sym = sym.clone();
-        let mut expr = expr.repr(&mut phox.ctx);
+        let mut expr = expr.repr(&mut phox.ctx.ty);
 
         let sch_tmpl = trait_sch_tmpls.get(&sym.to_string()).unwrap();
         let (ty, mut cs) = infer_expr(phox, module, icx, &mut expr)?;
-        let sch = sch_tmpl.fresh_copy(&mut phox.ctx);
-        let (constraints, ty_inst) = &sch.instantiate(&mut phox.ctx);
+        let sch = sch_tmpl.fresh_copy(&mut phox.ctx.ty);
+        let (constraints, ty_inst) = &sch.instantiate(&mut phox.ctx.ty);
         cs.extend(constraints.into_vec_for_trait_record());
-        cs.push(Constraint::TypeEq(ty.clone(), ty_inst.clone()));
+        cs.push(Constraint::type_eq(&ty, &ty_inst));
         if let Some(p) = &constraints.primary {
             let hd = *p.clone();
             for (t1, t2) in hd.params.iter().zip(named.head.params.iter()) {
@@ -160,10 +165,10 @@ fn infer_decl_named_impl(
 
     let residual = solve_with_residual(phox, css)?;
 
-    let typed = TypedImpl { head: named.head.clone(), members }.repr(&mut phox.ctx);
+    let typed = TypedImpl { head: named.head.clone(), members }.repr(&mut phox.ctx.ty);
 
     let mut scheme_vars = HashSet::new();
-    typed.free_type_vars(&mut phox.ctx, &mut scheme_vars);
+    typed.free_vars(&mut phox.ctx.ty, &mut scheme_vars);
 
     let (requires, errors) = filter_residual(phox, residual, scheme_vars.clone());
 
@@ -189,7 +194,7 @@ fn infer_decl_named_starlet(
 ) -> Result<Scheme<TypedStarlet>, Error> {
     let name = named.name.clone();
     let mut expr = named.expr.clone();
-    let ty = Type::Var(phox.ctx.fresh_type_var_id());
+    let ty = Type::Var(phox.ctx.ty.fresh_var_id());
 
     let mut css = Vec::new();
     let (t_expr, c_expr) = infer_expr(phox, module, icx, &mut expr)?;
@@ -199,10 +204,10 @@ fn infer_decl_named_starlet(
     // ★ need to solve here. (since `generalize` requires)
     let residual = solve_with_residual(phox, css)?;
 
-    let typed = TypedStarlet { name, expr, ty }.repr(&mut phox.ctx);
+    let typed = TypedStarlet { name, expr, ty }.repr(&mut phox.ctx.ty);
 
     let mut scheme_vars = HashSet::new();
-    typed.free_type_vars(&mut phox.ctx, &mut scheme_vars);
+    typed.free_vars(&mut phox.ctx.ty, &mut scheme_vars);
 
     let (requires, errors) = filter_residual(phox, residual, scheme_vars.clone());
 
@@ -232,7 +237,7 @@ pub fn infer_stmt(
         Stmt::Let(pat, expr) => {
             let mut css = Vec::new();
             let (t_expr, c_expr) = infer_expr(phox, module, icx, expr)?;
-            let t_pat = phox.ctx.fresh_type_for_pattern(pat);
+            let t_pat = phox.ctx.ty.fresh_type_for_pattern(pat);
             css.extend(c_expr);
             css.push(Constraint::type_eq(&t_expr, &t_pat));
 
@@ -241,7 +246,7 @@ pub fn infer_stmt(
                 || (icx.is_local() && !expr.is_value());
 
             let mut bindings = Vec::new();
-            let cs = phox.ctx.match_pattern(icx, pat, &t_pat, monotype_bindings, &mut bindings)?;
+            let cs = phox.ctx.ty.match_pattern(icx, pat, &t_pat, monotype_bindings, &mut bindings)?;
             css.extend(cs);
 
             // assert!(bindings.is_empty()) if monotype_bindings;
@@ -250,8 +255,8 @@ pub fn infer_stmt(
             let pending = solve_with_residual(phox, css)?;
 
             for (sym, t) in bindings {
-                let t = t.repr(&mut phox.ctx);
-                let sch = generalize(&mut phox.ctx, icx, &t);
+                let t = t.repr(&mut phox.ctx.ty);
+                let sch = generalize(&mut phox.ctx.ty, icx, &t);
                 icx.put_type_scheme(sym, sch);
             }
 
@@ -260,7 +265,7 @@ pub fn infer_stmt(
         Stmt::LetRec(pat, expr) => {
             match pat {
                 Pat::Var(x) => {
-                    let tv = Type::Var(phox.ctx.fresh_type_var_id());
+                    let tv = Type::Var(phox.ctx.ty.fresh_var_id());
                     let mut icx2 = icx.duplicate();
                     icx2.put_type_scheme(x.clone(), TypeScheme::mono(tv.clone()));
 
@@ -271,7 +276,7 @@ pub fn infer_stmt(
 
                     // ★ solve is required before repr (and before generalize in non-rec cases)
                     let pending = solve_with_residual(phox, css)?;
-                    let tv = tv.repr(&mut phox.ctx);
+                    let tv = tv.repr(&mut phox.ctx.ty);
 
                     let sch = Scheme::mono(tv);
                     icx.put_type_scheme(x.clone(), sch);
@@ -303,15 +308,15 @@ pub fn infer_expr(
                     }
                     1 => {
                         let tmpl = matches.first().unwrap();
-                        let sch = tmpl.fresh_copy(&mut phox.ctx);
-                        let (constraints, typed_starlet) = sch.instantiate(&mut phox.ctx);
+                        let sch = tmpl.fresh_copy(&mut phox.ctx.ty);
+                        let (constraints, typed_starlet) = sch.instantiate(&mut phox.ctx.ty);
                         (typed_starlet.ty.clone(), constraints.into_vec())
                     }
                     _ => {
                         let symbol = symbol.clone();
                         let mut cands = Vec::new();
                         for sch_tmpl in &matches {
-                            let sch = sch_tmpl.fresh_copy(&mut phox.ctx);
+                            let sch = sch_tmpl.fresh_copy(&mut phox.ctx.ty);
                             let member_sch = Scheme {
                                 vars: sch.vars.clone(),
                                 constraints: sch.constraints.clone(),
@@ -320,8 +325,8 @@ pub fn infer_expr(
                             let member_sch_tmpl = SchemeTemplate::new(member_sch);
                             cands.push(member_sch_tmpl);
                         }
-                        let ty = Type::Var(phox.ctx.fresh_type_var_id());
-                        (ty.clone(), vec![Constraint::Overloaded(symbol, ty, cands)])
+                        let ty = Type::Var(phox.ctx.ty.fresh_var_id());
+                        (ty.clone(), vec![Constraint::overloaded(&symbol, &ty, &cands)])
                     }
                 }
             }
@@ -333,7 +338,7 @@ pub fn infer_expr(
             else {
                 match icx.get_type_scheme(symbol) {
                     Some(sch) => {
-                        let (constraints, ty) = sch.instantiate(&mut phox.ctx);
+                        let (constraints, ty) = sch.instantiate(&mut phox.ctx.ty);
                         (ty, constraints.into_vec())
                     }
                     None => {
@@ -348,23 +353,23 @@ pub fn infer_expr(
                             0 => return Err(Error::UnboundVariable(symbol.clone())),
                             1 => {
                                 let tmpl = &matches.iter().cloned().next().unwrap();
-                                let sch = &tmpl.fresh_copy(&mut phox.ctx);
+                                let sch = &tmpl.fresh_copy(&mut phox.ctx.ty);
                                 let member_sch = sch.get_member_scheme(symbol).unwrap();
-                                let (constraints, ty_inst) = member_sch.instantiate(&mut phox.ctx);
+                                let (constraints, ty_inst) = member_sch.instantiate(&mut phox.ctx.ty);
                                 (ty_inst.clone(), constraints.into_vec())
                             }
                             _ => {
                                 let symbol = symbol.clone();
                                 let mut cands = Vec::new();
                                 for sch_tmpl in &matches {
-                                    let sch = sch_tmpl.fresh_copy(&mut phox.ctx);
+                                    let sch = sch_tmpl.fresh_copy(&mut phox.ctx.ty);
                                     let member_sch = sch.get_member_scheme(&symbol).unwrap();
                                     let member_sch_tmpl = SchemeTemplate::new(member_sch);
                                     cands.push(member_sch_tmpl);
                                 }
                                 let cands: Vec<_> = cands.iter().cloned().collect();
-                                let ty = Type::Var(phox.ctx.fresh_type_var_id());
-                                (ty.clone(), vec![Constraint::Overloaded(symbol, ty, cands)])
+                                let ty = Type::Var(phox.ctx.ty.fresh_var_id());
+                                (ty.clone(), vec![Constraint::overloaded(&symbol, &ty, &cands)])
                             }
                         }
                     }
@@ -376,7 +381,7 @@ pub fn infer_expr(
             let mut cs = Vec::new();
             let (ta, ca) = infer_expr(phox, module, icx, a)?;
             let (tf, cf) = infer_expr(phox, module, icx, f)?;
-            let tr = Type::Var(phox.ctx.fresh_type_var_id());
+            let tr = Type::Var(phox.ctx.ty.fresh_var_id());
             cs.extend(ca);
             cs.extend(cf);
             cs.push(Constraint::type_eq(&tf, &Type::fun(ta, tr.clone())));
@@ -385,13 +390,13 @@ pub fn infer_expr(
 
         ExprBody::Abs(pat, body) => {
             // パターンに対応する型を生成
-            let t_pat = phox.ctx.fresh_type_for_pattern(&pat);
+            let t_pat = phox.ctx.ty.fresh_type_for_pattern(&pat);
 
             // 環境を拡張
             let mut icx2 = icx.duplicate();
             let monotype_bindings = true;
             let mut binndings = Vec::new();
-            let mut cs = phox.ctx.match_pattern(&mut icx2, &pat, &t_pat, monotype_bindings, &mut binndings)?;
+            let mut cs = phox.ctx.ty.match_pattern(&mut icx2, &pat, &t_pat, monotype_bindings, &mut binndings)?;
 
             // 本体を推論
             let (t_body, cbody) = infer_expr(phox, module, &mut icx2, body)?;
@@ -436,7 +441,7 @@ pub fn infer_expr(
             let mut result_types = vec![];
             for (pat, body) in arms.iter_mut() {
                 // パターンに対応する型を生成（型変数を含む構造）
-                let t_pat = phox.ctx.fresh_type_for_pattern(&pat);
+                let t_pat = phox.ctx.ty.fresh_type_for_pattern(&pat);
 
                 // scrutinee の型とパターン型を unify
                 css.push(Constraint::type_eq(&t_scrut, &t_pat));
@@ -445,7 +450,7 @@ pub fn infer_expr(
                 let mut icx2 = icx.duplicate();
                 let monotype_bindings = true;
                 let mut binndings = Vec::new();
-                let cs = phox.ctx.match_pattern(&mut icx2, &pat, &t_pat, monotype_bindings, &mut binndings)?;
+                let cs = phox.ctx.ty.match_pattern(&mut icx2, &pat, &t_pat, monotype_bindings, &mut binndings)?;
                 css.extend(cs);
 
                 // アーム本体の型を推論
@@ -569,10 +574,10 @@ pub fn infer_expr(
                     let mut cs = Vec::new();
                     let mut typed_fields = Vec::with_capacity(members.len());
                     for (field_name, field_sch_tmpl) in members.iter() {
-                        let ty = Type::Var(phox.ctx.fresh_type_var_id());
+                        let ty = Type::Var(phox.ctx.ty.fresh_var_id());
                         typed_fields.push((field_name.clone(), ty.clone()));
-                        let sch = field_sch_tmpl.fresh_copy(&mut phox.ctx);
-                        let (constraints, ty_inst) = sch.instantiate(&mut phox.ctx);
+                        let sch = field_sch_tmpl.fresh_copy(&mut phox.ctx.ty);
+                        let (constraints, ty_inst) = sch.instantiate(&mut phox.ctx.ty);
                         // cs.extend(constraints.into_vec());
                         cs.extend(constraints.into_vec_for_trait_record()); // <<- primary を除外（Constraint::TraitBound の重複を避けるため）
                         cs.push(Constraint::type_eq(&ty, &ty_inst));
@@ -587,7 +592,7 @@ pub fn infer_expr(
                         }
 
                     }
-                    cs.push(Constraint::TraitBound(head.clone()));
+                    cs.push(Constraint::trait_bound(head));
                     (Type::Record(typed_fields), cs)
                 }
             }

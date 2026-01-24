@@ -1,9 +1,29 @@
+use std::collections::HashMap;
 use std::fmt;
 use super::*;
 use crate::module::*;
 
-// ===== Types =====
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+// ===== TypeVarId =====
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TypeVarId(pub usize);
+
+impl VarId for TypeVarId {
+    fn from_usize(u: usize) -> Self {
+        TypeVarId(u)
+    }
+    fn to_usize(self) -> usize {
+        self.0
+    }
+}
+
+impl fmt::Display for TypeVarId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "?{}", self.0)
+    }
+}
+
+// ===== Type =====
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Type {
     Var(TypeVarId),             // 型変数
     Fun(Box<Type>, Box<Type>),  // 関数型
@@ -69,10 +89,47 @@ impl Type {
     }
 }
 
+impl Type {
+    pub fn score(&self) -> (usize, i64) {
+        match self {
+            Type::Var(_) => (0, -1),
+            Type::Con(_) => (1, 0),
+            Type::App(f, x) => {
+                let (s1, g1) = f.score();
+                let (s2, g2) = x.score();
+                (s1+s2, g1+g2)
+            }
+            Type::Fun(a, b) => {
+                let (s1, g1) = a.score();
+                let (s2, g2) = b.score();
+                (s1+s2, g1+g2)
+            }
+            Type::Tuple(es) => {
+                let mut ret = (0, 0);
+                for e in es.iter() {
+                    let (s, g) = e.score();
+                    ret.0 += s;
+                    ret.1 += g;
+                }
+                ret
+            }
+            Type::Record(fields) => {
+                let mut ret = (0, 0);
+                for (_, e) in fields.iter() {
+                    let (s, g) = e.score();
+                    ret.0 += s;
+                    ret.1 += g;
+                }
+                ret
+            }
+        }
+    }
+}
+
 impl ApplySubst for Type {
     fn apply_subst(&self, subst: &Subst) -> Self {
         match self {
-            Type::Var(id) => subst.get(id).cloned().unwrap_or(Type::Var(*id)),
+            Type::Var(id) => subst.get(&Var::Ty(*id)).cloned().unwrap_or(Type::Var(*id)),
             Type::Con(name) => Type::Con(name.clone()),
             Type::Fun(t1, t2) => {
                 Type::fun(t1.apply_subst(subst), t2.apply_subst(subst))
@@ -94,31 +151,31 @@ impl ApplySubst for Type {
 
 use std::collections::HashSet;
 use super::TypeContext;
-use super::FreeTypeVars;
+use super::FreeVars;
 
-impl FreeTypeVars for Type {
-    fn free_type_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<TypeVarId>) {
+impl FreeVars for Type {
+    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
         match self.repr(ctx) {
             Type::Var(v) => {
-                acc.insert(v);
+                acc.insert(Var::Ty(v));
             }
             Type::Fun(ref a, ref b) => {
-                a.free_type_vars(ctx, acc);
-                b.free_type_vars(ctx, acc);
+                a.free_vars(ctx, acc);
+                b.free_vars(ctx, acc);
             }
             Type::Con(_) => {}
             Type::App(ref a, ref b) => {
-                a.free_type_vars(ctx, acc);
-                b.free_type_vars(ctx, acc);
+                a.free_vars(ctx, acc);
+                b.free_vars(ctx, acc);
             }
             Type::Tuple(ts) => {
                 for ty in ts {
-                    ty.free_type_vars(ctx, acc);
+                    ty.free_vars(ctx, acc);
                 }
             }
             Type::Record(ref fields) => {
                 for (_, field_ty) in fields {
-                    field_ty.free_type_vars(ctx, acc);
+                    field_ty.free_vars(ctx, acc);
                 }
             }
         }
@@ -203,34 +260,33 @@ impl fmt::Display for Type {
     }
 }
 
-use std::collections::HashMap;
-
-impl SchemePretty for Type {
-    fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self {
+impl RenameForPretty for Type {
+    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
         match self {
             Type::Var(v) => {
-                if let Some(name) = map.get(v) {
+                let v = Var::Ty(v.clone());
+                if let Some(name) = map.get(&v) {
                     Type::local_con(name) // ここでは Var を Con に置き換えてもよい
                 } else {
                     let ch = (b'a' + map.len() as u8) as char;
                     let name = ch.to_string();
-                    map.insert(v.clone(), name.clone());
+                    map.insert(v, name.clone());
                     Type::local_con(name)
                 }
             }
             Type::Con(name) => Type::Con(name.clone()),
             Type::Fun(t1, t2) => {
-                Type::fun(t1.rename_type_var(map), t2.rename_type_var(map))
+                Type::fun(t1.rename_var(map), t2.rename_var(map))
             }
             Type::App(t1, t2) => {
-                Type::app(t1.rename_type_var(map), t2.rename_type_var(map))
+                Type::app(t1.rename_var(map), t2.rename_var(map))
             }
             Type::Tuple(ts) => {
-                Type::Tuple(ts.iter().map(|t| t.rename_type_var(map)).collect())
+                Type::Tuple(ts.iter().map(|t| t.rename_var(map)).collect())
             }
             Type::Record(fields) => {
                 Type::Record(
-                    fields.iter().map(|(f, t)| (f.clone(), t.rename_type_var(map))).collect()
+                    fields.iter().map(|(f, t)| (f.clone(), t.rename_var(map))).collect()
                 )
             }
         }
@@ -239,52 +295,6 @@ impl SchemePretty for Type {
 
 impl Pretty for Type {
     fn pretty(&self) -> String {
-        self.rename_type_var(&mut HashMap::new()).to_string()
+        self.rename_var(&mut HashMap::new()).to_string()
    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-pub struct TypeVarId(pub usize);
-
-impl fmt::Display for TypeVarId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "?{}", self.0)
-    }
-}
-
-impl Type {
-    pub fn score(&self) -> (usize, i64) {
-        match self {
-            Type::Var(_) => (0, -1),
-            Type::Con(_) => (1, 0),
-            Type::App(f, x) => {
-                let (s1, g1) = f.score();
-                let (s2, g2) = x.score();
-                (s1+s2, g1+g2)
-            }
-            Type::Fun(a, b) => {
-                let (s1, g1) = a.score();
-                let (s2, g2) = b.score();
-                (s1+s2, g1+g2)
-            }
-            Type::Tuple(es) => {
-                let mut ret = (0, 0);
-                for e in es.iter() {
-                    let (s, g) = e.score();
-                    ret.0 += s;
-                    ret.1 += g;
-                }
-                ret
-            }
-            Type::Record(fields) => {
-                let mut ret = (0, 0);
-                for (_, e) in fields.iter() {
-                    let (s, g) = e.score();
-                    ret.0 += s;
-                    ret.1 += g;
-                }
-                ret
-            }
-        }
-    }
 }

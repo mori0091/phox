@@ -25,7 +25,7 @@ use loader::*;
 pub const DEFAULT_USER_ROOT_MODULE_NAME: &str = "__main__";
 
 pub struct PhoxEngine {
-    pub ctx: TypeContext,
+    pub ctx: UnifiedContext,
     pub roots: RootModules,
     pub extern_symbol_envs: HashMap<Path, SymbolEnv>, // extern symbol table for each modules
     pub module_symbol_envs: HashMap<Path, SymbolEnv>, // local symbol table for each modules
@@ -38,7 +38,7 @@ pub struct PhoxEngine {
 impl PhoxEngine {
     pub fn new() -> Self {
         let mut phox = PhoxEngine {
-            ctx: TypeContext::new(),
+            ctx: UnifiedContext::new(),
             roots: RootModules::new(),
             extern_symbol_envs: HashMap::new(),
             module_symbol_envs: HashMap::new(),
@@ -236,7 +236,7 @@ impl PhoxEngine {
         // eprintln!();
 
         let icx = &mut self.get_infer_ctx(module);
-        let sch = generalize(&mut self.ctx, icx, &ty);
+        let sch = generalize(&mut self.ctx.ty, icx, &ty);
         Ok((val, sch))
     }
 

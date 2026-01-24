@@ -20,9 +20,9 @@ pub fn resolve_decl_type_def(
     let env = &mut phox.get_value_env(module);
 
     // kind を構築
-    let mut kind = Kind::Star;
+    let mut kind = Kind::Type;
     for _ in ty_ctor_params.iter().rev() {
-        kind = Kind::Fun(Box::new(Kind::Star), Box::new(kind));
+        kind = Kind::Fun(Box::new(Kind::Type), Box::new(kind));
     }
     icx.put_kind(ty_ctor_name.clone(), kind);
 
@@ -54,7 +54,7 @@ fn resolve_raw_type_def(
             let mut param_map = HashMap::new();
             let mut param_ids = Vec::new();
             for p in params {
-                let id = phox.ctx.fresh_type_var_id();
+                let id = phox.ctx.ty.fresh_var_id();
                 param_map.insert(p.clone(), id);
                 param_ids.push(id);
             }
@@ -112,7 +112,7 @@ pub fn resolve_raw_type(
         RawType::VarName(name) => {
             let id = param_map
                 .entry(name.to_string())
-                .or_insert_with(|| phox.ctx.fresh_type_var_id());
+                .or_insert_with(|| phox.ctx.ty.fresh_var_id());
             Type::Var(*id)
         }
         RawType::ConName(symbol) => {

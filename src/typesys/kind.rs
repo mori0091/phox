@@ -1,6 +1,8 @@
 // ===== Kinds =====
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Kind {
-    Star,                        // *
-    Fun(Box<Kind>, Box<Kind>),   // k1 -> k2
+    Fun(Box<Kind>, Box<Kind>),   // κ1 -> κ2
+    Type,                        // τ
+    // Row,                         // ρ
+    // Nat,                         // ν
 }

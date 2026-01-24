@@ -25,12 +25,12 @@ pub type ImplTemplate = SchemeTemplate<TypedImpl>;
 
 // ----------------------------------------------
 // FreeTypeVars
-impl FreeTypeVars for TypedImpl {
-    fn free_type_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<TypeVarId>) {
-        self.head.free_type_vars(ctx, acc);
+impl FreeVars for TypedImpl {
+    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
+        self.head.free_vars(ctx, acc);
         for (_sym, e, ty) in self.members.iter() {
-            e.free_type_vars(ctx, acc);
-            ty.free_type_vars(ctx, acc);
+            e.free_vars(ctx, acc);
+            ty.free_vars(ctx, acc);
         }
     }
 }
@@ -60,15 +60,15 @@ impl ApplySubst for TypedImpl {
 }
 
 // ----------------------------------------------
-// SchemePretty
-impl SchemePretty for TypedImpl {
-    fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self {
-        let head = self.head.rename_type_var(map);
+// RenameForPretty
+impl RenameForPretty for TypedImpl {
+    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+        let head = self.head.rename_var(map);
         let members = self.members.iter().map(
             |(sym, expr, ty)| (
                 sym.clone(),
-                expr.rename_type_var(map),
-                ty.rename_type_var(map)
+                expr.rename_var(map),
+                ty.rename_var(map)
             )).collect();
         TypedImpl { head, members }
     }
@@ -78,7 +78,7 @@ impl SchemePretty for TypedImpl {
 // Pretty
 impl Pretty for TypedImpl {
     fn pretty(&self) -> String {
-        self.rename_type_var(&mut HashMap::new()).to_string()
+        self.rename_var(&mut HashMap::new()).to_string()
     }
 }
 
@@ -147,8 +147,8 @@ impl Scheme<TypedImpl> {
             map.insert(*v, ch.to_string());
         }
 
-        let requires = self.constraints.rename_type_var(&mut map);
-        let typed_impl = self.target.rename_type_var(&mut map);
+        let requires = self.constraints.rename_var(&mut map);
+        let typed_impl = self.target.rename_var(&mut map);
 
         let mut vars: Vec<String> = map.into_values().collect();
         vars.sort();

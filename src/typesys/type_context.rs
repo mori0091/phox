@@ -1,58 +1,9 @@
-use std::collections::HashSet;
-
 use super::*;
 use crate::module::*;
 use crate::syntax::ast::*;
 
-// ===== Type context: union-find + binding =====
-#[derive(Clone)]
-pub struct TypeContext {
-    parent: Vec<TypeVarId>,    // union-find parent pointers
-    pub binding: Vec<Option<Type>>, // representative binding (Some if bound to a type)
-    pub non_touchable: HashSet<TypeVarId>,
-}
-
-impl TypeContext {
-    pub fn new() -> Self {
-        Self {
-            parent: Vec::new(),
-            binding: Vec::new(),
-            non_touchable: HashSet::new(),
-        }
-    }
-
-    pub fn set_non_touchable(&mut self, non_touchable: &HashSet<TypeVarId>) {
-        self.non_touchable.extend(non_touchable);
-    }
-
-    pub fn clear_non_touchable(&mut self) {
-        self.non_touchable.clear();
-    }
-
-    pub fn fresh_type_var_id(&mut self) -> TypeVarId {
-        let id = TypeVarId(self.parent.len());
-        self.parent.push(id);
-        self.binding.push(None);
-        id
-    }
-}
-
-impl TypeContext {
-    // find with path compression
-    pub fn find(&mut self, id: TypeVarId) -> TypeVarId {
-        let p = self.parent[id.0];
-        if p != id {
-            let root = self.find(p);
-            self.parent[id.0] = root;
-        }
-        self.parent[id.0]
-    }
-
-    pub fn get_bound(&mut self, v: &TypeVarId) -> Option<Type> {
-        let r = self.find(*v);
-        self.binding[r.0].clone()
-    }
-}
+// ===== TypeContext: union-find + binding =====
+pub type TypeContext = Context<TypeVarId, Type>;
 
 impl TypeContext {
     // Occurs check: does tv occur in ty (following bindings)?
@@ -214,7 +165,7 @@ impl TypeContext {
 impl TypeContext {
     pub fn fresh_type_for_pattern(&mut self, pat: &Pat) -> Type {
         match pat {
-            Pat::Var(_) | Pat::Wildcard => Type::Var(self.fresh_type_var_id()),
+            Pat::Var(_) | Pat::Wildcard => Type::Var(self.fresh_var_id()),
             Pat::Lit(lit) => match lit {
                 Lit::Unit => Type::unit(),
                 Lit::Bool(_) => Type::bool_(),
@@ -225,11 +176,11 @@ impl TypeContext {
                 Type::Tuple(ts)
             }
             Pat::Con(_, _) => {
-                Type::Var(self.fresh_type_var_id()) // パターン全体の型は未知とする
+                Type::Var(self.fresh_var_id()) // パターン全体の型は未知とする
             }
             Pat::Record(fields) => {
                 let tys = fields.iter()
-                                .map(|(name, _p)| (name.clone(), Type::Var(self.fresh_type_var_id())))
+                                .map(|(name, _p)| (name.clone(), Type::Var(self.fresh_var_id())))
                                 .collect();
                 Type::Record(tys)
             }
@@ -312,7 +263,7 @@ impl TypeContext {
                     _ => {
                         let mut ts = Vec::new();
                         for _p in ps {
-                            ts.push(Type::Var(self.fresh_type_var_id()));
+                            ts.push(Type::Var(self.fresh_var_id()));
                         }
 
                         let mut css = Vec::new();
@@ -345,7 +296,7 @@ impl TypeContext {
                     _ => {
                         let mut tys = Vec::new();
                         for (n, _p) in fields {
-                            tys.push((n.clone(), Type::Var(self.fresh_type_var_id())));
+                            tys.push((n.clone(), Type::Var(self.fresh_var_id())));
                         }
 
                         let mut css = Vec::new();

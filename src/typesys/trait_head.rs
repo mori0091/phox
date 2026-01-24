@@ -9,41 +9,41 @@ pub struct TraitHead {
     pub params: Vec<Type>,      // type parameters
 }
 
-impl TraitHead {
-    /// Searches for all `trait`s that have members with the specified name and
-    /// type.
-    pub fn lookup_traits_by_member(
-        ctx: &mut TypeContext,
-        member_env: &TraitMemberEnv,
-        member_name: &Symbol,
-        member_ty: &Type,
-    ) -> Result<Vec<TraitHead>, Error> {
-        let entries = member_env
-            .get(member_name)
-            .ok_or_else(|| Error::UnknownTraitMember(member_name.to_string()))?;
+// impl TraitHead {
+//     /// Searches for all `trait`s that have members with the specified name and
+//     /// type.
+//     pub fn lookup_traits_by_member(
+//         ctx: &mut TypeContext,
+//         member_env: &TraitMemberEnv,
+//         member_name: &Symbol,
+//         member_ty: &Type,
+//     ) -> Result<Vec<TraitHead>, Error> {
+//         let entries = member_env
+//             .get(member_name)
+//             .ok_or_else(|| Error::UnknownTraitMember(member_name.to_string()))?;
 
-        let mut out = Vec::new();
-        for scheme_tmpl in entries {
-            let scheme = scheme_tmpl.fresh_copy(ctx);
-            let (constraints, ty) = scheme.instantiate(ctx);
-            if ctx.unify(&ty, member_ty).is_ok() {
-                if let Some(ref head) = constraints.primary {
-                    let mut head = *head.clone();
-                    head.params = head.params.into_iter().map(|t| t.repr(ctx)).collect();
-                    out.push(head);
-                }
-            }
-        }
-        Ok(out)
-    }
-}
+//         let mut out = Vec::new();
+//         for scheme_tmpl in entries {
+//             let scheme = scheme_tmpl.fresh_copy(ctx);
+//             let (constraints, ty) = scheme.instantiate(ctx);
+//             if ctx.unify(&ty, member_ty).is_ok() {
+//                 if let Some(ref head) = constraints.primary {
+//                     let mut head = *head.clone();
+//                     head.params = head.params.into_iter().map(|t| t.repr(ctx)).collect();
+//                     out.push(head);
+//                 }
+//             }
+//         }
+//         Ok(out)
+//     }
+// }
 
-use super::FreeTypeVars;
+use super::FreeVars;
 
-impl FreeTypeVars for TraitHead {
-    fn free_type_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<TypeVarId>) {
+impl FreeVars for TraitHead {
+    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
         for t in self.params.iter() {
-            t.free_type_vars(ctx, acc);
+            t.free_vars(ctx, acc);
         }
     }
 }
@@ -100,16 +100,16 @@ impl fmt::Display for TraitHead {
      }
 }
 
-impl SchemePretty for TraitHead {
-    fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self {
-        let ts = self.params.iter().map(|t| t.rename_type_var(map)).collect();
+impl RenameForPretty for TraitHead {
+    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+        let ts = self.params.iter().map(|t| t.rename_var(map)).collect();
         TraitHead {name: self.name.clone(), params: ts}
     }
 }
 
 impl Pretty for TraitHead {
     fn pretty(&self) -> String {
-        self.rename_type_var(&mut HashMap::new()).to_string()
+        self.rename_var(&mut HashMap::new()).to_string()
     }
 }
 
