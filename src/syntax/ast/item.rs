@@ -32,18 +32,18 @@ impl Item {
 
 // ----------------------------------------------
 // FreeTypeVars
-impl FreeTypeVars for Item {
-    fn free_type_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<TypeVarId>) {
+impl FreeVars for Item {
+    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
         for c in &self.constraints {
-            c.free_type_vars(ctx, acc);
+            c.free_vars(ctx, acc);
         }
         match &self.body {
             ItemBody::Decl(_decl) => {}
             ItemBody::Stmt(stmt) => {
-                stmt.free_type_vars(ctx, acc);
+                stmt.free_vars(ctx, acc);
             }
             ItemBody::Expr(expr) => {
-                expr.free_type_vars(ctx, acc);
+                expr.free_vars(ctx, acc);
             }
         }
     }
@@ -97,20 +97,20 @@ impl ApplySubst for Item {
 
 // ----------------------------------------------
 // SchemePretty
-impl SchemePretty for Item {
-    fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self {
-        let constraints = self.constraints.iter().map(|c| c.rename_type_var(map)).collect();
+impl RenameForPretty for Item {
+    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+        let constraints = self.constraints.iter().map(|c| c.rename_var(map)).collect();
         let body = match &self.body {
             ItemBody::Decl(decl) => {
                 let decl = decl.clone();
                 ItemBody::Decl(decl)
             }
             ItemBody::Stmt(stmt) => {
-                let stmt = stmt.rename_type_var(map);
+                let stmt = stmt.rename_var(map);
                 ItemBody::Stmt(stmt)
             }
             ItemBody::Expr(expr) => {
-                let expr = expr.rename_type_var(map);
+                let expr = expr.rename_var(map);
                 ItemBody::Expr(expr)
             }
         };

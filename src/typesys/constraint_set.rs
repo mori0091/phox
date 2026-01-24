@@ -1,5 +1,6 @@
 use std::fmt;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use super::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -23,7 +24,7 @@ impl ConstraintSet {
     pub fn into_vec(&self) -> Vec<Constraint> {
         let mut cs = Vec::new();
         if let Some(ref head) = &self.primary {
-            cs.push(Constraint::TraitBound(*head.clone()));
+            cs.push(Constraint::trait_bound(head));
         }
         let mut xs = self.requires.iter().cloned().collect::<Vec<_>>();
         xs.sort();
@@ -52,13 +53,13 @@ impl ApplySubst for ConstraintSet {
     }
 }
 
-impl SchemePretty for ConstraintSet {
-    fn rename_type_var(&self, map: &mut std::collections::HashMap<TypeVarId, String>) -> Self {
+impl RenameForPretty for ConstraintSet {
+    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
         let primary = match self.primary {
             None => None,
-            Some(ref head) => Some(Box::new(head.rename_type_var(map))),
+            Some(ref head) => Some(Box::new(head.rename_var(map))),
         };
-        let requires = self.requires.iter().map(|c| c.rename_type_var(map)).collect::<BTreeSet<_>>();
+        let requires = self.requires.iter().map(|c| c.rename_var(map)).collect::<BTreeSet<_>>();
         ConstraintSet {
             primary,
             requires,

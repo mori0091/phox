@@ -28,35 +28,38 @@ pub fn solve_with_residual(
     while changed {
         worklist.extend(pending.drain(..));
         changed = false;
-        while let Some(c) = worklist.pop() {
-            match c {
-                Constraint::TypeEq(t1, t2) => {
-                    phox.ctx.unify(&t1, &t2)?;
-                    changed = true;
-                }
-                Constraint::TraitBound(head) => {
-                    let mut fv = HashSet::new();
-                    head.free_type_vars(&mut phox.ctx, &mut fv);
+        while let Some(constraint) = worklist.pop() {
+            match constraint {
+                Constraint::Ty(c) => match c {
+                    TypeConstraint::TypeEq(t1, t2) => {
+                        phox.ctx.ty.unify(&t1, &t2)?;
+                        changed = true;
+                    }
+                    TypeConstraint::TraitBound(head) => {
+                        let mut fv = HashSet::new();
+                        head.free_vars(&mut phox.ctx.ty, &mut fv);
 
-                    if intersects(&fv, &phox.ctx.non_touchable) {
-                        pending.push(Constraint::TraitBound(head));
+                        let fv = fv.into_iter().map(|v| { let Var::Ty(t) = v; t }).collect();
+                        if intersects(&fv, &phox.ctx.ty.non_touchable) {
+                            pending.push(Constraint::trait_bound(&head));
+                        }
+                        else if let Ok(cs) = solve_trait_bound(phox, &head) {
+                            pending.extend(cs); // <<< OK. `pending.extend(cs)` is better than `worklist.extend(cs)`.
+                            changed = true;
+                        }
+                        else {
+                            pending.push(Constraint::trait_bound(&head));
+                        }
                     }
-                    else if let Ok(cs) = solve_trait_bound(phox, &head) {
-                        pending.extend(cs); // <<< OK. `pending.extend(cs)` is better than `worklist.extend(cs)`.
-                        changed = true;
+                    TypeConstraint::Overloaded(sym, ty, sch_tmpls) => {
+                        let repr_ty = ty.repr(&mut phox.ctx.ty);
+                        if repr_ty != ty {
+                            changed = true;
+                        }
+                        let cs = solve_overloaded(phox, &sym, &repr_ty, &sch_tmpls)?;
+                        // worklist.extend(cs);  // <<< NG. Don't this! This may causes inifinite loop!!
+                        pending.extend(cs); // <<< OK!
                     }
-                    else {
-                        pending.push(Constraint::TraitBound(head));
-                    }
-                }
-                Constraint::Overloaded(sym, ty, sch_tmpls) => {
-                    let repr_ty = ty.repr(&mut phox.ctx);
-                    if repr_ty != ty {
-                        changed = true;
-                    }
-                    let cs = solve_overloaded(phox, &sym, &repr_ty, &sch_tmpls)?;
-                    // worklist.extend(cs);  // <<< NG. Don't this! This may causes inifinite loop!!
-                    pending.extend(cs); // <<< OK!
                 }
             }
         }
@@ -76,50 +79,52 @@ pub fn solve_error(
         // }
 
         let e = match pending[0].clone() {
-            Constraint::TypeEq(t1, t2) => {
-                Error::TypeMismatch(t1, t2)
-            },
-            Constraint::TraitBound(head) => {
-                let candidates = lookup_impls_by_trait_head(phox, &head);
-                if candidates.is_empty() {
-                    Error::MissingImpl(head)
-                }
-                else {
-                    let dummy_ctx = &mut phox.ctx.clone();
-                    let cands = candidates.iter().map(
-                        |tmpl| {
-                            let sch = tmpl.fresh_copy(dummy_ctx);
-                            Scheme {
-                                vars: vec![],
-                                constraints: sch.constraints.clone(),
-                                target: sch.target.head.clone()
+            Constraint::Ty(c) => match c {
+                TypeConstraint::TypeEq(t1, t2) => {
+                    Error::TypeMismatch(t1, t2)
+                },
+                TypeConstraint::TraitBound(head) => {
+                    let candidates = lookup_impls_by_trait_head(phox, &head);
+                    if candidates.is_empty() {
+                        Error::MissingImpl(head)
+                    }
+                    else {
+                        let mut dummy_ctx = phox.ctx.clone();
+                        let cands = candidates.iter().map(
+                            |tmpl| {
+                                let sch = tmpl.fresh_copy(&mut dummy_ctx.ty);
+                                Scheme {
+                                    vars: vec![],
+                                    constraints: sch.constraints.clone(),
+                                    target: sch.target.head.clone()
+                                }
                             }
+                        ).collect();
+                        Error::AmbiguousImpl {
+                            trait_head: head,
+                            candidates: cands,
                         }
-                    ).collect();
-                    Error::AmbiguousImpl {
-                        trait_head: head,
-                        candidates: cands,
                     }
-                }
-            },
-            Constraint::Overloaded(sym, ty, sch_tmpls) => {
-                if ty.contains_type_var() {
-                    Error::AmbiguousVariable {
-                        name: sym,
-                        candidates: sch_tmpls
-                            .iter()
-                            .map(|tmpl| tmpl.fresh_copy(&mut phox.ctx))
-                            .collect(),
+                },
+                TypeConstraint::Overloaded(sym, ty, sch_tmpls) => {
+                    if ty.contains_type_var() {
+                        Error::AmbiguousVariable {
+                            name: sym,
+                            candidates: sch_tmpls
+                                .iter()
+                                .map(|tmpl| tmpl.fresh_copy(&mut phox.ctx.ty))
+                                .collect(),
+                        }
                     }
-                }
-                else {
-                    Error::NoMatchingOverload(Expr {
-                        span: (0,0), // \TODO unused yet
-                        body: ExprBody::Var(sym),
-                        ty: Some(ty),
-                    })
-                }
-            },
+                    else {
+                        Error::NoMatchingOverload(Expr {
+                            span: (0,0), // \TODO unused yet
+                            body: ExprBody::Var(sym),
+                            ty: Some(ty),
+                        })
+                    }
+                },
+            }
         };
         return Err(e)
     }
@@ -136,8 +141,8 @@ fn solve_trait_bound(
         0 => Err(Error::MissingImpl(head.clone())),
         1 => {
             let tmpl = &candidates[0];
-            let sch = tmpl.fresh_copy(&mut phox.ctx);
-            let (constraints, typed_impl) = sch.instantiate(&mut phox.ctx);
+            let sch = tmpl.fresh_copy(&mut phox.ctx.ty);
+            let (constraints, typed_impl) = sch.instantiate(&mut phox.ctx.ty);
             let mut cs = head.params
                              .iter()
                              .zip(typed_impl.head.params.iter())
@@ -148,10 +153,10 @@ fn solve_trait_bound(
         }
         _ => {
             // eprintln!("** solve_trait_bound ** {:?}", head);
-            let dummy_ctx = &mut phox.ctx.clone();
+            let mut dummy_ctx = phox.ctx.clone();
             let cands = candidates.iter().map(
                 |tmpl| {
-                    let sch = tmpl.fresh_copy(dummy_ctx);
+                    let sch = tmpl.fresh_copy(&mut dummy_ctx.ty);
                     Scheme {
                         vars: vec![],
                         constraints: sch.constraints.clone(),
@@ -177,13 +182,13 @@ fn lookup_impls_by_trait_head(
         if head.name == sch.target.head.name
             && head.params.len() == sch.target.head.params.len()
         {
-            let try_ctx = &mut phox.ctx.clone();
-            let sch = tmpl.fresh_copy(try_ctx);
-            let (_, typed_impl) = sch.instantiate(try_ctx);
+            let mut try_ctx = phox.ctx.clone();
+            let sch = tmpl.fresh_copy(&mut try_ctx.ty);
+            let (_, typed_impl) = sch.instantiate(&mut try_ctx.ty);
             let ok = head.params
                 .iter()
                 .zip(typed_impl.head.params.iter())
-                .all(|(t1, t2)| try_ctx.unify(t1, t2).is_ok());
+                .all(|(t1, t2)| try_ctx.ty.unify(t1, t2).is_ok());
             if ok {
                 candidates.push(tmpl.clone())
             }
@@ -201,9 +206,9 @@ fn solve_overloaded(
     let mut filtered = Vec::new();
     for cand_tmpl in sch_tmpls {
         let mut try_ctx = phox.ctx.clone();
-        let cand = cand_tmpl.fresh_copy(&mut try_ctx);
-        let (_, ty_inst) = &cand.instantiate(&mut try_ctx);
-        if try_ctx.unify(ty, ty_inst).is_ok() {
+        let cand = cand_tmpl.fresh_copy(&mut try_ctx.ty);
+        let (_, ty_inst) = &cand.instantiate(&mut try_ctx.ty);
+        if try_ctx.ty.unify(ty, ty_inst).is_ok() {
             filtered.push((cand.target.score(), cand_tmpl));
         }
     }
@@ -229,16 +234,15 @@ fn solve_overloaded(
         if candidates.len() > 1 {
             let tmpls = filtered
                 .into_iter()
-                .map(|(_, tmpl)| tmpl)
-                .cloned()
-                .collect();
-            return Ok(vec![Constraint::Overloaded(sym.clone(), ty.clone(), tmpls)]);
+                .map(|(_, tmpl)| tmpl.clone())
+                .collect::<Vec<_>>();
+            return Ok(vec![Constraint::overloaded(sym, ty, &tmpls)]);
         }
     }
 
-    let winner = winner_tmpl.fresh_copy(&mut phox.ctx);
-    let (constraints, ty_inst) = winner.instantiate(&mut phox.ctx);
-    phox.ctx.unify(ty, &ty_inst)?;
+    let winner = winner_tmpl.fresh_copy(&mut phox.ctx.ty);
+    let (constraints, ty_inst) = winner.instantiate(&mut phox.ctx.ty);
+    phox.ctx.ty.unify(ty, &ty_inst)?;
     // Ok(constraints.into_vec())
     Ok(constraints.into_vec_for_trait_record()) // Vec<Constraint> w/o ConstraintSet::primary
 }

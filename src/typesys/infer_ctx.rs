@@ -148,10 +148,10 @@ impl InferCtx {
             .contains_key(symbol)
     }
 
-    pub fn free_env_vars(&self, ctx: &mut TypeContext) -> HashSet<TypeVarId> {
+    pub fn free_env_vars(&self, ctx: &mut TypeContext) -> HashSet<Var> {
         let mut acc = HashSet::new();
         for scheme in self.inner.borrow().type_env.values() {
-            scheme.target.free_type_vars(ctx, &mut acc);
+            scheme.target.free_vars(ctx, &mut acc);
             for v in &scheme.vars {
                 acc.remove(v);
             }

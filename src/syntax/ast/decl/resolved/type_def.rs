@@ -49,6 +49,8 @@ impl Variant {
             }
         };
 
-        TypeScheme::poly(params.to_vec(), ctor_type)
+        let params: Vec<Var> = params.iter().map(|v| Var::Ty(v.clone())).collect();
+
+        TypeScheme::poly(params, ctor_type)
     }
 }

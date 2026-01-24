@@ -17,8 +17,8 @@ pub fn resolve_decl_trait(
     let head = {
         let mut params = Vec::new(); // [Type::Var(id)]
         for p in raw.params.iter() {
-            let ty_var_id = phox.ctx.fresh_type_var_id();
-            vars.push(ty_var_id.clone());
+            let ty_var_id = phox.ctx.ty.fresh_var_id();
+            vars.push(Var::Ty(ty_var_id.clone()));
             param_map.insert(p.to_string(), ty_var_id);
             let ty_var = Type::Var(ty_var_id);
             params.push(ty_var);

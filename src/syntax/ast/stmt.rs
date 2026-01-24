@@ -16,14 +16,14 @@ pub enum Stmt {
 
 // ----------------------------------------------
 // FreeTypeVars
-impl FreeTypeVars for Stmt {
-    fn free_type_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<TypeVarId>) {
+impl FreeVars for Stmt {
+    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
         match self {
             Stmt::Mod(_name, opt_itmes) => {
                 match opt_itmes {
                     Some(items) => {
                         for item in items {
-                            item.free_type_vars(ctx, acc);
+                            item.free_vars(ctx, acc);
                         }
                     }
                     None => {}
@@ -31,10 +31,10 @@ impl FreeTypeVars for Stmt {
             }
             Stmt::Use(_) => {}
             Stmt::Let(_pat, expr) => {
-                expr.free_type_vars(ctx, acc);
+                expr.free_vars(ctx, acc);
             }
             Stmt::LetRec(_pat, expr) => {
-                expr.free_type_vars(ctx, acc);
+                expr.free_vars(ctx, acc);
             }
         }
     }
@@ -104,14 +104,14 @@ impl ApplySubst for Stmt {
 
 // ----------------------------------------------
 // SchemePretty
-impl SchemePretty for Stmt {
-    fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self {
+impl RenameForPretty for Stmt {
+    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
         match self {
             Stmt::Mod(name, opt_itmes) => {
                 let name = name.clone();
                 let opt_itmes = match opt_itmes {
                     Some(items) => {
-                        let items = items.iter().map(|item| item.rename_type_var(map)).collect();
+                        let items = items.iter().map(|item| item.rename_var(map)).collect();
                         Some(items)
                     }
                     None => None,
@@ -121,12 +121,12 @@ impl SchemePretty for Stmt {
             Stmt::Use(_) => { self.clone() }
             Stmt::Let(pat, expr) => {
                 let pat = pat.clone();
-                let expr = expr.rename_type_var(map);
+                let expr = expr.rename_var(map);
                 Stmt::Let(pat, Box::new(expr))
             }
             Stmt::LetRec(pat, expr) => {
                 let pat = pat.clone();
-                let expr = expr.rename_type_var(map);
+                let expr = expr.rename_var(map);
                 Stmt::LetRec(pat, Box::new(expr))
             }
         }

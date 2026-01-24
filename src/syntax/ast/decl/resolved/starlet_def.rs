@@ -21,10 +21,10 @@ pub struct TypedStarlet {
 
 // ----------------------------------------------
 // FreeTypeVars
-impl FreeTypeVars for TypedStarlet {
-    fn free_type_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<TypeVarId>) {
-        self.expr.free_type_vars(ctx, acc);
-        self.ty.free_type_vars(ctx, acc);
+impl FreeVars for TypedStarlet {
+    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
+        self.expr.free_vars(ctx, acc);
+        self.ty.free_vars(ctx, acc);
     }
 }
 
@@ -52,11 +52,11 @@ impl ApplySubst for TypedStarlet {
 
 // ----------------------------------------------
 // SchemePretty
-impl SchemePretty for TypedStarlet {
-    fn rename_type_var(&self, map: &mut HashMap<TypeVarId, String>) -> Self {
+impl RenameForPretty for TypedStarlet {
+    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
         let symbol = self.name.clone();
-        let expr = self.expr.rename_type_var(map);
-        let ty = self.ty.rename_type_var(map);
+        let expr = self.expr.rename_var(map);
+        let ty = self.ty.rename_var(map);
         TypedStarlet { name: symbol, expr, ty }
     }
 }
@@ -65,7 +65,7 @@ impl SchemePretty for TypedStarlet {
 // Pretty
 impl Pretty for TypedStarlet {
     fn pretty(&self) -> String {
-        self.rename_type_var(&mut HashMap::new()).to_string()
+        self.rename_var(&mut HashMap::new()).to_string()
     }
 }
 
@@ -124,8 +124,8 @@ impl Scheme<TypedStarlet> {
             map.insert(*v, ch.to_string());
         }
 
-        let requires = self.constraints.rename_type_var(&mut map);
-        let typed_starlet = self.target.rename_type_var(&mut map);
+        let requires = self.constraints.rename_var(&mut map);
+        let typed_starlet = self.target.rename_var(&mut map);
 
         let mut vars: Vec<String> = map.into_values().collect();
         vars.sort();
