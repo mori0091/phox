@@ -34,7 +34,9 @@ impl Variant {
         // 型コンストラクタ適用: Option a, Result a b, ...
         let mut applied = Type::Con(type_name.clone());
         for &p in params {
-            applied = Type::App(Box::new(applied), Box::new(Type::Var(p)));
+            let texpr1 = TypeExpr::Ty(applied);
+            let texpr2 = TypeExpr::Ty(Type::Var(p));
+            applied = Type::app(texpr1, texpr2);
         }
 
         // コンストラクタの型を構築

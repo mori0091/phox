@@ -3,32 +3,13 @@ use std::fmt;
 use super::*;
 use crate::module::*;
 
-// ===== TypeVarId =====
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TypeVarId(pub usize);
-
-impl VarId for TypeVarId {
-    fn from_usize(u: usize) -> Self {
-        TypeVarId(u)
-    }
-    fn to_usize(self) -> usize {
-        self.0
-    }
-}
-
-impl fmt::Display for TypeVarId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "?{}", self.0)
-    }
-}
-
 // ===== Type =====
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Type {
     Var(TypeVarId),             // 型変数
     Fun(Box<Type>, Box<Type>),  // 関数型
     Con(Symbol),                // 型構築子
-    App(Box<Type>, Box<Type>),  // 型適用
+    App(Box<TypeExpr>, Box<TypeExpr>), // 型適用
 
     Tuple(Vec<Type>),
     Record(Vec<(String, Type)>),
@@ -53,7 +34,7 @@ impl Type {
     pub fn unresolved_con<S: Into<String>>(s: S) -> Self {
         Type::Con(Symbol::Unresolved(Path::relative(vec![s.into()])))
     }
-    pub fn app(f: Type, x: Type) -> Self {
+    pub fn app(f: TypeExpr, x: TypeExpr) -> Self {
         Type::App(Box::new(f), Box::new(x))
     }
     pub fn fun(a: Type, b: Type) -> Self {
@@ -230,8 +211,10 @@ impl fmt::Display for Type {
             }
             Type::App(fun, arg) => {
                 match **arg {
-                    Type::Fun(_, _) | Type::App(_, _) => write!(f, "{} ({})", fun, arg),
-                    _ => write!(f, "{} {}", fun, arg),
+                    TypeExpr::Ty(ref ty) => match ty {
+                        Type::Fun(_, _) | Type::App(_, _) => write!(f, "{} ({})", fun, arg),
+                        _ => write!(f, "{} {}", fun, arg),
+                    }
                 }
             }
             Type::Tuple(ts) => {

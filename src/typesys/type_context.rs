@@ -24,8 +24,11 @@ impl TypeContext {
                     false
                 }
             }
-            Type::Fun(a, b) | Type::App(a, b) => {
+            Type::Fun(a, b) => {
                 self.occurs_in(tv, a) || self.occurs_in(tv, b)
+            }
+            Type::App(a, b) => {
+                self.occurs_in(tv, a.as_ref_type()) || self.occurs_in(tv, b.as_ref_type())
             }
             Type::Tuple(ts) => {
                 ts.iter().any(|t| self.occurs_in(tv, t))
@@ -53,8 +56,8 @@ impl TypeContext {
             (Type::Con(c1), Type::Con(c2)) if c1 == c2 => Ok(()),
 
             (Type::App(f1, x1), Type::App(f2, x2)) => {
-                self.unify(f1, f2)?;
-                self.unify(x1, x2)
+                self.unify(f1.as_ref_type(), f2.as_ref_type())?;
+                self.unify(x1.as_ref_type(), x2.as_ref_type())
             }
 
             (Type::Tuple(ts1), Type::Tuple(ts2)) => {
