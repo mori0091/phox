@@ -40,6 +40,7 @@ pub enum Token {
 
     // --- 演算子・記号 ---
     #[token("::"   , priority = 7)]  ColonColon, // path separator
+    #[token("|("   , priority = 7)]  SectionStart,
 
     #[token("*"    , priority = 6)]  Star,
     #[token("/"    , priority = 6)]  Slash,

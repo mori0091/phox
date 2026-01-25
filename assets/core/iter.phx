@@ -58,7 +58,7 @@ let zeros = repeat 0;
 let ones = repeat 1;
 
 /// counter : Int -> Seq Int
-let counter = Seq #(1 +);
+let counter = Seq |(1 +);
 
 // -------------------------------------------------------------
 type Map s a b = Map (a -> b) (s a);

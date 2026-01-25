@@ -28,6 +28,7 @@ extern {
 
         // --- 演算子・記号 ---
         "::" =>  Token::ColonColon,
+        "|(" =>  Token::SectionStart,
 
         "*"  =>  Token::Star,
         "/"  =>  Token::Slash,
@@ -90,7 +91,6 @@ lambda: Token = {
     "\\",
     "λ",
 };
-
 
 // ----------------------------------------------
 pub Program: Vec<Item> = {
@@ -496,6 +496,8 @@ Atom: Expr = {
 Atom0: Expr = {
     ExprSectionL,
     ExprSectionR,
+    ExprSectionL_deprecated,
+    ExprSectionR_deprecated,
     ExprParen,
     ExprVar,
     Lit => Expr::lit(<>),
@@ -508,6 +510,36 @@ Atom0: Expr = {
 };
 
 ExprSectionL: Expr = {
+    "|(" <l:Atom> "`" <op:Atom> "`" "_"? ")" => {
+        Expr::abs(
+            Pat::unresolved_var("__rhs__"),
+            Expr::app(Expr::app(op, l), Expr::unresolved_var("__rhs__"))
+        )
+    },
+    "|(" <l:Atom> <op:InfixOps> "_"? ")" => {
+        Expr::abs(
+            Pat::unresolved_var("__rhs__"),
+            Expr::app(Expr::app(Expr::unresolved_var(op), l), Expr::unresolved_var("__rhs__"))
+        )
+    },
+};
+
+ExprSectionR: Expr = {
+    "|(" "_"? "`" <op:Atom> "`" <r:Atom> ")" => {
+        Expr::abs(
+            Pat::unresolved_var("__lhs__"),
+            Expr::app(Expr::app(op, Expr::unresolved_var("__lhs__")), r)
+        )
+    },
+    "|(" "_"? <op:InfixOps> <r:Atom> ")" => {
+        Expr::abs(
+            Pat::unresolved_var("__lhs__"),
+            Expr::app(Expr::app(Expr::unresolved_var(op), Expr::unresolved_var("__lhs__")), r)
+        )
+    },
+};
+
+ExprSectionL_deprecated: Expr = {
     "#" "(" <l:Atom> "`" <op:Atom> "`" "_"? ")" => {
         Expr::abs(
             Pat::unresolved_var("__rhs__"),
@@ -522,7 +554,7 @@ ExprSectionL: Expr = {
     },
 };
 
-ExprSectionR: Expr = {
+ExprSectionR_deprecated: Expr = {
     "#" "(" "_"? "`" <op:Atom> "`" <r:Atom> ")" => {
         Expr::abs(
             Pat::unresolved_var("__lhs__"),
