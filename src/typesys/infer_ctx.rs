@@ -1,12 +1,14 @@
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use indexmap::IndexMap;
+use indexmap::IndexSet;
+
 use crate::module::*;
 use super::*;
 
 // ===== Kind Environment =====
 // maps name of type constructor to Kind
-pub type KindEnv = HashMap<Symbol, Kind>;
+pub type KindEnv = IndexMap<Symbol, Kind>;
 
 // ===== Type Environment =====
 // maps name of variable to type scheme.
@@ -14,7 +16,7 @@ pub type KindEnv = HashMap<Symbol, Kind>;
 // {
 //   "id": ∀ a. a -> a,
 // }
-pub type TypeEnv = HashMap<Symbol, TypeScheme>;
+pub type TypeEnv = IndexMap<Symbol, TypeScheme>;
 
 // ===== Type Environment for trait member =====
 // maps name of trait member to set of type schemes.
@@ -40,7 +42,7 @@ pub type TypeEnv = HashMap<Symbol, TypeScheme>;
 //   },
 // }
 //
-pub type TraitMemberEnv = HashMap<Symbol, HashSet<SchemeTemplate<Type>>>;
+pub type TraitMemberEnv = IndexMap<Symbol, IndexSet<SchemeTemplate<Type>>>;
 
 // ===== Infer Context =====
 #[derive(Clone)]
@@ -126,7 +128,7 @@ impl InferCtx {
             .or_default()
             .insert(tmpl);
     }
-    pub fn extend_trait_member_schemes(&self, symbol: &Symbol, tmpls: HashSet<SchemeTemplate<Type>>) {
+    pub fn extend_trait_member_schemes(&self, symbol: &Symbol, tmpls: IndexSet<SchemeTemplate<Type>>) {
         self.inner
             .borrow_mut()
             .trait_member_env
@@ -134,7 +136,7 @@ impl InferCtx {
             .or_default()
             .extend(tmpls);
     }
-    pub fn get_trait_member_schemes(&self, symbol: &Symbol) -> Option<HashSet<SchemeTemplate<Type>>> {
+    pub fn get_trait_member_schemes(&self, symbol: &Symbol) -> Option<IndexSet<SchemeTemplate<Type>>> {
         self.inner
             .borrow()
             .trait_member_env
@@ -148,12 +150,12 @@ impl InferCtx {
             .contains_key(symbol)
     }
 
-    pub fn free_env_vars(&self, ctx: &mut TypeContext) -> HashSet<Var> {
-        let mut acc = HashSet::new();
+    pub fn free_env_vars(&self, ctx: &mut UnifiedContext) -> IndexSet<Var> {
+        let mut acc = IndexSet::new();
         for scheme in self.inner.borrow().type_env.values() {
             scheme.target.free_vars(ctx, &mut acc);
             for v in &scheme.vars {
-                acc.remove(v);
+                acc.shift_remove(v);
             }
         }
         acc

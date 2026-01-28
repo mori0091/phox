@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use indexmap::IndexSet;
 use std::fmt;
 
 use super::*;
@@ -22,7 +21,7 @@ pub struct TypedStarlet {
 // ----------------------------------------------
 // FreeTypeVars
 impl FreeVars for TypedStarlet {
-    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
+    fn free_vars(&self, ctx: &mut UnifiedContext, acc: &mut IndexSet<Var>) {
         self.expr.free_vars(ctx, acc);
         self.ty.free_vars(ctx, acc);
     }
@@ -53,7 +52,7 @@ impl ApplySubst for TypedStarlet {
 // ----------------------------------------------
 // SchemePretty
 impl RenameForPretty for TypedStarlet {
-    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+    fn rename_var(&self, map: &mut VarNameMap) -> Self {
         let symbol = self.name.clone();
         let expr = self.expr.rename_var(map);
         let ty = self.ty.rename_var(map);
@@ -65,7 +64,7 @@ impl RenameForPretty for TypedStarlet {
 // Pretty
 impl Pretty for TypedStarlet {
     fn pretty(&self) -> String {
-        self.rename_var(&mut HashMap::new()).to_string()
+        self.rename_var(&mut VarNameMap::new()).to_string()
     }
 }
 
@@ -118,7 +117,7 @@ impl Scheme<TypedStarlet> {
 
     pub fn pretty_componets(&self) -> (Vec<String>, ConstraintSet, TypedStarlet) {
         // 量化変数に a, b, c... を割り当てる
-        let mut map = HashMap::new();
+        let mut map = VarNameMap::new();
         for (i, v) in self.vars.iter().enumerate() {
             let ch = (b'a' + i as u8) as char;
             map.insert(*v, ch.to_string());

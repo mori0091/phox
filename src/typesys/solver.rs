@@ -1,9 +1,4 @@
-use std::collections::HashSet;
-use std::hash::Hash;
-
-fn intersects<T: Eq + Hash>(a: &HashSet<T>, b: &HashSet<T>) -> bool {
-    a.intersection(b).next().is_some()
-}
+use indexmap::IndexSet;
 
 use crate::api::PhoxEngine;
 use crate::syntax::ast::*;
@@ -22,44 +17,23 @@ pub fn solve_with_residual(
     phox: &mut PhoxEngine,
     constraints: Vec<Constraint>,
 ) -> Result<Vec<Constraint>, Error> {
-    let mut worklist = constraints;
-    let mut pending = Vec::new();
+    let mut worklist = Vec::new();
+    let mut pending = constraints;
     let mut changed = true;
     while changed {
         worklist.extend(pending.drain(..));
         changed = false;
         while let Some(constraint) = worklist.pop() {
-            match constraint {
-                Constraint::Ty(c) => match c {
-                    TypeConstraint::TypeEq(t1, t2) => {
-                        phox.ctx.ty.unify(&t1, &t2)?;
-                        changed = true;
-                    }
-                    TypeConstraint::TraitBound(head) => {
-                        let mut fv = HashSet::new();
-                        head.free_vars(&mut phox.ctx.ty, &mut fv);
-
-                        let fv = fv.into_iter().map(|v| { let Var::Ty(t) = v; t }).collect();
-                        if intersects(&fv, &phox.ctx.ty.non_touchable) {
-                            pending.push(Constraint::trait_bound(&head));
-                        }
-                        else if let Ok(cs) = solve_trait_bound(phox, &head) {
-                            pending.extend(cs); // <<< OK. `pending.extend(cs)` is better than `worklist.extend(cs)`.
-                            changed = true;
-                        }
-                        else {
-                            pending.push(Constraint::trait_bound(&head));
-                        }
-                    }
-                    TypeConstraint::Overloaded(sym, ty, sch_tmpls) => {
-                        let repr_ty = ty.repr(&mut phox.ctx.ty);
-                        if repr_ty != ty {
-                            changed = true;
-                        }
-                        let cs = solve_overloaded(phox, &sym, &repr_ty, &sch_tmpls)?;
-                        // worklist.extend(cs);  // <<< NG. Don't this! This may causes inifinite loop!!
-                        pending.extend(cs); // <<< OK!
-                    }
+            match constraint.solve(phox)? {
+                Response::Done => {
+                    changed = true;
+                }
+                Response::Progressed(cs) => {
+                    changed = true;
+                    pending.extend(cs);
+                }
+                Response::Defered(cs) => {
+                    pending.extend(cs);
                 }
             }
         }
@@ -72,66 +46,129 @@ pub fn solve_error(
     pending: Vec<Constraint>,
 ) -> Result<(), Error> {
     if !pending.is_empty() {
-
-        // eprintln!("[solve_error] pending from here:");
-        // for c in &pending {
-        //     eprintln!("  {}", c);
-        // }
-
-        let e = match pending[0].clone() {
-            Constraint::Ty(c) => match c {
-                TypeConstraint::TypeEq(t1, t2) => {
-                    Error::TypeMismatch(t1, t2)
-                },
-                TypeConstraint::TraitBound(head) => {
-                    let candidates = lookup_impls_by_trait_head(phox, &head);
-                    if candidates.is_empty() {
-                        Error::MissingImpl(head)
-                    }
-                    else {
-                        let mut dummy_ctx = phox.ctx.clone();
-                        let cands = candidates.iter().map(
-                            |tmpl| {
-                                let sch = tmpl.fresh_copy(&mut dummy_ctx.ty);
-                                Scheme {
-                                    vars: vec![],
-                                    constraints: sch.constraints.clone(),
-                                    target: sch.target.head.clone()
-                                }
-                            }
-                        ).collect();
-                        Error::AmbiguousImpl {
-                            trait_head: head,
-                            candidates: cands,
-                        }
-                    }
-                },
-                TypeConstraint::Overloaded(sym, ty, sch_tmpls) => {
-                    if ty.contains_type_var() {
-                        Error::AmbiguousVariable {
-                            name: sym,
-                            candidates: sch_tmpls
-                                .iter()
-                                .map(|tmpl| tmpl.fresh_copy(&mut phox.ctx.ty))
-                                .collect(),
-                        }
-                    }
-                    else {
-                        Error::NoMatchingOverload(Expr {
-                            span: (0,0), // \TODO unused yet
-                            body: ExprBody::Var(sym),
-                            ty: Some(ty),
-                        })
-                    }
-                },
-            }
-        };
-        return Err(e)
+        Err(pending[0].clone().error(phox))
     }
-
-    Ok(())
+    else {
+        Ok(())
+    }
 }
 
+// -------------------------------------------------------------
+pub enum Response<T> {
+    Done,
+    Progressed(T),
+    Defered(T),
+}
+
+pub type SolverResult = Result<Response<Vec<Constraint>>, Error>;
+
+pub trait Solver {
+    fn solve(self, phox: &mut PhoxEngine) -> SolverResult;
+    fn error(self, phox: &mut PhoxEngine) -> Error;
+}
+
+// -------------------------------------------------------------
+impl Solver for Constraint {
+    fn solve(self, phox: &mut PhoxEngine) -> SolverResult {
+        match self {
+            Constraint::Ty(c) => c.solve(phox),
+            // Constraint::Row(c) => c.solve(phox),
+        }
+    }
+    fn error(self, phox: &mut PhoxEngine) -> Error {
+        match self {
+            Constraint::Ty(c) => c.error(phox),
+            // Constraint::Row(c) => c.error(phox),
+        }
+    }
+}
+
+// -------------------------------------------------------------
+impl Solver for TypeConstraint {
+    fn solve(self, phox: &mut PhoxEngine) -> SolverResult {
+        match &self {
+            TypeConstraint::TypeEq(t1, t2) => {
+                phox.ctx.ty.unify(&t1, &t2)?;
+                Ok(Response::Done)
+            }
+            TypeConstraint::TraitBound(head) => {
+                let mut fv = IndexSet::new();
+                head.free_vars(&mut phox.ctx, &mut fv);
+
+                if fv.iter().any(|v| phox.ctx.non_touchable.contains(v)) {
+                    Ok(Response::Defered(vec![Constraint::Ty(self)]))
+                }
+                else if let Ok(cs) = solve_trait_bound(phox, &head) {
+                    Ok(Response::Progressed(cs))
+                }
+                else {
+                    Ok(Response::Defered(vec![Constraint::Ty(self)]))
+                }
+            }
+            TypeConstraint::Overloaded(sym, ty, sch_tmpls) => {
+                let repr_ty = ty.repr(&mut phox.ctx.ty);
+                let cs = solve_overloaded(phox, &sym, &repr_ty, &sch_tmpls)?;
+                if repr_ty != *ty {
+                    Ok(Response::Progressed(cs))
+                }
+                else {
+                    Ok(Response::Defered(cs))
+                }
+            }
+        }
+    }
+
+    fn error(self, phox: &mut PhoxEngine) -> Error {
+        match self {
+            TypeConstraint::TypeEq(t1, t2) => {
+                Error::TypeMismatch(t1, t2)
+            },
+            TypeConstraint::TraitBound(head) => {
+                let candidates = lookup_impls_by_trait_head(phox, &head);
+                if candidates.is_empty() {
+                    Error::MissingImpl(head)
+                }
+                else {
+                    let mut dummy_ctx = phox.ctx.clone();
+                    let cands = candidates.iter().map(
+                        |tmpl| {
+                            let sch = tmpl.fresh_copy(&mut dummy_ctx.ty);
+                            Scheme {
+                                vars: vec![],
+                                constraints: sch.constraints.clone(),
+                                target: sch.target.head.clone()
+                            }
+                        }
+                    ).collect();
+                    Error::AmbiguousImpl {
+                        trait_head: head,
+                        candidates: cands,
+                    }
+                }
+            },
+            TypeConstraint::Overloaded(sym, ty, sch_tmpls) => {
+                if ty.contains_type_var() {
+                    Error::AmbiguousVariable {
+                        name: sym,
+                        candidates: sch_tmpls
+                            .iter()
+                            .map(|tmpl| tmpl.fresh_copy(&mut phox.ctx.ty))
+                            .collect(),
+                    }
+                }
+                else {
+                    Error::NoMatchingOverload(Expr {
+                        span: (0,0), // \TODO unused yet
+                        body: ExprBody::Var(sym),
+                        ty: Some(ty),
+                    })
+                }
+            },
+        }
+    }
+}
+
+// -------------------------------------------------------------
 fn solve_trait_bound(
     phox: &mut PhoxEngine,
     head: &TraitHead
@@ -203,17 +240,17 @@ fn solve_overloaded(
     ty: &Type,
     sch_tmpls: &Vec<SchemeTemplate<Type>>,
 ) -> Result<Vec<Constraint>, Error> {
-    let mut filtered = Vec::new();
+    let mut candidates = Vec::new();
     for cand_tmpl in sch_tmpls {
         let mut try_ctx = phox.ctx.clone();
         let cand = cand_tmpl.fresh_copy(&mut try_ctx.ty);
         let (_, ty_inst) = &cand.instantiate(&mut try_ctx.ty);
         if try_ctx.ty.unify(ty, ty_inst).is_ok() {
-            filtered.push((cand.target.score(), cand_tmpl));
+            candidates.push(cand_tmpl);
         }
     }
 
-    if filtered.is_empty() {
+    if candidates.is_empty() {
         return Err(Error::NoMatchingOverload(Expr {
             span: (0,0), // \TODO unused yet
             body: ExprBody::Var(sym.clone()),
@@ -221,26 +258,15 @@ fn solve_overloaded(
         }));
     }
 
-    let (_best_score, winner_tmpl) = filtered
-        .iter()
-        .max_by_key(|(score, _)| score)
-        .unwrap();
-    {
-        let candidates: Vec<_> = filtered
-            .iter()
-            // .filter(|(score, _)| score == best_score)
-            .cloned()
-            .collect();
-        if candidates.len() > 1 {
-            let tmpls = filtered
-                .into_iter()
-                .map(|(_, tmpl)| tmpl.clone())
-                .collect::<Vec<_>>();
-            return Ok(vec![Constraint::overloaded(sym, ty, &tmpls)]);
-        }
+    if candidates.len() > 1 {
+        let tmpls = candidates
+            .into_iter()
+            .map(|tmpl| tmpl.clone())
+            .collect::<Vec<_>>();
+        return Ok(vec![Constraint::overloaded(sym, ty, &tmpls)]);
     }
 
-    let winner = winner_tmpl.fresh_copy(&mut phox.ctx.ty);
+    let winner = candidates[0].fresh_copy(&mut phox.ctx.ty);
     let (constraints, ty_inst) = winner.instantiate(&mut phox.ctx.ty);
     phox.ctx.ty.unify(ty, &ty_inst)?;
     // Ok(constraints.into_vec())

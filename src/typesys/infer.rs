@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use indexmap::IndexMap;
+use indexmap::IndexSet;
+
 use crate::api::PhoxEngine;
 use crate::syntax::ast::*;
 use crate::module::*;
@@ -9,7 +10,7 @@ use super::*;
 fn filter_residual(
     phox: &mut PhoxEngine,
     residual: Vec<Constraint>,
-    scheme_vars: HashSet<Var>,
+    scheme_vars: IndexSet<Var>,
 ) -> (Vec<Constraint>, Vec<Constraint>) {
     let mut requires = Vec::new();
     let mut errors = Vec::new();
@@ -20,8 +21,8 @@ fn filter_residual(
                 let c = c.repr(&mut phox.ctx.ty);
                 match c {
                     TypeConstraint::TraitBound(ref head) => {
-                        let fv = &mut HashSet::new();
-                        head.free_vars(&mut phox.ctx.ty, fv);
+                        let fv = &mut IndexSet::new();
+                        head.free_vars(&mut phox.ctx, fv);
                         if fv.iter().all(|v| scheme_vars.contains(v)) {
                             requires.push(Constraint::Ty(c));
                         } else {
@@ -72,17 +73,16 @@ pub fn infer_decl(
             unreachable!();
         }
         Decl::NamedImpl(named) => {
-            let mut headvars = HashSet::new();
-            named.head.free_vars(&mut phox.ctx.ty, &mut headvars);
-            let headvars = headvars.into_iter().map(|v| { let Var::Ty(t) = v; t }).collect();
+            let mut headvars = IndexSet::new();
+            named.head.free_vars(&mut phox.ctx, &mut headvars);
             // ----------------------------------------------------------------------
-            phox.ctx.ty.set_non_touchable(&headvars);
+            phox.ctx.set_non_touchable(&headvars);
             // ----------------------------------------------------------------------
             icx.enter_template_body();
             let res = infer_decl_named_impl(phox, module, icx, named);
             icx.leave_template_body();
             // ----------------------------------------------------------------------
-            phox.ctx.ty.clear_non_touchable();
+            phox.ctx.clear_non_touchable();
             // ----------------------------------------------------------------------
             let scheme = res?;
             *decl = Decl::SchImpl(scheme);
@@ -96,17 +96,11 @@ pub fn infer_decl(
             unreachable!();
         }
         Decl::NamedStarlet(named) => {
-            // let mut vars = HashSet::new();
-            // named.expr.free_type_vars(&mut phox.ctx, &mut vars);
-            // // ----------------------------------------------------------------------
-            // phox.ctx.set_non_touchable(&vars);
-            // // ----------------------------------------------------------------------
+            // ----------------------------------------------------------------------
             icx.enter_template_body();
             let res = infer_decl_named_starlet(phox, module, icx, named);
             icx.leave_template_body();
-            // // ----------------------------------------------------------------------
-            // phox.ctx.clear_non_touchable();
-            // // ----------------------------------------------------------------------
+            // ----------------------------------------------------------------------
             let scheme = res?;
             *decl = Decl::SchStarlet(scheme);
             Ok((Type::unit(), vec![]))
@@ -167,8 +161,8 @@ fn infer_decl_named_impl(
 
     let typed = TypedImpl { head: named.head.clone(), members }.repr(&mut phox.ctx.ty);
 
-    let mut scheme_vars = HashSet::new();
-    typed.free_vars(&mut phox.ctx.ty, &mut scheme_vars);
+    let mut scheme_vars = IndexSet::new();
+    typed.free_vars(&mut phox.ctx, &mut scheme_vars);
 
     let (requires, errors) = filter_residual(phox, residual, scheme_vars.clone());
 
@@ -206,8 +200,8 @@ fn infer_decl_named_starlet(
 
     let typed = TypedStarlet { name, expr, ty }.repr(&mut phox.ctx.ty);
 
-    let mut scheme_vars = HashSet::new();
-    typed.free_vars(&mut phox.ctx.ty, &mut scheme_vars);
+    let mut scheme_vars = IndexSet::new();
+    typed.free_vars(&mut phox.ctx, &mut scheme_vars);
 
     let (requires, errors) = filter_residual(phox, residual, scheme_vars.clone());
 
@@ -256,7 +250,7 @@ pub fn infer_stmt(
 
             for (sym, t) in bindings {
                 let t = t.repr(&mut phox.ctx.ty);
-                let sch = generalize(&mut phox.ctx.ty, icx, &t);
+                let sch = generalize(&mut phox.ctx, icx, &t);
                 icx.put_type_scheme(sym, sch);
             }
 
@@ -606,14 +600,14 @@ fn trait_members(
     phox: &mut PhoxEngine,
     module: &RefModule,
     head: &TraitHead,
-) -> Option<HashMap<String, SchemeTemplate<Type>>> {
+) -> Option<IndexMap<String, SchemeTemplate<Type>>> {
     let Symbol::Unique(path) = &head.name else { return None };
     match path.resolve(module, &phox.roots) {
         Some((m, Some(rem))) if rem.len() == 1 => {
             let trait_members = m.borrow().trait_members.clone();
             let Some(member_names) = trait_members.get(&rem.to_string()) else { return None };
             let icx = &mut phox.get_infer_ctx(&m);
-            let mut member_map = HashMap::new();
+            let mut member_map = IndexMap::new();
             for member_name in member_names.iter() {
                 let Some(tmpls) = icx.get_trait_member_schemes(&Symbol::trait_member(member_name.clone())) else { return None };
                 for tmpl in tmpls.iter() {

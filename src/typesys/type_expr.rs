@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use indexmap::IndexSet;
 use std::fmt;
+
 use super::*;
 
 // ===== TypeExpr =====
@@ -37,12 +37,6 @@ impl TypeExpr {
         }
     }
 
-    pub fn score(&self) -> (usize, i64) {
-        match self {
-            Self::Ty(ty) => ty.score()
-        }
-    }
-
     pub fn as_ref_type(&self) -> &Type {
         match self {
             Self::Ty(ty) => ty
@@ -59,7 +53,7 @@ impl ApplySubst for TypeExpr {
 }
 
 impl FreeVars for TypeExpr {
-    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
+    fn free_vars(&self, ctx: &mut UnifiedContext, acc: &mut IndexSet<Var>) {
         match self {
             Self::Ty(ty) => ty.free_vars(ctx, acc),
         }
@@ -75,7 +69,7 @@ impl Repr for TypeExpr {
 }
 
 impl RenameForPretty for TypeExpr {
-    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+    fn rename_var(&self, map: &mut VarNameMap) -> Self {
         match self {
             Self::Ty(ty) => Self::Ty(ty.rename_var(map))
         }

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+indexmap = "2.13.0"
 # lalrpop-util = { version = "0.22", features = ["lexer"] }
 lalrpop-util = "0.22"
 logos = "0.14"

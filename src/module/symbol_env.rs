@@ -1,9 +1,9 @@
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use super::*;
 
-pub type Binding = HashMap<Path, Symbol>;
+pub type Binding = IndexMap<Path, Symbol>;
 
 /// resolve 時の環境
 #[derive(Clone)]
@@ -14,7 +14,7 @@ pub struct SymbolEnv {
 
 impl SymbolEnv {
     pub fn new() -> Self {
-        SymbolEnv { map: Rc::new(RefCell::new(HashMap::new())), local: false, }
+        SymbolEnv { map: Rc::new(RefCell::new(IndexMap::new())), local: false, }
     }
 
     pub fn insert(&self, k: Path, v: Symbol) {

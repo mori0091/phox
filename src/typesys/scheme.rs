@@ -1,5 +1,6 @@
 use std::fmt;
-use std::collections::{HashMap, HashSet};
+use indexmap::IndexSet;
+
 use super::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -38,13 +39,13 @@ impl <T> Scheme<T> {
     }
 }
 
-pub fn generalize<T: FreeVars + Repr>(ctx: &mut TypeContext, icx: &InferCtx, target: &T) -> Scheme<T> {
-    let mut fty = HashSet::new();
+pub fn generalize<T: FreeVars + Repr>(ctx: &mut UnifiedContext, icx: &InferCtx, target: &T) -> Scheme<T> {
+    let mut fty = IndexSet::new();
     target.free_vars(ctx, &mut fty);
     let fenv = icx.free_env_vars(ctx);
     let mut vars: Vec<Var> = fty.difference(&fenv).cloned().collect();
     vars.sort();
-    Scheme::poly(vars, target.repr(ctx))
+    Scheme::poly(vars, target.repr(&mut ctx.ty))
 }
 
 impl <T: ApplySubst> ApplySubst for Scheme<T> {
@@ -106,7 +107,7 @@ impl <T: fmt::Display> fmt::Display for Scheme<T> {
 impl <T: RenameForPretty + Pretty + fmt::Display> Pretty for Scheme<T> {
     fn pretty(&self) -> String {
         // 量化変数に a, b, c... を割り当てる
-        let mut map = HashMap::new();
+        let mut map = VarNameMap::new();
         for (i, v) in self.vars.iter().enumerate() {
             let ch = (b'a' + i as u8) as char;
             map.insert(v.clone(), ch.to_string());

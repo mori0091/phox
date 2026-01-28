@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use indexmap::IndexSet;
 use std::fmt;
 
 use crate::module::*;
@@ -17,7 +16,7 @@ pub enum Stmt {
 // ----------------------------------------------
 // FreeTypeVars
 impl FreeVars for Stmt {
-    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
+    fn free_vars(&self, ctx: &mut UnifiedContext, acc: &mut IndexSet<Var>) {
         match self {
             Stmt::Mod(_name, opt_itmes) => {
                 match opt_itmes {
@@ -105,7 +104,7 @@ impl ApplySubst for Stmt {
 // ----------------------------------------------
 // SchemePretty
 impl RenameForPretty for Stmt {
-    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+    fn rename_var(&self, map: &mut VarNameMap) -> Self {
         match self {
             Stmt::Mod(name, opt_itmes) => {
                 let name = name.clone();

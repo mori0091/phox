@@ -69,20 +69,11 @@ pub use context::*;
 mod type_context;
 pub use type_context::*;
 
-#[derive(Clone)]
-pub struct UnifiedContext {
-    pub ty: TypeContext,
-    // pub row: RowContext,
-    // pub nat: NatContext,
-}
-impl UnifiedContext {
-    pub fn new() -> Self {
-        Self {
-            ty: TypeContext::new()
-        }
-    }
-}
+// ----
+mod unified_context;
+pub use unified_context::*;
 
+// ----
 mod infer_ctx;
 pub use infer_ctx::{
     KindEnv,
@@ -91,9 +82,11 @@ pub use infer_ctx::{
     InferCtx,
 };
 
+// ----
 mod impl_env;
 pub use impl_env::*;
 
+// ----
 mod starlet_env;
 pub use starlet_env::*;
 

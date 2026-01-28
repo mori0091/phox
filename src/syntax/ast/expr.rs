@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use indexmap::IndexSet;
 use std::fmt;
 
 use super::*;
@@ -120,7 +119,7 @@ impl Expr {
 // ----------------------------------------------
 // FreeTypeVars
 impl FreeVars for Expr {
-    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
+    fn free_vars(&self, ctx: &mut UnifiedContext, acc: &mut IndexSet<Var>) {
         match &self.ty {
             Some(ty) => {
                 ty.free_vars(ctx, acc);
@@ -402,7 +401,7 @@ impl fmt::Display for Expr {
 // ----------------------------------------------
 // SchemePretty
 impl RenameForPretty for Expr {
-    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+    fn rename_var(&self, map: &mut VarNameMap) -> Self {
         let span = self.span.clone();
         let ty = match &self.ty {
             Some(ty) => Some(ty.rename_var(map)),

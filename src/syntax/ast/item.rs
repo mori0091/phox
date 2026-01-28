@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use indexmap::IndexSet;
 use std::fmt;
+
 
 use crate::typesys::*;
 use super::{Decl, Stmt, Expr};
@@ -33,7 +33,7 @@ impl Item {
 // ----------------------------------------------
 // FreeTypeVars
 impl FreeVars for Item {
-    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
+    fn free_vars(&self, ctx: &mut UnifiedContext, acc: &mut IndexSet<Var>) {
         for c in &self.constraints {
             c.free_vars(ctx, acc);
         }
@@ -98,7 +98,7 @@ impl ApplySubst for Item {
 // ----------------------------------------------
 // SchemePretty
 impl RenameForPretty for Item {
-    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+    fn rename_var(&self, map: &mut VarNameMap) -> Self {
         let constraints = self.constraints.iter().map(|c| c.rename_var(map)).collect();
         let body = match &self.body {
             ItemBody::Decl(decl) => {

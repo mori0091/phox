@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use indexmap::IndexSet;
 use std::fmt;
 
 use super::*;
@@ -26,7 +25,7 @@ pub type ImplTemplate = SchemeTemplate<TypedImpl>;
 // ----------------------------------------------
 // FreeTypeVars
 impl FreeVars for TypedImpl {
-    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
+    fn free_vars(&self, ctx: &mut UnifiedContext, acc: &mut IndexSet<Var>) {
         self.head.free_vars(ctx, acc);
         for (_sym, e, ty) in self.members.iter() {
             e.free_vars(ctx, acc);
@@ -62,7 +61,7 @@ impl ApplySubst for TypedImpl {
 // ----------------------------------------------
 // RenameForPretty
 impl RenameForPretty for TypedImpl {
-    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+    fn rename_var(&self, map: &mut VarNameMap) -> Self {
         let head = self.head.rename_var(map);
         let members = self.members.iter().map(
             |(sym, expr, ty)| (
@@ -78,7 +77,7 @@ impl RenameForPretty for TypedImpl {
 // Pretty
 impl Pretty for TypedImpl {
     fn pretty(&self) -> String {
-        self.rename_var(&mut HashMap::new()).to_string()
+        self.rename_var(&mut VarNameMap::new()).to_string()
     }
 }
 
@@ -141,7 +140,7 @@ impl Scheme<TypedImpl> {
 
     pub fn pretty_componets(&self) -> (Vec<String>, ConstraintSet, TypedImpl) {
         // 量化変数に a, b, c... を割り当てる
-        let mut map = HashMap::new();
+        let mut map = VarNameMap::new();
         for (i, v) in self.vars.iter().enumerate() {
             let ch = (b'a' + i as u8) as char;
             map.insert(*v, ch.to_string());

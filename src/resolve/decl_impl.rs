@@ -33,7 +33,6 @@ fn check_impl_conflict(
         let sch = tmpl.fresh_copy(&mut ctx2.ty);
         let head = &sch.target.head;
         if head.name != impl_head.name { continue }
-        if head.score() != impl_head.score() { continue }
         let mut same = true;
         for (t1, t2) in head.params.iter().zip(impl_head.params.iter()) {
             if ctx2.ty.unify(t1, t2).is_err() {
