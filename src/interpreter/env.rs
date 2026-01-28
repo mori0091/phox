@@ -1,11 +1,11 @@
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use super::Value;
 use crate::module::*;
 
-pub type Binding = HashMap<Symbol, Value>;
+pub type Binding = IndexMap<Symbol, Value>;
 
 /// 評価時の環境
 #[derive(Clone)]
@@ -15,7 +15,7 @@ pub struct ValueEnv {
 
 impl ValueEnv {
     pub fn new() -> Self {
-        ValueEnv { map: Rc::new(RefCell::new(HashMap::new())) }
+        ValueEnv { map: Rc::new(RefCell::new(IndexMap::new())) }
     }
 
     pub fn insert(&self, k: Symbol, v: Value) {

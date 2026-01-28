@@ -236,7 +236,7 @@ impl PhoxEngine {
         // eprintln!();
 
         let icx = &mut self.get_infer_ctx(module);
-        let sch = generalize(&mut self.ctx.ty, icx, &ty);
+        let sch = generalize(&mut self.ctx, icx, &ty);
         Ok((val, sch))
     }
 

@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use indexmap::IndexMap;
+
 use super::*;
 
-pub type Subst = HashMap<Var, Type>;
+pub type Subst = IndexMap<Var, Type>;
 
 pub trait ApplySubst {
     fn apply_subst(&self, subst: &Subst) -> Self;

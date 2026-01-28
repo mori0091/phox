@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use indexmap::IndexSet;
 use std::fmt;
+
 use super::*;
 use crate::module::*;
 
@@ -70,43 +71,6 @@ impl Type {
     }
 }
 
-impl Type {
-    pub fn score(&self) -> (usize, i64) {
-        match self {
-            Type::Var(_) => (0, -1),
-            Type::Con(_) => (1, 0),
-            Type::App(f, x) => {
-                let (s1, g1) = f.score();
-                let (s2, g2) = x.score();
-                (s1+s2, g1+g2)
-            }
-            Type::Fun(a, b) => {
-                let (s1, g1) = a.score();
-                let (s2, g2) = b.score();
-                (s1+s2, g1+g2)
-            }
-            Type::Tuple(es) => {
-                let mut ret = (0, 0);
-                for e in es.iter() {
-                    let (s, g) = e.score();
-                    ret.0 += s;
-                    ret.1 += g;
-                }
-                ret
-            }
-            Type::Record(fields) => {
-                let mut ret = (0, 0);
-                for (_, e) in fields.iter() {
-                    let (s, g) = e.score();
-                    ret.0 += s;
-                    ret.1 += g;
-                }
-                ret
-            }
-        }
-    }
-}
-
 impl ApplySubst for Type {
     fn apply_subst(&self, subst: &Subst) -> Self {
         match self {
@@ -130,13 +94,9 @@ impl ApplySubst for Type {
     }
 }
 
-use std::collections::HashSet;
-use super::TypeContext;
-use super::FreeVars;
-
 impl FreeVars for Type {
-    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
-        match self.repr(ctx) {
+    fn free_vars(&self, ctx: &mut UnifiedContext, acc: &mut IndexSet<Var>) {
+        match self.repr(&mut ctx.ty) {
             Type::Var(v) => {
                 acc.insert(Var::Ty(v));
             }
@@ -244,7 +204,7 @@ impl fmt::Display for Type {
 }
 
 impl RenameForPretty for Type {
-    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+    fn rename_var(&self, map: &mut VarNameMap) -> Self {
         match self {
             Type::Var(v) => {
                 let v = Var::Ty(v.clone());
@@ -278,6 +238,6 @@ impl RenameForPretty for Type {
 
 impl Pretty for Type {
     fn pretty(&self) -> String {
-        self.rename_var(&mut HashMap::new()).to_string()
+        self.rename_var(&mut VarNameMap::new()).to_string()
    }
 }

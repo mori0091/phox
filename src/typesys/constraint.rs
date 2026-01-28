@@ -1,6 +1,5 @@
 use std::fmt;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use indexmap::IndexSet;
 
 use crate::module::*;
 use super::*;
@@ -25,7 +24,7 @@ impl Constraint {
 }
 
 impl FreeVars for Constraint {
-    fn free_vars(&self, ctx: &mut TypeContext, acc: &mut HashSet<Var>) {
+    fn free_vars(&self, ctx: &mut UnifiedContext, acc: &mut IndexSet<Var>) {
         match self {
             Self::Ty(c) => c.free_vars(ctx, acc)
         }
@@ -41,7 +40,7 @@ impl ApplySubst for Constraint {
 }
 
 impl RenameForPretty for Constraint {
-    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+    fn rename_var(&self, map: &mut VarNameMap) -> Self {
         match self {
             Self::Ty(c) => Self::Ty(c.rename_var(map))
         }

@@ -143,7 +143,7 @@ fn add_primitive_func(phox: &mut PhoxEngine, module: &RefModule, name: &str, val
     let symbol = make_top_level_symbol(phox, module, name)?;
     phox.get_value_env(module).insert(symbol.clone(), val);
     let icx = &mut phox.get_infer_ctx(module);
-    let sch = generalize(&mut phox.ctx.ty, icx, &ty);
+    let sch = generalize(&mut phox.ctx, icx, &ty);
     icx.put_type_scheme(symbol, sch);
     Ok(())
 }

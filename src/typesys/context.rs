@@ -1,6 +1,6 @@
-use std::collections::HashSet;
 use std::fmt::Debug;
 use std::hash::Hash;
+use indexmap::IndexSet;
 
 pub trait VarId:
     Copy + Clone + Eq + Ord + Hash + Debug
@@ -14,7 +14,7 @@ pub trait VarId:
 pub struct Context<Id: VarId, T> {
     pub parent: Vec<Id>,         // union-find parent pointers
     pub binding: Vec<Option<T>>, // representative binding (Some if bound to a type)
-    pub non_touchable: HashSet<Id>,
+    pub non_touchable: IndexSet<Id>,
 }
 
 impl <Id: VarId, T: Clone> Context<Id, T> {
@@ -22,11 +22,11 @@ impl <Id: VarId, T: Clone> Context<Id, T> {
         Self {
             parent: Vec::new(),
             binding: Vec::new(),
-            non_touchable: HashSet::new(),
+            non_touchable: IndexSet::new(),
         }
     }
 
-    pub fn set_non_touchable(&mut self, non_touchable: &HashSet<Id>) {
+    pub fn set_non_touchable(&mut self, non_touchable: &IndexSet<Id>) {
         self.non_touchable.extend(non_touchable);
     }
 

@@ -1,6 +1,9 @@
-use std::collections::HashMap;
+use indexmap::IndexMap;
+
 use super::*;
 
+pub type VarNameMap = IndexMap<Var, String>;
+
 pub trait RenameForPretty {
-    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self;
+    fn rename_var(&self, map: &mut VarNameMap) -> Self;
 }

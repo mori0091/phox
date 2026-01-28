@@ -1,6 +1,5 @@
 use std::fmt;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use super::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -54,7 +53,7 @@ impl ApplySubst for ConstraintSet {
 }
 
 impl RenameForPretty for ConstraintSet {
-    fn rename_var(&self, map: &mut HashMap<Var, String>) -> Self {
+    fn rename_var(&self, map: &mut VarNameMap) -> Self {
         let primary = match self.primary {
             None => None,
             Some(ref head) => Some(Box::new(head.rename_var(map))),
