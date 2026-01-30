@@ -23,15 +23,15 @@ fn test_match_option_some() {
 
 #[test]
 fn test_record_value() {
-    let (val, sch) = eval("@{ x: 1, y: 2 }").unwrap();
-    assert_eq!(format!("{}", val), "@{ x: 1, y: 2 }");
+    let (val, sch) = eval("@{ x = 1, y = 2 }").unwrap();
+    assert_eq!(format!("{}", val), "@{ x = 1, y = 2 }");
     assert_eq!(format!("{}", sch.pretty()), "@{ x: Int, y: Int }");
 }
 
 #[test]
 fn test_record_match() {
     let (val, sch) = eval(
-        "match(@{ x: 1, y: 2 }) { @{ x: x, y: y } => x + y }"
+        "match(@{ x = 1, y = 2 }) { @{ x = x, y = y } => x + y }"
     ).unwrap();
     assert_eq!(format!("{}", val), "3");
     assert_eq!(format!("{}", sch.pretty()), "Int");
@@ -40,7 +40,7 @@ fn test_record_match() {
 #[test]
 fn test_record_match_ignore_field() {
     let (val, sch) = eval(
-        "match(@{ x: 10, y: 20 }) { @{ x: x, y: _ } => x }"
+        "match(@{ x = 10, y = 20 }) { @{ x = x, y = _ } => x }"
     ).unwrap();
     assert_eq!(format!("{}", val), "10");
     assert_eq!(format!("{}", sch.pretty()), "Int");

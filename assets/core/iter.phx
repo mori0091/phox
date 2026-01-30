@@ -154,8 +154,8 @@ type ZipWith s a t b c = ZipWith (a -> b -> c) (s a) (t b);
 /// impl Iter (ZipWith a b c d) e requires Iter a b, Iter c d.
 impl Iter (ZipWith s a t b) c {
     next = \ZipWith f xs ys. {
-        let @{next: next_s} = @{Iter s a};
-        let @{next: next_t} = @{Iter t b};
+        let @{next = next_s} = @{Iter s a};
+        let @{next = next_t} = @{Iter t b};
         match ((next_s xs, next_t ys)) {
             (Some (x, xs'), Some (y, ys')) => Some (f x y, ZipWith f xs' ys'),
             _ => None,

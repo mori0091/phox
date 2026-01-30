@@ -27,7 +27,7 @@ fn test_lambda_record_pattern() {
     // f = \@{x, y}. y
     let (val, sch) = eval(
         "let f = \\@{ x, y }. y;
-         f @{ x: 10, y: true }"
+         f @{ x = 10, y = true }"
     ).unwrap();
     assert_eq!(format!("{}", val), "true");
     assert_eq!(format!("{}", sch.pretty()), "Bool");
@@ -184,7 +184,7 @@ fn test_constructor_arity_mismatch() {
 #[test]
 fn test_unknown_field_access() {
     let err = eval(
-        "let r = @{ x: 1 };
+        "let r = @{ x = 1 };
          r.y"
     ).unwrap_err();
     assert!(err.contains("unknown field `y`"), "unexpected error: {err}");
@@ -193,7 +193,7 @@ fn test_unknown_field_access() {
 #[test]
 fn test_unknown_field_in_pattern() {
     let err = eval(
-        "let @{ x, y } = @{ x: 1 };"
+        "let @{ x, y } = @{ x = 1 };"
     ).unwrap_err();
     assert!(err.contains("type mismatch"), "unexpected error: {err}");
 }
