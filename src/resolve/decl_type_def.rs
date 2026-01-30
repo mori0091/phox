@@ -51,7 +51,7 @@ fn resolve_raw_type_def(
 ) -> Result<TypeDef, Error> {
     match raw {
         RawTypeDef::SumType { name, params, variants } => {
-            let mut param_map = HashMap::new();
+            let mut param_map = TyParMap::new();
             let mut param_ids = Vec::new();
             for p in params {
                 let id = phox.ctx.ty.fresh_var_id();
@@ -80,7 +80,7 @@ fn resolve_raw_variant(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawVariant,
-    param_map: &HashMap<String, TypeVarId>,
+    param_map: &TyParMap,
 ) -> Result<Variant, Error> {
     let v = match raw {
         RawVariant::Unit(name) => {
@@ -106,7 +106,7 @@ pub fn resolve_raw_type(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawType,
-    param_map: &mut HashMap<String, TypeVarId>,
+    param_map: &mut TyParMap,
 ) -> Result<Type, Error> {
     let ty = match raw {
         RawType::VarName(name) => {

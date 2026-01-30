@@ -9,7 +9,7 @@ pub fn resolve_stmt(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
-    param_map: &mut HashMap<String, TypeVarId>,
+    param_map: &mut TyParMap,
     stmt: &mut Stmt,
 ) -> Result<(), Error> {
     match stmt {

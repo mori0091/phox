@@ -12,7 +12,7 @@ pub fn resolve_decl_starlet(
     // let mut name = Symbol::unresolved(&raw.name);
     // resolve_symbol(phox, module, symbol_env, &mut name)?;
     let mut expr = raw.expr.as_ref().clone();
-    let mut param_map = HashMap::new();
+    let mut param_map = TyParMap::new();
     resolve_expr(phox, module, symbol_env, &mut param_map, &mut expr)?;
 
     Ok(NamedStarlet { name, expr })

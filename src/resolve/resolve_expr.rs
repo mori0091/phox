@@ -6,7 +6,7 @@ pub fn resolve_expr(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
-    param_map: &mut HashMap<String, TypeVarId>,
+    param_map: &mut TyParMap,
     expr: &mut Expr,
 ) -> Result<(), Error> {
     match &mut expr.body {

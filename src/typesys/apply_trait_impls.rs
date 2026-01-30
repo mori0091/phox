@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
 use crate::api::PhoxEngine;
-use crate::resolve::resolve_expr;
+use crate::resolve::*;
 use crate::syntax::ast::*;
 use crate::typesys::*;
 use crate::module::*;
@@ -129,7 +127,7 @@ pub fn apply_trait_impls_expr(
                             // it currently needs to be resolved again in the
                             // calling environment.
                             let symbol_env = &mut phox.get_symbol_env(module);
-                            let param_map = &mut HashMap::new();
+                            let param_map = &mut TyParMap::new();
                             resolve_expr(phox, module, symbol_env, param_map, &mut expr_inst)?;
 
                             apply_trait_impls_expr(phox, module, &mut expr_inst)?;
@@ -185,7 +183,7 @@ pub fn apply_trait_impls_expr(
                             // it currently needs to be resolved again in the
                             // calling environment.
                             let symbol_env = &mut phox.get_symbol_env(module);
-                            let param_map = &mut HashMap::new();
+                            let param_map = &mut TyParMap::new();
                             resolve_expr(phox, module, symbol_env, param_map, &mut expr_inst)?;
 
                             apply_trait_impls_expr(phox, module, &mut expr_inst)?;
@@ -218,7 +216,7 @@ pub fn apply_trait_impls_expr(
             expr.body = body;
 
             let symbol_env = &mut phox.get_symbol_env(module);
-            let param_map = &mut HashMap::new();
+            let param_map = &mut TyParMap::new();
             resolve_expr(phox, module, symbol_env, param_map, expr)?;
 
             apply_trait_impls_expr(phox, module, expr)?;

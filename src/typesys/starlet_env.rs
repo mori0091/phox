@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use indexmap::IndexMap;
+
 use crate::syntax::ast::*;
 use crate::module::*;
 use super::*;
@@ -6,13 +7,13 @@ use super::*;
 // ===== Starlet Environment =====
 // set of typed starlets.
 pub struct StarletEnv {
-    map: HashMap<String, SchemeTemplate<TypedStarlet>>,
+    map: IndexMap<String, SchemeTemplate<TypedStarlet>>,
 }
 
 impl StarletEnv {
     pub fn new() -> Self {
         StarletEnv {
-            map: HashMap::new(),
+            map: IndexMap::new(),
         }
     }
     pub fn insert(&mut self, tmpl: SchemeTemplate<TypedStarlet>) -> bool {

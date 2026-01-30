@@ -13,7 +13,7 @@ pub fn resolve_decl_trait(
     let trait_symbol = make_symbol(phox, module, symbol_env, &raw.name)?;
 
     let mut vars = Vec::new();          // [id]
-    let mut param_map = HashMap::new(); // {"a": id}
+    let mut param_map = TyParMap::new(); // {"a": id}
     let head = {
         let mut params = Vec::new(); // [Type::Var(id)]
         for p in raw.params.iter() {

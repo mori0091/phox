@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use super::*;
 
 // -------------------------------------------------------------
@@ -9,7 +8,7 @@ pub fn resolve_decl_impl(
     symbol_env: &mut SymbolEnv,
     raw: &RawImpl,
 ) -> Result<NamedImpl, Error> {
-    let mut param_map = HashMap::new();
+    let mut param_map = TyParMap::new();
     let head = resolve_impl_head(phox, module, symbol_env, &mut param_map, &raw.head())?;
     check_impl_conflict(phox, &head)?;
 
@@ -60,7 +59,7 @@ pub fn resolve_impl_head(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
-    param_map: &mut HashMap<String, TypeVarId>,
+    param_map: &mut TyParMap,
     raw: &RawTraitHead,
 ) -> Result<TraitHead, Error> {
     let mut symbol = raw.name.clone();

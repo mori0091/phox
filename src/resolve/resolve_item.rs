@@ -6,7 +6,7 @@ pub fn resolve_item(
     phox: &mut PhoxEngine,
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
-    param_map: &mut HashMap<String, TypeVarId>,
+    param_map: &mut TyParMap,
     item: &mut Item,
 ) -> Result<(), Error> {
     match &mut item.body {

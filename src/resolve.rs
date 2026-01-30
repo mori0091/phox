@@ -9,6 +9,9 @@ mod resolve_symbol;
 pub use resolve_symbol::*;
 
 // -------------------------------------------------------------
+use indexmap::IndexMap;
+pub type TyParMap = IndexMap<String, TypeVarId>;
+
 mod resolve_item;
 pub use resolve_item::*;
 
@@ -26,8 +29,6 @@ mod resolve_pat;
 pub use resolve_pat::*;
 
 // -------------------------------------------------------------
-use std::collections::HashMap;
-
 use crate::api::PhoxEngine;
 use crate::module::*;
 use crate::syntax::ast::*;

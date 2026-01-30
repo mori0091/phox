@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use indexmap::IndexMap;
 use lalrpop_util::ParseError;
 
 use crate::grammar::*;
@@ -27,10 +26,10 @@ pub const DEFAULT_USER_ROOT_MODULE_NAME: &str = "__main__";
 pub struct PhoxEngine {
     pub ctx: UnifiedContext,
     pub roots: RootModules,
-    pub extern_symbol_envs: HashMap<Path, SymbolEnv>, // extern symbol table for each modules
-    pub module_symbol_envs: HashMap<Path, SymbolEnv>, // local symbol table for each modules
-    pub module_infer_ctxs: HashMap<Path, InferCtx>,   // kind_env, type_env, and trait_member_env for each modules
-    pub module_value_envs: HashMap<Path, ValueEnv>,   // value_env for each modules
+    pub extern_symbol_envs: IndexMap<Path, SymbolEnv>, // extern symbol table for each modules
+    pub module_symbol_envs: IndexMap<Path, SymbolEnv>, // local symbol table for each modules
+    pub module_infer_ctxs: IndexMap<Path, InferCtx>,   // kind_env, type_env, and trait_member_env for each modules
+    pub module_value_envs: IndexMap<Path, ValueEnv>,   // value_env for each modules
     pub starlet_env: StarletEnv,                      // starlet_env ; the set of `SchemeTeamplate<TypedStarlet>`s for each defined `*let`.
     pub impl_env: ImplEnv,                            // impl_env ; the set of `SchemeTeamplate<TypedImpl>`s for each defined `impl`.
 }
@@ -40,10 +39,10 @@ impl PhoxEngine {
         let mut phox = PhoxEngine {
             ctx: UnifiedContext::new(),
             roots: RootModules::new(),
-            extern_symbol_envs: HashMap::new(),
-            module_symbol_envs: HashMap::new(),
-            module_infer_ctxs: HashMap::new(),
-            module_value_envs: HashMap::new(),
+            extern_symbol_envs: IndexMap::new(),
+            module_symbol_envs: IndexMap::new(),
+            module_infer_ctxs: IndexMap::new(),
+            module_value_envs: IndexMap::new(),
             starlet_env: StarletEnv::new(),
             impl_env: ImplEnv::new(),
         };
@@ -147,7 +146,7 @@ impl PhoxEngine {
     /// Resolve an item.
     pub fn resolve_item(&mut self, module: &RefModule, item: &mut Item) -> Result<(), Error> {
         let symbol_env = &mut self.get_symbol_env(module);
-        let param_map = &mut HashMap::new();
+        let param_map = &mut IndexMap::new();
         resolve_item(self, module, symbol_env, param_map, item)
     }
 

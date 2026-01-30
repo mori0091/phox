@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use indexmap::IndexMap;
+
 use crate::syntax::ast::*;
 use crate::module::*;
 use super::*;
@@ -6,13 +7,13 @@ use super::*;
 // ===== Impl Environment =====
 // set of typed impls.
 pub struct ImplEnv {
-    map: HashMap<String, SchemeTemplate<TypedImpl>>,
+    map: IndexMap<String, SchemeTemplate<TypedImpl>>,
 }
 
 impl ImplEnv {
     pub fn new() -> Self {
         ImplEnv {
-            map: HashMap::new(),
+            map: IndexMap::new(),
         }
     }
     pub fn insert(&mut self, tmpl: SchemeTemplate<TypedImpl>) -> bool {
