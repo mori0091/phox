@@ -57,7 +57,7 @@ impl fmt::Display for Value {
                 else {
                     let s: Vec<String>
                         = fields.iter()
-                                .map(|(k, v)| format!("{}: {}", PathComponent::Name(k.clone()).pretty(), v))
+                                .map(|(k, v)| format!("{} = {}", PathComponent::Name(k.clone()).pretty(), v))
                                 .collect();
                     write!(f, "@{{ {} }}", s.join(", "))
                 }

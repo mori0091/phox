@@ -30,7 +30,7 @@ cargo run examples/curry.phx
 ## 3. タプルとレコード
 ```ml
 let t = (1, true, ());
-let r = @{ x: 10, y: 20 };
+let r = @{ x = 10, y = 20 };
 (t.0, r.x)
 // => (1, 10): (Int, Int)
 ```
@@ -64,7 +64,7 @@ cargo run examples/pattern_match.phx
 ## 5. レコードパターン
 ```ml
 let f = λ@{ x, y }. x + y;
-f @{ x: 10, y: 32 }
+f @{ x = 10, y = 32 }
 // => 42: Int
 ```
 
@@ -78,7 +78,7 @@ cargo run examples/record_pattern.phx
 ```ml
 type Point a = @{ x: a, y: a };
 
-let p = Point @{ x: 3, y: 4 };
+let p = Point @{ x = 3, y = 4 };
 p.x + p.y
 // => 7: Int
 ```

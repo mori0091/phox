@@ -599,7 +599,7 @@ TraitHead: RawTraitHead = {
 };
 
 ExprRecordField: (String, Expr) = {
-    <name:Ident> ":" <value:Expr> => (name, value)
+    <name:Ident> "=" <value:Expr> => (name, value)
 };
 
 ExprFieldAccess: Expr = {
@@ -666,7 +666,7 @@ PatRecord: Pat = {
 };
 
 PatRecordField: (String, Pat) = {
-    <name:Ident> ":" <pat:Pat> => (name, pat),
+    <name:Ident> "=" <pat:Pat> => (name, pat),
     <name:Ident> => (name.clone(), Pat::unresolved_var(name)) // 省略形
 };
 

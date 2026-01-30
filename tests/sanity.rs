@@ -55,36 +55,36 @@ fn sanity_record_empty_fields_with_comma() {
 
 #[test]
 fn sanity_record_single_field_no_comma() {
-    let (val, sch) = eval("@{ a: 1 }").unwrap();
-    assert_eq!(format!("{}", val), "@{ a: 1 }");
+    let (val, sch) = eval("@{ a = 1 }").unwrap();
+    assert_eq!(format!("{}", val), "@{ a = 1 }");
     assert_eq!(format!("{}", sch.pretty()), "@{ a: Int }");
 }
 
 #[test]
 fn sanity_record_single_field_with_comma() {
-    let (val, sch) = eval("@{ a: 1, }").unwrap();
-    assert_eq!(format!("{}", val), "@{ a: 1 }");
+    let (val, sch) = eval("@{ a = 1, }").unwrap();
+    assert_eq!(format!("{}", val), "@{ a = 1 }");
     assert_eq!(format!("{}", sch.pretty()), "@{ a: Int }");
 }
 
 #[test]
 fn sanity_record_multiple_fields_no_comma() {
-    let (val, sch) = eval("@{ x: 1, y: 2 }").unwrap();
-    assert_eq!(format!("{}", val), "@{ x: 1, y: 2 }");
+    let (val, sch) = eval("@{ x = 1, y = 2 }").unwrap();
+    assert_eq!(format!("{}", val), "@{ x = 1, y = 2 }");
     assert_eq!(format!("{}", sch.pretty()), "@{ x: Int, y: Int }");
 }
 
 #[test]
 fn sanity_record_multiple_fields_with_comma() {
-    let (val, sch) = eval("@{ x: 1, y: 2, }").unwrap();
-    assert_eq!(format!("{}", val), "@{ x: 1, y: 2 }");
+    let (val, sch) = eval("@{ x = 1, y = 2, }").unwrap();
+    assert_eq!(format!("{}", val), "@{ x = 1, y = 2 }");
     assert_eq!(format!("{}", sch.pretty()), "@{ x: Int, y: Int }");
 }
 
 #[test]
 fn sanity_record_pattern_field_order_irrelevant() {
     let (val, sch) = eval(
-        "match(@{ y: 2, x: 1 }) { @{ x: x, y: y } => x + y }"
+        "match(@{ y = 2, x = 1 }) { @{ x = x, y = y } => x + y }"
     ).unwrap();
     assert_eq!(format!("{}", val), "3");
     assert_eq!(format!("{}", sch.pretty()), "Int");
@@ -94,7 +94,7 @@ fn sanity_record_pattern_field_order_irrelevant() {
 #[should_panic]
 fn sanity_record_pattern_too_less_field() {
     let _ = eval(
-        "match(@{ y: 2, x: 1 }) { @{ x: x } => x }"
+        "match(@{ y = 2, x = 1 }) { @{ x = x } => x }"
     ).unwrap();
 }
 
@@ -102,6 +102,6 @@ fn sanity_record_pattern_too_less_field() {
 #[should_panic]
 fn sanity_record_pattern_too_much_field() {
     let _ = eval(
-        "match(@{ y: 2, x: 1 }) { @{ x: x, y: y, z: _ } => x + y }"
+        "match(@{ y = 2, x = 1 }) { @{ x = x, y = y, z = _ } => x + y }"
     ).unwrap();
 }

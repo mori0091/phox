@@ -34,9 +34,9 @@ fn test_user_defined_result_like() {
 fn test_user_defined_record_variant() {
     let (val, sch) = eval(
         "type Point = P @{ x: Int, y: Int };
-         P @{ x: 3, y: 4 }"
+         P @{ x = 3, y = 4 }"
     ).unwrap();
-    assert_eq!(format!("{}", val), "P @{ x: 3, y: 4 }");
+    assert_eq!(format!("{}", val), "P @{ x = 3, y = 4 }");
     assert_eq!(format!("{}", sch.pretty()), "Point");
 }
 
@@ -44,7 +44,7 @@ fn test_user_defined_record_variant() {
 fn test_user_defined_record_variant_match() {
     let (val, sch) = eval(
         "type Point = P @{ x: Int, y: Int };
-         match(P @{ x: 3, y: 4 }) { P @{ x, y } => x + y }"
+         match(P @{ x = 3, y = 4 }) { P @{ x, y } => x + y }"
     ).unwrap();
     assert_eq!(format!("{}", val), "7");
     assert_eq!(format!("{}", sch.pretty()), "Int");
@@ -87,9 +87,9 @@ fn test_user_defined_tree_match() {
 fn test_user_defined_tree_record_leaf() {
     let (val, sch) = eval(
         "type Tree a = Leaf @{ value: a } | Node @{ left: Tree a, right: Tree a };
-         Leaf @{ value: 42 }"
+         Leaf @{ value = 42 }"
     ).unwrap();
-    assert_eq!(format!("{}", val), "Leaf @{ value: 42 }");
+    assert_eq!(format!("{}", val), "Leaf @{ value = 42 }");
     assert_eq!(format!("{}", sch.pretty()), "Tree Int");
 }
 
@@ -97,9 +97,9 @@ fn test_user_defined_tree_record_leaf() {
 fn test_user_defined_tree_record_node() {
     let (val, sch) = eval(
         "type Tree a = Leaf @{ value: a } | Node @{ left: Tree a, right: Tree a };
-         Node @{ left: Leaf @{ value: 1 }, right: Leaf @{ value: 2 } }"
+         Node @{ left = Leaf @{ value = 1 }, right = Leaf @{ value = 2 } }"
     ).unwrap();
-    assert_eq!(format!("{}", val), "Node @{ left: Leaf @{ value: 1 }, right: Leaf @{ value: 2 } }");
+    assert_eq!(format!("{}", val), "Node @{ left = Leaf @{ value = 1 }, right = Leaf @{ value = 2 } }");
     assert_eq!(format!("{}", sch.pretty()), "Tree Int");
 }
 
@@ -107,11 +107,11 @@ fn test_user_defined_tree_record_node() {
 fn test_user_defined_tree_record_match() {
     let (val, sch) = eval(
         "type Tree a = Leaf @{ value: a } | Node @{ left: Tree a, right: Tree a };
-         match(Node @{ left: Leaf @{ value: 10 }, right: Leaf @{ value: 20 } }) {
-             Leaf @{ value: x } => x,
+         match(Node @{ left = Leaf @{ value = 10 }, right = Leaf @{ value = 20 } }) {
+             Leaf @{ value = x } => x,
              Node @{ left, right } =>
                  match(left) {
-                     Leaf @{ value: y } => y,
+                     Leaf @{ value = y } => y,
                      Node _ => 0
                  }
          }"

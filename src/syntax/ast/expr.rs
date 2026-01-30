@@ -363,7 +363,7 @@ impl fmt::Display for Expr {
                 else {
                     let s: Vec<String>
                         = fields.iter()
-                                .map(|(k, v)| format!("{}: {}", k, v))
+                                .map(|(k, v)| format!("{} = {}", k, v))
                                 .collect();
                     write!(f, "@{{ {} }}", s.join(", "))
                 }

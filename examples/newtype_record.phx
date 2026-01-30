@@ -1,5 +1,5 @@
 type Point a = @{ x: a, y: a };
 
-let p = Point @{ x: 3, y: 4 };
+let p = Point @{ x = 3, y = 4 };
 p.x + p.y
 // => 7: Int

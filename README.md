@@ -146,7 +146,7 @@ match (opt) {
 ### Tuples and records
 ``` rust
 let t = (1, true, ());
-let r = @{ x: 10, y: 20 };
+let r = @{ x = 10, y = 20 };
 (t.1, r.x)   // tuple index is 0-based
 // => (true, 10): (Bool, Int)
 ```
@@ -156,7 +156,7 @@ let r = @{ x: 10, y: 20 };
 ``` rust
 type Point a = @{ x: a, y: a };
 
-let p = Point @{ x: 3, y: 4 };
+let p = Point @{ x = 3, y = 4 };
 p.x + p.y
 // => 7: Int
 ```
