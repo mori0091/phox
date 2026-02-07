@@ -116,6 +116,23 @@ pub Item: Item = {
     Expr => Item::expr(<>),
 };
 
+// === block local items ===
+pub LocalItemList: Vec<Item> = {
+    <mut v:(<LocalItem> ";")*> <tail:Expr> => {
+        v.push(Item::expr(tail));
+        v
+    },
+    <mut v:(<LocalItem> ";")+> => {
+        v.push(Item::expr(Expr::unit()));
+        v
+    },
+};
+
+pub LocalItem: Item = {
+    Stmt => Item::stmt(<>),
+    Expr => Item::expr(<>),
+};
+
 // ----------------------------------------------
 // === declarations ===
 Decl: Decl = {
@@ -614,7 +631,7 @@ ExprBlock: Expr = {
     "{" "}" => {
         Expr::block(vec![Item::expr(Expr::unit())])
     },
-    "{" <items:ItemList> "}" => {
+    "{" <items:LocalItemList> "}" => {
         Expr::block(items)
     },
 };
