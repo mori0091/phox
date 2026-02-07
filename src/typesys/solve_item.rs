@@ -7,11 +7,11 @@ pub fn solve_item(
     item: &mut Item,
 ) -> Result<(), Error> {
     match &mut item.body {
-        ItemBody::Decl(_decl) => {
+        ItemBody::Decl(decl) => {
+            solve_decl(phox, decl)?;
             solve(phox, item.constraints.clone())
         }
-        ItemBody::Stmt(stmt) => {
-            solve_stmt(phox, stmt)?;
+        ItemBody::Stmt(_stmt) => {
             solve(phox, item.constraints.clone())
         }
         ItemBody::Expr(_expr) => {
@@ -20,12 +20,12 @@ pub fn solve_item(
     }
 }
 
-pub fn solve_stmt(
+pub fn solve_decl(
     phox: &mut PhoxEngine,
-    stmt: &mut Stmt,
+    decl: &mut Decl,
 ) -> Result<(), Error> {
-    match stmt {
-        Stmt::Mod(_name, opt_items) => {
+    match decl {
+        Decl::Mod(_name, opt_items) => {
             let Some(items) = opt_items else { unreachable!() };
             for item in items.iter_mut() {
                 solve_item(phox, item)?;

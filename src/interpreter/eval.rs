@@ -35,7 +35,6 @@ pub fn eval_stmt(
     stmt: &Stmt,
 ) -> Result<(), Error> {
     match stmt {
-        Stmt::Use(_) | Stmt::Mod(_, _) => Ok(()),
         Stmt::Let(pat, expr) => {
             let val = eval_expr(phox, module, env, expr)?;
             if let Some(bindings) = match_pat(pat, &val) {

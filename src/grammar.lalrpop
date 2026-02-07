@@ -119,11 +119,26 @@ pub Item: Item = {
 // ----------------------------------------------
 // === declarations ===
 Decl: Decl = {
+    DeclMod,
+    DeclUse,
     DeclType => Decl::Type(<>),
     DeclTrait => Decl::Trait(<>),
     DeclImpl => Decl::RawImpl(<>),
     DeclStarlet => Decl::RawStarlet(<>),
 }
+
+DeclMod: Decl = {
+    "mod" <m:"identifier"> <items:ModBlock> => Decl::Mod(m, items),
+};
+
+ModBlock: Option<Vec<Item>> = {
+    "{" "}" => None,
+    <("{" <ItemList> "}")?>,
+};
+
+DeclUse: Decl = {
+    "use" <ps:PathGlob> => Decl::Use(ps),
+};
 
 // ----------------------------------------------
 // === ADT type declarations ===
@@ -319,23 +334,8 @@ PathCon: Path = {
 // ----------------------------------------------
 // === statements ===
 Stmt: Stmt = {
-    StmtMod,
-    StmtUse,
     StmtLet,
     StmtLetRec,
-};
-
-StmtMod: Stmt = {
-    "mod" <m:"identifier"> <items:ModBlock> => Stmt::Mod(m, items),
-};
-
-ModBlock: Option<Vec<Item>> = {
-    "{" "}" => None,
-    <("{" <ItemList> "}")?>,
-};
-
-StmtUse: Stmt = {
-    "use" <ps:PathGlob> => Stmt::Use(ps),
 };
 
 StmtLet: Stmt = {
