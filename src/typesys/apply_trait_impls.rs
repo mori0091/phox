@@ -22,16 +22,7 @@ pub fn apply_trait_impls_stmt(
     stmt: &mut Stmt,
 ) -> Result<(), Error> {
     match stmt {
-        Stmt::Use(_) => Ok(()),
-        Stmt::Mod(name, opt_items) => {
-            let Some(items) = opt_items else { unreachable!() };
-            let sub = &module.get_submod(name).unwrap();
-            for item in items.iter_mut() {
-                apply_trait_impls_item(phox, sub, item)?;
-            }
-            Ok(())
-        }
-        Stmt::Let(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
+        Stmt::Let(_pat, expr)    => apply_trait_impls_expr(phox, module, expr),
         Stmt::LetRec(_pat, expr) => apply_trait_impls_expr(phox, module, expr),
     }
 }

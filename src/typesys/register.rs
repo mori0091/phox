@@ -27,7 +27,10 @@ pub fn register_decl(
     decl: &mut Decl,
 ) -> Result<(), Error> {
     match decl {
-        Decl::Type(_) | Decl::Trait(_) => {
+        Decl::Mod(_, _) |
+        Decl::Use(_)    |
+        Decl::Type(_)   |
+        Decl::Trait(_) => {
             Ok(())
         }
 

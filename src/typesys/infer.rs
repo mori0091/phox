@@ -65,7 +65,10 @@ pub fn infer_decl(
     decl: &mut Decl,
 ) -> Result<(Type, Vec<Constraint>), Error> {
     match decl {
-        Decl::Type(_) | Decl::Trait(_) => {
+        Decl::Mod(_, _) |
+        Decl::Use(_)    |
+        Decl::Type(_)   |
+        Decl::Trait(_) => {
             Ok((Type::unit(), vec![]))
         }
 
@@ -226,8 +229,6 @@ pub fn infer_stmt(
     stmt: &mut Stmt,
 ) -> Result<(Type, Vec<Constraint>), Error> {
     match stmt {
-        Stmt::Use(_) => Ok((Type::unit(), vec![])),
-        Stmt::Mod(_, _) => Ok((Type::unit(), vec![])),
         Stmt::Let(pat, expr) => {
             let mut css = Vec::new();
             let (t_expr, c_expr) = infer_expr(phox, module, icx, expr)?;

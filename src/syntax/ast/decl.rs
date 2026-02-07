@@ -6,10 +6,15 @@ pub use raw::*;
 mod resolved;
 pub use resolved::*;
 
+use crate::module::*;
 use crate::typesys::*;
+use super::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Decl {
+    Mod(String, Option<Vec<Item>>), // `mod bar;`
+    Use(PathGlob),              // `use ::foo::bar;`
+
     Type(RawTypeDef),           // parsed, "raw" type decl.
     Trait(RawTrait),            // parsed, "raw" trait decl.
 
@@ -25,6 +30,19 @@ pub enum Decl {
 impl fmt::Display for Decl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Decl::Mod(m, items) => {
+                if let Some(items) = items {
+                    let s: Vec<String> = items.iter()
+                        .map(|item| format!("  {};\n", item))
+                        .collect();
+                    write!(f, "mod {} {{\n{}\n}}", m, s.join("\n"))
+                }
+                else {
+                    write!(f, "mod {}", m)
+                }
+            },
+            Decl::Use(p)       => write!(f, "use {}", p),
+
             Decl::Type(raw) => write!(f, "{:?}", raw),
             Decl::Trait(raw) => write!(f, "{:?}", raw),
 
