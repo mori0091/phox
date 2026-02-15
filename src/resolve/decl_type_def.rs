@@ -1,9 +1,29 @@
+use crate::interpreter::*;
+use crate::syntax::ast::{Expr, Pat};
 use super::*;
+
+fn make_con(name: &Symbol, arity: usize) -> Value {
+    let mut args = Vec::with_capacity(arity);
+    let mut vars = Vec::with_capacity(arity);
+    for i in 0..arity {
+        let v = format!("a{}", i);
+        args.push(v.clone());
+        vars.push(Expr::unresolved_var(v));
+    }
+    let mut e = Expr::con(name.clone(), vars);
+    for v in args.iter().rev() {
+        e = Expr::abs(Pat::unresolved_var(v), e)
+    }
+
+    match e.body {
+        ExprBody::Con(name, _)   => Value::Con(name, vec![]),
+        ExprBody::Abs(pat, body) => Value::Closure { pat, body, env: ValueEnv::new() },
+        _ => unreachable!(),
+    }
+}
 
 // -------------------------------------------------------------
 // === type decl ===
-use crate::interpreter::make_constructor;
-
 pub fn resolve_decl_type_def(
     phox: &mut PhoxEngine,
     module: &RefModule,
@@ -36,7 +56,7 @@ pub fn resolve_decl_type_def(
         // Value of the data constructor `v`.
         env.insert(
             v.name(),
-            make_constructor(&v.name(), v.arity())
+            make_con(&v.name(), v.arity())
         );
     }
 

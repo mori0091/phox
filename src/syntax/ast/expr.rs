@@ -4,6 +4,7 @@ use std::fmt;
 use super::*;
 use crate::typesys::*;
 use crate::module::*;
+use crate::runtime::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Expr {
@@ -15,20 +16,21 @@ pub struct Expr {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ExprBody {
     Lit(Lit),
-    Var(Symbol),
-    App(Box<Expr>, Box<Expr>),
-
     Abs(Pat, Box<Expr>),
-    If(Box<Expr>, Box<Expr>, Box<Expr>),
-    Match(Box<Expr>, Vec<(Pat, Expr)>),
-    Block(Vec<Item>),               // ex. `{stmt; stmt; expr; expr}`
-
+    Builtin(Builtin),
+    Con(Symbol, Vec<Expr>),
     Tuple(Vec<Expr>),               // ex. `(1,)`, `(1, true, ())`
-    TupleAccess(Box<Expr>, usize),  // ex. `p.0`
-
     RawTraitRecord(RawTraitHead),   // ex. `@{ Eq Int }`
     TraitRecord(TraitHead),
     Record(Vec<(String, Expr)>),    // ex. `@{ x:a, y:b }`
+
+    Var(Symbol),
+    App(Box<Expr>, Box<Expr>),
+    If(Box<Expr>, Box<Expr>, Box<Expr>),
+    Match(Box<Expr>, Vec<(Pat, Expr)>),
+    For(Box<Expr>, Box<Expr>, Box<Expr>),
+    Block(Vec<Item>),               // ex. `{stmt; stmt; expr; expr}`
+    TupleAccess(Box<Expr>, usize),  // ex. `p.0`
     FieldAccess(Box<Expr>, String), // ex. `p.x`
 }
 
@@ -38,16 +40,19 @@ impl Expr {
             // values
             ExprBody::Lit(_)            => true,
             ExprBody::Abs(_, _)         => true,
+            ExprBody::Builtin(_)        => true,
+            ExprBody::Con(_, _)         => true,
             ExprBody::Tuple(_)          => true,
             ExprBody::RawTraitRecord(_) => true,
             ExprBody::TraitRecord(_)    => true,
             ExprBody::Record(_)         => true,
 
-            // non-values (expr may be sustituted by evaluation)
+            // non-values (expr may be substituted by evaluation)
             ExprBody::Var(_)            => false,
             ExprBody::App(_, _)         => false,
             ExprBody::If(_, _, _)       => false,
             ExprBody::Match(_, _)       => false,
+            ExprBody::For(_, _, _)      => false,
             ExprBody::Block(_)          => false,
             ExprBody::TupleAccess(_, _) => false,
             ExprBody::FieldAccess(_, _) => false,
@@ -84,11 +89,20 @@ impl Expr {
     pub fn abs(pat: Pat, e: Expr) -> Self {
         Expr::expr(ExprBody::Abs(pat, Box::new(e)))
     }
+    pub fn builtin(f: Builtin) -> Self {
+        Expr::expr(ExprBody::Builtin(f))
+    }
+    pub fn con(name: Symbol, es: Vec<Expr>) -> Self {
+        Expr::expr(ExprBody::Con(name, es))
+    }
     pub fn if_(e1: Expr, e2: Expr, e3: Expr) -> Self {
         Expr::expr(ExprBody::If(Box::new(e1), Box::new(e2), Box::new(e3)))
     }
     pub fn match_(e: Expr, arms: Vec<(Pat, Expr)>) -> Self {
         Expr::expr(ExprBody::Match(Box::new(e), arms))
+    }
+    pub fn for_(init: Expr, pred: Expr, next: Expr) -> Self {
+        Expr::expr(ExprBody::For(Box::new(init), Box::new(pred), Box::new(next)))
     }
 
     pub fn record(fields: Vec<(String, Expr)>) -> Self {
@@ -148,9 +162,22 @@ impl FreeVars for Expr {
                     e.free_vars(ctx, acc);
                 }
             }
+            ExprBody::For(init, pred, next) => {
+                init.free_vars(ctx, acc);
+                pred.free_vars(ctx, acc);
+                next.free_vars(ctx, acc);
+            }
             ExprBody::Block(items) => {
                 for item in items {
                     item.free_vars(ctx, acc);
+                }
+            }
+
+            ExprBody::Builtin(_) => {}
+
+            ExprBody::Con(_, es) => {
+                for e in es {
+                    e.free_vars(ctx, acc);
                 }
             }
 
@@ -213,11 +240,22 @@ impl Repr for Expr {
                 let arms = arms.iter().map(|(p, e)| (p.clone(), e.repr(ctx))).collect();
                 Expr::match_(expr, arms)
             }
+            ExprBody::For(init, pred, next) => {
+                let init = init.repr(ctx);
+                let pred = pred.repr(ctx);
+                let next = next.repr(ctx);
+                Expr::for_(init, pred, next)
+            }
             ExprBody::Block(items) => {
                 let items = items.iter().map(|item| item.repr(ctx)).collect();
                 Expr::block(items)
             }
 
+            ExprBody::Builtin(_) => { self.clone() }
+            ExprBody::Con(name, es) => {
+                let es = es.iter().map(|e| e.repr(ctx)).collect();
+                Expr::con(name.clone(), es)
+            }
             ExprBody::Tuple(es) => {
                 let es = es.iter().map(|e| e.repr(ctx)).collect();
                 Expr::tuple(es)
@@ -280,11 +318,22 @@ impl ApplySubst for Expr {
                 let arms = arms.iter().map(|(p, e)| (p.clone(), e.apply_subst(subst))).collect();
                 Expr::match_(expr, arms)
             }
+            ExprBody::For(init, pred, next) => {
+                let init = init.apply_subst(subst);
+                let pred = pred.apply_subst(subst);
+                let next = next.apply_subst(subst);
+                Expr::for_(init, pred, next)
+            }
             ExprBody::Block(items) => {
                 let items = items.iter().map(|item| item.apply_subst(subst)).collect();
                 Expr::block(items)
             }
 
+            ExprBody::Builtin(_) => { self.clone() }
+            ExprBody::Con(name, es) => {
+                let es = es.iter().map(|e| e.apply_subst(subst)).collect();
+                Expr::con(name.clone(), es)
+            }
             ExprBody::Tuple(es) => {
                 let es = es.iter().map(|e| e.apply_subst(subst)).collect();
                 Expr::tuple(es)
@@ -345,6 +394,26 @@ impl fmt::Display for Expr {
                           .map(|(p, e)| format!("  {} => {},", p, e))
                           .collect();
                 write!(f, "match ({}) {{\n{}\n}}", *expr, s.join("\n"))
+            }
+            ExprBody::For(init, pred, next) => {
+                write!(f, "__for__ ({}; {}; {})", init, pred, next)
+            }
+            ExprBody::Builtin(b) => write!(f, "{:?}", b),
+            ExprBody::Con(name, args) => {
+                if args.is_empty() {
+                    write!(f, "{name}")
+                }
+                else {
+                    // 引数が複雑なら括弧を付ける
+                    let inner: Vec<String> = args.iter().map(|v| {
+                        match v.body {
+                            ExprBody::Lit(_) | ExprBody::Tuple(_) | ExprBody::Record(_)  => v.to_string(),
+                            ExprBody::Con(_, ref a) if a.is_empty() => v.to_string(),
+                            _ => format!("({})", v),
+                        }
+                    }).collect();
+                    write!(f, "{} {}", name, inner.join(" "))
+                }
             }
             ExprBody::Tuple(es) => {
                 assert!(!es.is_empty());
@@ -432,11 +501,22 @@ impl RenameForPretty for Expr {
                 let arms = arms.iter().map(|(p, e)| (p.clone(), e.rename_var(map))).collect();
                 Expr::match_(expr, arms)
             }
+            ExprBody::For(init, pred, next) => {
+                let init = init.rename_var(map);
+                let pred = pred.rename_var(map);
+                let next = next.rename_var(map);
+                Expr::for_(init, pred, next)
+            }
             ExprBody::Block(items) => {
                 let items = items.iter().map(|item| item.rename_var(map)).collect();
                 Expr::block(items)
             }
 
+            ExprBody::Builtin(_) => { self.clone() }
+            ExprBody::Con(name, es) => {
+                let es = es.iter().map(|e| e.rename_var(map)).collect();
+                Expr::con(name.clone(), es)
+            }
             ExprBody::Tuple(es) => {
                 let es = es.iter().map(|e| e.rename_var(map)).collect();
                 Expr::tuple(es)

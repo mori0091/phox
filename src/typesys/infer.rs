@@ -3,6 +3,7 @@ use indexmap::IndexMap;
 use indexmap::IndexSet;
 
 use crate::api::PhoxEngine;
+use crate::runtime::builtin::*;
 use crate::syntax::ast::*;
 use crate::module::*;
 use super::*;
@@ -463,9 +464,42 @@ pub fn infer_expr(
             (t_result, css)
         }
 
+        ExprBody::For(init, pred, next) => {
+            let mut cs = Vec::new();
+            let (t_init, cs_init) = infer_expr(phox, module, icx, init)?;
+            let (t_pred, cs_pred) = infer_expr(phox, module, icx, pred)?;
+            let (t_next, cs_next) = infer_expr(phox, module, icx, next)?;
+            cs.extend(cs_init);
+            cs.extend(cs_pred);
+            cs.push(Constraint::type_eq(&t_pred, &Type::fun(t_init.clone(), Type::bool_())));
+            cs.extend(cs_next);
+            cs.push(Constraint::type_eq(&t_next, &Type::fun(t_init.clone(), t_init.clone())));
+            (t_init, cs)
+        }
+
         ExprBody::Lit(Lit::Unit) => (Type::unit(), vec![]),
         ExprBody::Lit(Lit::Bool(_)) => (Type::bool_(), vec![]),
         ExprBody::Lit(Lit::Int(_)) => (Type::int(), vec![]),
+
+        ExprBody::Builtin(f) => {
+            (builtin_type(f.clone()), vec![])
+        }
+
+        ExprBody::Con(name, es) => {
+            let scheme = icx.get_type_scheme(name).ok_or(Error::UnknownConstructor(name.clone()))?;
+            let (cs, con_ty) = scheme.instantiate(&mut phox.ctx.ty);
+            let mut cs = cs.into_vec();
+            let mut ty = con_ty;
+
+            for e in es.iter_mut() {
+                let (te, ce) = infer_expr(phox, module, icx, e)?;
+                let tr = Type::Var(phox.ctx.ty.fresh_var_id());
+                cs.extend(ce);
+                cs.push(Constraint::type_eq(&ty, &Type::fun(te, tr.clone())));
+                ty = tr;
+            }
+            (ty, cs)
+        }
 
         ExprBody::Tuple(es) => {
             let mut tys = Vec::with_capacity(es.len());

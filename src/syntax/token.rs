@@ -34,6 +34,7 @@ pub enum Token {
     #[token("if"   , priority = 10)] If,
     #[token("else" , priority = 10)] Else,
     #[token("match", priority = 10)] Match,
+    #[token("__for__", priority = 10)] For,
     #[token("true" , priority = 10)] True,
     #[token("false", priority = 10)] False,
     #[token("()"   , priority = 10)] Unit,

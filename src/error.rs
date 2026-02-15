@@ -50,6 +50,9 @@ pub enum Error {
     // --- records ---
     ExpectedRecord(Type),
     UnknownField(String, Type),
+
+    // ---- from `eval`
+    DivisionByZero,
 }
 
 impl Error {
@@ -180,6 +183,11 @@ impl fmt::Display for Error {
             }
             Error::UnknownField(name, ty) => {
                 write!(f, "unknown field `{}` for `{}`", name, ty.pretty())
+            }
+
+            // ---- from `eval`
+            Error::DivisionByZero => {
+                write!(f, "division by zero")
             }
         }
     }
