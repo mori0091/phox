@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::api::PhoxEngine;
 use crate::module::*;
 use crate::typesys::*;
@@ -47,9 +45,7 @@ pub fn eval_stmt(
         Stmt::LetRec(pat, expr) => {
             match pat {
                 Pat::Var(x) => {
-                    env.insert(x.clone(), Value::Builtin(Rc::new(|_| {
-                        unreachable!("recursive value used before initialization")
-                    })));
+                    env.insert(x.clone(), Value::Lit(Lit::Unit));
                     let val = eval_expr(phox, module, env, expr)?;
                     env.insert(x.clone(), val);
                     Ok(())
@@ -114,9 +110,8 @@ pub fn eval_expr(
                     }
                 }
 
-                // 組み込み関数（Builtin）
-                Value::Builtin(func) => {
-                    Ok(func(arg_val))
+                Value::Builtin(f) => {
+                    builtin(f, arg_val)
                 }
 
                 _ => unreachable!("attempted to apply non-function"),
@@ -175,6 +170,10 @@ pub fn eval_expr(
                 };
             }
             Ok(x_val)
+        }
+
+        ExprBody::Builtin(f) => {
+            Ok(Value::Builtin(f.clone()))
         }
 
         ExprBody::Con(name, es) => {

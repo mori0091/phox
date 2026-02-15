@@ -1,6 +1,6 @@
-use std::rc::Rc;
 use crate::syntax::ast::*;
 use crate::module::*;
+use crate::runtime::*;
 use super::*;
 
 #[derive(Clone)]
@@ -8,7 +8,7 @@ pub enum Value {
     Lit(Lit),
     Closure { pat: Pat, body: Box<Expr>, env: ValueEnv },
     Con(Symbol, Vec<Value>),
-    Builtin(Rc<dyn Fn(Value) -> Value>), // ← Rust 側の関数をラップ
+    Builtin(Builtin),
 
     Tuple(Vec<Value>),
     Record(Vec<(String, Value)>),
@@ -22,7 +22,7 @@ impl std::fmt::Debug for Value {
             Value::Lit(l) => write!(f, "{:?}", l),
             Value::Closure { .. } => write!(f, "<closure>"),
             Value::Con(name, _) => write!(f, "<con {}>", name),
-            Value::Builtin(_) => write!(f, "<builtin>"),
+            Value::Builtin(b) => write!(f, "{:?}", b),
 
             Value::Tuple(vs) => f.debug_tuple("Tuple").field(vs).finish(),
             Value::Record(fields) => f.debug_map()
@@ -79,7 +79,7 @@ impl fmt::Display for Value {
             }
 
             Value::Closure { .. } => write!(f, "<closure>"),
-            Value::Builtin(_) => write!(f, "<builtin>"),
+            Value::Builtin(b) => write!(f, "{:?}", b),
         }
     }
 }

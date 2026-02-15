@@ -3,6 +3,7 @@ use indexmap::IndexMap;
 use indexmap::IndexSet;
 
 use crate::api::PhoxEngine;
+use crate::runtime::builtin::*;
 use crate::syntax::ast::*;
 use crate::module::*;
 use super::*;
@@ -479,6 +480,10 @@ pub fn infer_expr(
         ExprBody::Lit(Lit::Unit) => (Type::unit(), vec![]),
         ExprBody::Lit(Lit::Bool(_)) => (Type::bool_(), vec![]),
         ExprBody::Lit(Lit::Int(_)) => (Type::int(), vec![]),
+
+        ExprBody::Builtin(f) => {
+            (builtin_type(f.clone()), vec![])
+        }
 
         ExprBody::Con(name, es) => {
             let scheme = icx.get_type_scheme(name).ok_or(Error::UnknownConstructor(name.clone()))?;

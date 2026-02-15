@@ -6,6 +6,9 @@ pub use env::ValueEnv;
 mod value;
 pub use value::Value;
 
+mod builtin;
+pub use builtin::*;
+
 pub mod eval;
 pub use eval::{
     eval_item,

@@ -38,6 +38,9 @@ pub fn resolve_expr(
             resolve_expr(phox, module, symbol_env, param_map, pred)?;
             resolve_expr(phox, module, symbol_env, param_map, next)
         }
+        ExprBody::Builtin(_) => {
+            Ok(())
+        }
         ExprBody::Con(name, es) => {
             resolve_symbol(phox, module, symbol_env, name)?;
             for e in es {

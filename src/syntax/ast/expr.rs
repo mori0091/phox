@@ -4,6 +4,7 @@ use std::fmt;
 use super::*;
 use crate::typesys::*;
 use crate::module::*;
+use crate::runtime::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Expr {
@@ -16,6 +17,7 @@ pub struct Expr {
 pub enum ExprBody {
     Lit(Lit),
     Abs(Pat, Box<Expr>),
+    Builtin(Builtin),
     Con(Symbol, Vec<Expr>),
     Tuple(Vec<Expr>),               // ex. `(1,)`, `(1, true, ())`
     RawTraitRecord(RawTraitHead),   // ex. `@{ Eq Int }`
@@ -30,7 +32,6 @@ pub enum ExprBody {
     Block(Vec<Item>),               // ex. `{stmt; stmt; expr; expr}`
     TupleAccess(Box<Expr>, usize),  // ex. `p.0`
     FieldAccess(Box<Expr>, String), // ex. `p.x`
-
 }
 
 impl Expr {
@@ -39,6 +40,7 @@ impl Expr {
             // values
             ExprBody::Lit(_)            => true,
             ExprBody::Abs(_, _)         => true,
+            ExprBody::Builtin(_)        => true,
             ExprBody::Con(_, _)         => true,
             ExprBody::Tuple(_)          => true,
             ExprBody::RawTraitRecord(_) => true,
@@ -86,6 +88,9 @@ impl Expr {
     }
     pub fn abs(pat: Pat, e: Expr) -> Self {
         Expr::expr(ExprBody::Abs(pat, Box::new(e)))
+    }
+    pub fn builtin(f: Builtin) -> Self {
+        Expr::expr(ExprBody::Builtin(f))
     }
     pub fn con(name: Symbol, es: Vec<Expr>) -> Self {
         Expr::expr(ExprBody::Con(name, es))
@@ -168,6 +173,8 @@ impl FreeVars for Expr {
                 }
             }
 
+            ExprBody::Builtin(_) => {}
+
             ExprBody::Con(_, es) => {
                 for e in es {
                     e.free_vars(ctx, acc);
@@ -244,6 +251,7 @@ impl Repr for Expr {
                 Expr::block(items)
             }
 
+            ExprBody::Builtin(_) => { self.clone() }
             ExprBody::Con(name, es) => {
                 let es = es.iter().map(|e| e.repr(ctx)).collect();
                 Expr::con(name.clone(), es)
@@ -321,6 +329,7 @@ impl ApplySubst for Expr {
                 Expr::block(items)
             }
 
+            ExprBody::Builtin(_) => { self.clone() }
             ExprBody::Con(name, es) => {
                 let es = es.iter().map(|e| e.apply_subst(subst)).collect();
                 Expr::con(name.clone(), es)
@@ -389,6 +398,7 @@ impl fmt::Display for Expr {
             ExprBody::For(init, pred, next) => {
                 write!(f, "__for__ ({}; {}; {})", init, pred, next)
             }
+            ExprBody::Builtin(b) => write!(f, "{:?}", b),
             ExprBody::Con(name, args) => {
                 if args.is_empty() {
                     write!(f, "{name}")
@@ -502,6 +512,7 @@ impl RenameForPretty for Expr {
                 Expr::block(items)
             }
 
+            ExprBody::Builtin(_) => { self.clone() }
             ExprBody::Con(name, es) => {
                 let es = es.iter().map(|e| e.rename_var(map)).collect();
                 Expr::con(name.clone(), es)
