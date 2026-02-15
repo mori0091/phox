@@ -480,6 +480,22 @@ pub fn infer_expr(
         ExprBody::Lit(Lit::Bool(_)) => (Type::bool_(), vec![]),
         ExprBody::Lit(Lit::Int(_)) => (Type::int(), vec![]),
 
+        ExprBody::Con(name, es) => {
+            let scheme = icx.get_type_scheme(name).ok_or(Error::UnknownConstructor(name.clone()))?;
+            let (cs, con_ty) = scheme.instantiate(&mut phox.ctx.ty);
+            let mut cs = cs.into_vec();
+            let mut ty = con_ty;
+
+            for e in es.iter_mut() {
+                let (te, ce) = infer_expr(phox, module, icx, e)?;
+                let tr = Type::Var(phox.ctx.ty.fresh_var_id());
+                cs.extend(ce);
+                cs.push(Constraint::type_eq(&ty, &Type::fun(te, tr.clone())));
+                ty = tr;
+            }
+            (ty, cs)
+        }
+
         ExprBody::Tuple(es) => {
             let mut tys = Vec::with_capacity(es.len());
             let mut css = Vec::new();

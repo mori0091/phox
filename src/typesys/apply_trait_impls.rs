@@ -62,6 +62,11 @@ pub fn apply_trait_impls_expr(
             apply_trait_impls_expr(phox, module, pred)?;
             apply_trait_impls_expr(phox, module, next)?;
         }
+        ExprBody::Con(_, es) => {
+            for e in es.iter_mut() {
+                apply_trait_impls_expr(phox, module, e)?;
+            }
+        }
         ExprBody::Tuple(es) => {
             for e in es.iter_mut() {
                 apply_trait_impls_expr(phox, module, e)?;

@@ -16,6 +16,7 @@ pub struct Expr {
 pub enum ExprBody {
     Lit(Lit),
     Abs(Pat, Box<Expr>),
+    Con(Symbol, Vec<Expr>),
     Tuple(Vec<Expr>),               // ex. `(1,)`, `(1, true, ())`
     RawTraitRecord(RawTraitHead),   // ex. `@{ Eq Int }`
     TraitRecord(TraitHead),
@@ -38,6 +39,7 @@ impl Expr {
             // values
             ExprBody::Lit(_)            => true,
             ExprBody::Abs(_, _)         => true,
+            ExprBody::Con(_, _)         => true,
             ExprBody::Tuple(_)          => true,
             ExprBody::RawTraitRecord(_) => true,
             ExprBody::TraitRecord(_)    => true,
@@ -84,6 +86,9 @@ impl Expr {
     }
     pub fn abs(pat: Pat, e: Expr) -> Self {
         Expr::expr(ExprBody::Abs(pat, Box::new(e)))
+    }
+    pub fn con(name: Symbol, es: Vec<Expr>) -> Self {
+        Expr::expr(ExprBody::Con(name, es))
     }
     pub fn if_(e1: Expr, e2: Expr, e3: Expr) -> Self {
         Expr::expr(ExprBody::If(Box::new(e1), Box::new(e2), Box::new(e3)))
@@ -163,6 +168,12 @@ impl FreeVars for Expr {
                 }
             }
 
+            ExprBody::Con(_, es) => {
+                for e in es {
+                    e.free_vars(ctx, acc);
+                }
+            }
+
             ExprBody::Tuple(es) => {
                 for e in es {
                     e.free_vars(ctx, acc);
@@ -233,6 +244,10 @@ impl Repr for Expr {
                 Expr::block(items)
             }
 
+            ExprBody::Con(name, es) => {
+                let es = es.iter().map(|e| e.repr(ctx)).collect();
+                Expr::con(name.clone(), es)
+            }
             ExprBody::Tuple(es) => {
                 let es = es.iter().map(|e| e.repr(ctx)).collect();
                 Expr::tuple(es)
@@ -306,6 +321,10 @@ impl ApplySubst for Expr {
                 Expr::block(items)
             }
 
+            ExprBody::Con(name, es) => {
+                let es = es.iter().map(|e| e.apply_subst(subst)).collect();
+                Expr::con(name.clone(), es)
+            }
             ExprBody::Tuple(es) => {
                 let es = es.iter().map(|e| e.apply_subst(subst)).collect();
                 Expr::tuple(es)
@@ -369,6 +388,22 @@ impl fmt::Display for Expr {
             }
             ExprBody::For(init, pred, next) => {
                 write!(f, "__for__ ({}; {}; {})", init, pred, next)
+            }
+            ExprBody::Con(name, args) => {
+                if args.is_empty() {
+                    write!(f, "{name}")
+                }
+                else {
+                    // 引数が複雑なら括弧を付ける
+                    let inner: Vec<String> = args.iter().map(|v| {
+                        match v.body {
+                            ExprBody::Lit(_) | ExprBody::Tuple(_) | ExprBody::Record(_)  => v.to_string(),
+                            ExprBody::Con(_, ref a) if a.is_empty() => v.to_string(),
+                            _ => format!("({})", v),
+                        }
+                    }).collect();
+                    write!(f, "{} {}", name, inner.join(" "))
+                }
             }
             ExprBody::Tuple(es) => {
                 assert!(!es.is_empty());
@@ -467,6 +502,10 @@ impl RenameForPretty for Expr {
                 Expr::block(items)
             }
 
+            ExprBody::Con(name, es) => {
+                let es = es.iter().map(|e| e.rename_var(map)).collect();
+                Expr::con(name.clone(), es)
+            }
             ExprBody::Tuple(es) => {
                 let es = es.iter().map(|e| e.rename_var(map)).collect();
                 Expr::tuple(es)

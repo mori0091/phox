@@ -177,6 +177,15 @@ pub fn eval_expr(
             Ok(x_val)
         }
 
+        ExprBody::Con(name, es) => {
+            let mut xs = Vec::new();
+            for e in es.iter() {
+                let x = eval_expr(phox, module, env, e)?;
+                xs.push(x);
+            }
+            Ok(Value::Con(name.clone(), xs))
+        }
+
         ExprBody::Tuple(es) => {
             let mut xs = Vec::new();
             for e in es.iter() {

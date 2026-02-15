@@ -2,7 +2,6 @@ use crate::error::Error;
 
 mod env;
 pub use env::ValueEnv;
-pub use env::make_constructor;
 
 mod value;
 pub use value::Value;
