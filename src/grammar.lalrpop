@@ -22,6 +22,7 @@ extern {
         "if"    => Token::If,
         "else"  => Token::Else,
         "match" => Token::Match,
+        "__for__" => Token::For,
         "true"  => Token::True,
         "false" => Token::False,
         "()"    => Token::Unit,
@@ -373,6 +374,7 @@ Expr0: Expr = {
     ExprAbs,
     ExprIf,
     ExprMatch,
+    ExprFor,
     Expr1,
 };
 
@@ -391,6 +393,11 @@ ExprMatch: Expr = {
 
 MatchArm: (Pat, Expr) = {
     <p:Pat> "=>" <e:Expr> => (p, e)
+};
+
+ExprFor: Expr = {
+    "__for__" "(" <init:Expr0> ";" <pred:Expr0> ";" <next:Expr0> ")"
+        => Expr::for_(init, pred, next)
 };
 
 Expr1: Expr = {

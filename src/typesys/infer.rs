@@ -463,6 +463,19 @@ pub fn infer_expr(
             (t_result, css)
         }
 
+        ExprBody::For(init, pred, next) => {
+            let mut cs = Vec::new();
+            let (t_init, cs_init) = infer_expr(phox, module, icx, init)?;
+            let (t_pred, cs_pred) = infer_expr(phox, module, icx, pred)?;
+            let (t_next, cs_next) = infer_expr(phox, module, icx, next)?;
+            cs.extend(cs_init);
+            cs.extend(cs_pred);
+            cs.push(Constraint::type_eq(&t_pred, &Type::fun(t_init.clone(), Type::bool_())));
+            cs.extend(cs_next);
+            cs.push(Constraint::type_eq(&t_next, &Type::fun(t_init.clone(), t_init.clone())));
+            (t_init, cs)
+        }
+
         ExprBody::Lit(Lit::Unit) => (Type::unit(), vec![]),
         ExprBody::Lit(Lit::Bool(_)) => (Type::bool_(), vec![]),
         ExprBody::Lit(Lit::Int(_)) => (Type::int(), vec![]),

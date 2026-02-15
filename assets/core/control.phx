@@ -7,14 +7,14 @@ use ::core::combinator::fix;
 // let while = \pred.\next.
 //     fix (\rep.\x. if (pred x) rep (next x) else x)
 // ;
-let while = \pred.\next.
-    ::core::__while__ (pred, next)
+let while = \pred.\next.\init.
+    __for__ (init; pred; next)
 ;
 
 /// `for` loop function
 /// for: ∀ a. a -> (a -> Bool) -> (a -> a) -> a
 let for = \init.\pred.\next.
-    while pred next init
+    __for__ (init; pred; next)
 ;
 
 // -------------------------------------------------------------

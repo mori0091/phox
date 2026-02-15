@@ -33,6 +33,11 @@ pub fn resolve_expr(
             }
             Ok(())
         }
+        ExprBody::For(init, pred, next) => {
+            resolve_expr(phox, module, symbol_env, param_map, init)?;
+            resolve_expr(phox, module, symbol_env, param_map, pred)?;
+            resolve_expr(phox, module, symbol_env, param_map, next)
+        }
         ExprBody::Tuple(es) => {
             for e in es {
                 resolve_expr(phox, module, symbol_env, param_map, e)?;

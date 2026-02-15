@@ -9,7 +9,6 @@ pub enum Value {
     Closure { pat: Pat, body: Box<Expr>, env: ValueEnv },
     Con(Symbol, Vec<Value>),
     Builtin(Rc<dyn Fn(Value) -> Value>), // ← Rust 側の関数をラップ
-    Loop { pred: Box<Value>, next: Box<Value> },
 
     Tuple(Vec<Value>),
     Record(Vec<(String, Value)>),
@@ -24,7 +23,6 @@ impl std::fmt::Debug for Value {
             Value::Closure { .. } => write!(f, "<closure>"),
             Value::Con(name, _) => write!(f, "<con {}>", name),
             Value::Builtin(_) => write!(f, "<builtin>"),
-            Value::Loop { pred:_, next:_ } => write!(f, "<loop>"),
 
             Value::Tuple(vs) => f.debug_tuple("Tuple").field(vs).finish(),
             Value::Record(fields) => f.debug_map()
@@ -82,7 +80,6 @@ impl fmt::Display for Value {
 
             Value::Closure { .. } => write!(f, "<closure>"),
             Value::Builtin(_) => write!(f, "<builtin>"),
-            Value::Loop { pred:_, next:_ } => write!(f, "<loop>"),
         }
     }
 }

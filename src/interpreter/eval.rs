@@ -119,28 +119,6 @@ pub fn eval_expr(
                     Ok(func(arg_val))
                 }
 
-                Value::Loop { pred, next } => {
-                    let mut x_val = arg_val;
-                    let Value::Closure { pat: p_pat, body: p_body, env: p_env } = &*pred else { panic!() };
-                    let p_env2 = &mut p_env.duplicate();
-                    let Value::Closure { pat: n_pat, body: n_body, env: n_env } = &*next else { panic!() };
-                    let n_env2 = &mut n_env.duplicate();
-                    loop {
-                        let cond = {
-                            let Some(bindings) = match_pat(&p_pat, &x_val) else { panic!() };
-                            p_env2.extend(&bindings);
-                            eval_expr(phox, module, p_env2, &p_body)?
-                        };
-                        if let Value::Lit(Lit::Bool(false)) = cond { break; }
-                        x_val = {
-                            let Some(bindings) = match_pat(&n_pat, &x_val) else { panic!() };
-                            n_env2.extend(&bindings);
-                            eval_expr(phox, module, n_env2, &n_body)?
-                        };
-                    }
-                    Ok(x_val)
-                }
-
                 _ => unreachable!("attempted to apply non-function"),
             }
         }
@@ -173,6 +151,30 @@ pub fn eval_expr(
                 }
             }
             Err(error(format!("non-exhaustive match: no pattern matched value {}", v_scrut)))
+        }
+
+        ExprBody::For(init, pred, next) => {
+            let mut x_val = eval_expr(phox, module, env, &init)?;
+            let pred = eval_expr(phox, module, env, &pred)?;
+            let next = eval_expr(phox, module, env, &next)?;
+            let Value::Closure { pat: p_pat, body: p_body, env: p_env } = &pred else { panic!() };
+            let p_env2 = &mut p_env.duplicate();
+            let Value::Closure { pat: n_pat, body: n_body, env: n_env } = &next else { panic!() };
+            let n_env2 = &mut n_env.duplicate();
+            loop {
+                let cond = {
+                    let Some(bindings) = match_pat(&p_pat, &x_val) else { panic!() };
+                    p_env2.extend(&bindings);
+                    eval_expr(phox, module, p_env2, &p_body)?
+                };
+                if let Value::Lit(Lit::Bool(false)) = cond { break; }
+                x_val = {
+                    let Some(bindings) = match_pat(&n_pat, &x_val) else { panic!() };
+                    n_env2.extend(&bindings);
+                    eval_expr(phox, module, n_env2, &n_body)?
+                };
+            }
+            Ok(x_val)
         }
 
         ExprBody::Tuple(es) => {

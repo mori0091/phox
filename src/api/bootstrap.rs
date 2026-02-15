@@ -7,23 +7,6 @@ pub fn bootstrap(phox: &mut PhoxEngine, module: &RefModule) -> Result<(), Error>
     add_primitive_type(phox, module, "Bool")?;
     add_primitive_type(phox, module, "Int")?;
 
-    {
-        let a = Type::var(phox.ctx.ty.fresh_var_id());
-        add_primitive_func(
-            phox,
-            module,
-            "__while__",
-            make_loop_func(),
-            Type::fun(
-                Type::Tuple(vec![
-                    Type::fun(a.clone(), Type::bool_()),
-                    Type::fun(a.clone(), a.clone()),
-                ]),
-                Type::fun(a.clone(), a.clone()),
-            ),
-        )?;
-    }
-
     add_primitive_func(
         phox,
         module,
@@ -190,20 +173,5 @@ where
             }
         }
         panic!("type error in <builtin>");
-    }))
-}
-
-fn make_loop_func() -> Value
-{
-    Value::Builtin(Rc::new(move |arg: Value| {
-        if let Value::Tuple(xs) = arg {
-            if let [pred, next] = &xs[..] {
-                return Value::Loop {
-                    pred: Box::new(pred.clone()),
-                    next: Box::new(next.clone()),
-                }
-            }
-        }
-        panic!("type error in <loop>");
     }))
 }
