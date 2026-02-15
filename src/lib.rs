@@ -10,3 +10,5 @@ lalrpop_mod!(pub grammar); // grammar.lalrpop を読み込む
 
 pub mod module;
 pub mod error;
+
+pub mod collection;
