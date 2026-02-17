@@ -12,5 +12,6 @@ pub mod module;
 pub mod error;
 
 pub mod runtime;
+pub mod vm;
 
 pub mod collection;
