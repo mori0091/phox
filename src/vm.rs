@@ -483,7 +483,11 @@ impl VM {
             let x = self.eval(*init)?;
             self.heap_alloc(x)
         };
+
+        self.state.clo.env = env.clone();
         let pred = self.eval(*pred)?;
+
+        self.state.clo.env = env;
         let next = self.eval(*next)?;
 
         loop {
@@ -498,7 +502,6 @@ impl VM {
             self.heap_store(a.clone());
         }
         self.heap_load(a);
-        self.state.clo.env = env;
         Ok(())
     }
 
