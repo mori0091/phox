@@ -323,7 +323,8 @@ fn match_pat(pat: &Pat, val: &Closure) -> Option<Env> {
         (Pat::Con(name_p, args_p), Closure{ term: Term::Con(name_v, arity), env: args_v})
             if name_p == name_v && args_p.len() == *arity =>
         {
-            for (p, v) in args_p.iter().zip(args_v.iter()) {
+            let n = args_v.len() - *arity;
+            for (p, v) in args_p.iter().zip(args_v[n..].iter()) {
                 let sub = match_pat(p, &v.borrow())?;
                 env.extend(sub);
             }
@@ -331,7 +332,8 @@ fn match_pat(pat: &Pat, val: &Closure) -> Option<Env> {
         }
 
         (Pat::Tuple(pats), Closure{ term: Term::Tuple(arity), env: vals}) if pats.len() == *arity => {
-            for (p, v) in pats.iter().zip(vals.iter()) {
+            let n = vals.len() - *arity;
+            for (p, v) in pats.iter().zip(vals[n..].iter()) {
                 let sub = match_pat(p, &v.borrow())?;
                 env.extend(sub);
             }
@@ -339,9 +341,10 @@ fn match_pat(pat: &Pat, val: &Closure) -> Option<Env> {
         }
 
         (Pat::Record(fields1), Closure{ term: Term::Record(labels), env: vals}) => {
+            let n = vals.len() - labels.len();
             for (fname, p) in fields1 {
                 let i = labels.iter().position(|n| n == fname).unwrap();
-                let v = &vals[i].borrow();
+                let v = &vals[n+i].borrow();
                 let sub = match_pat(p, v)?;
                 env.extend(sub);
             }
