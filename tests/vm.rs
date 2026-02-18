@@ -343,8 +343,7 @@ fn test_strict_let_in_tuple_closure() {
 // {()}
 #[test]
 fn test_empty_block() {
-    let unit = Term::unit();
-    let term = Term::block(unit);
+    let term = Term::block(vec![]);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
     let result = vm.run().unwrap();
@@ -355,10 +354,7 @@ fn test_empty_block() {
 // { 1; 2 }
 #[test]
 fn test_simple_sequence_block() {
-    let one = Term::int(1);
-    let two = Term::int(2);
-    let seq = Term::let_(one, two);
-    let term = Term::block(seq);
+    let term = Term::block(vec![Term::int(1), Term::int(2)]);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
     let result = vm.run().unwrap();
@@ -389,11 +385,7 @@ fn test_block_with_expr_tail() {
 // { let x = 1; { x } }
 #[test]
 fn test_block_can_see_outer_scope() {
-    // inner block: { Var(0) }
-    let inner = Term::block(Term::Var(0));
-
-    // outer: let x = 1 in inner
-    let term = Term::let_(Term::int(1), inner);
+    let term = Term::let_(Term::int(1), Term::block(vec![Term::Var(0)]));
 
     let mut vm = VM::new(GlobalEnv::new(), term);
     let result = vm.run().unwrap();
@@ -408,7 +400,7 @@ fn test_inner_scope_does_not_escape() {
     let inner = Term::let_(Term::int(2), Term::Var(0));
 
     // block: { inner }
-    let block = Term::block(inner);
+    let block = Term::block(vec![inner]);
 
     // seq: let _ = block in x
     let seq = Term::let_(block, Term::Var(1));
@@ -426,13 +418,13 @@ fn test_inner_scope_does_not_escape() {
 #[test]
 fn test_nested_block_shadowing() {
     // inner-most: { Var(0) }
-    let inner = Term::block(Term::Var(0));
+    let inner = Term::block(vec![Term::Var(0)]);
 
     // middle: let x = 2 in inner
     let middle = Term::let_(Term::int(2), inner);
 
     // outer block: { middle }
-    let block = Term::block(middle);
+    let block = Term::block(vec![middle]);
 
     // outer-most: let x = 1 in block
     let term = Term::let_(Term::int(1), block);

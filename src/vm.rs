@@ -35,7 +35,6 @@ pub enum Term {
     App(Box<Term>, Box<Term>),  // strict App f x
     Let(Box<Term>, Box<Term>),  // strict Let x in e
     Match(Box<Term>, Vec<(Pat, Term)>),
-    Block(Box<Term>),                     // `{ ... }`
     For(Box<Term>, Box<Term>, Box<Term>), // `__for__ init pred next`
     TupleAccess(Box<Term>, usize),  // ex. `p.0`
     FieldAccess(Box<Term>, Label),  // ex. `p.x`
@@ -60,9 +59,6 @@ impl Term {
     pub fn match_(scrut: Term, arms: Vec<(Pat, Term)>) -> Term {
         Term::Match(Box::new(scrut), arms)
     }
-    pub fn block(e: Term) -> Term {
-        Term::Block(Box::new(e))
-    }
     pub fn for_(init: Term, pred: Term, next: Term) -> Term {
         Term::For(Box::new(init), Box::new(pred), Box::new(next))
     }
@@ -71,6 +67,18 @@ impl Term {
     }
     pub fn field_access(r: Term, label: Label) -> Term {
         Term::FieldAccess(Box::new(r), label)
+    }
+
+    pub fn block(mut xs: Vec<Term>) -> Term {
+        if xs.is_empty() {
+            return Term::unit()
+        }
+
+        let mut e = xs.pop().unwrap();
+        for x in xs.into_iter().rev() {
+            e = Term::let_(x, e);
+        }
+        e
     }
 
     pub fn unit() -> Term {
@@ -187,9 +195,6 @@ impl VM {
             Term::Match(_, _) => {
                 self.run_match()
             }
-            Term::Block(_) => {
-                self.run_block()
-            }
             Term::For(_, _, _) => {
                 self.run_for()
             }
@@ -274,18 +279,6 @@ impl VM {
         let (a, args) = self.state.upds.pop().unwrap();
         self.state.args = args;
         a
-    }
-
-    fn stack_save(&mut self) -> (AStack, UStack) {
-        let saved = (self.state.args.clone(), self.state.upds.clone());
-        self.state.args = AStack::new();
-        self.state.upds = UStack::new();
-        saved
-    }
-
-    fn stack_restore(&mut self, stack: (AStack, UStack)) {
-        self.state.args = stack.0;
-        self.state.upds = stack.1;
     }
 
     /// Allocate fresh address and store closure
@@ -465,17 +458,6 @@ impl VM {
             }
         }
         panic!("non-exhaustive match: no pattern matched value {:?}", v_scrut)
-    }
-
-    fn run_block(&mut self) -> Result<(), RuntimeError> {
-        let Term::Block(term) = self.state.clo.term.clone() else { panic!() };
-        let stack = self.stack_save();
-        let env = self.env_clone();
-        self.state.clo.term = *term;
-        self.run()?;
-        self.state.clo.env = env;
-        self.stack_restore(stack);
-        Ok(())
     }
 
     fn run_for(&mut self) -> Result<(), RuntimeError> {
