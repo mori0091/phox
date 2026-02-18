@@ -511,10 +511,7 @@ pub fn i64_mul(a: Term, b: Term) -> Term {
 
 #[test]
 fn test_add_literals() {
-    let term = Term::app(
-        Term::Builtin(Builtin::I64Add),
-        tuple2(Term::int(1), Term::int(2)),
-    );
+    let term = i64_add(Term::int(1), Term::int(2));
 
     let mut vm = VM::new(GlobalEnv::new(), term);
     let result = vm.run().unwrap();
