@@ -238,15 +238,17 @@ impl VM {
         }
     }
 
-    fn eval_into_value(&mut self) -> Result<Closure, RuntimeError> {
+    /// Evaluate the current closure and return the result closure.
+    fn eval(&mut self) -> Result<Closure, RuntimeError> {
         self.run_state_whnf()?;
         Ok(self.state.clo.clone())
     }
 
-    fn eval(&mut self, term: Term) -> Result<Closure, RuntimeError> {
+    /// Evaluates the given term in the current closure's environment and
+    /// returns the resulting closure.
+    fn eval_term(&mut self, term: Term) -> Result<Closure, RuntimeError> {
         self.state.clo.term = term;
-        self.run_state_whnf()?;
-        Ok(self.state.clo.clone())
+        self.eval()
     }
 }
 
@@ -371,9 +373,9 @@ impl VM {
         // strict App f x
         let Term::App(t1, t2) = self.state.clo.term.clone() else { panic!() };
         let env = self.env_dup();
-        let f = self.eval(*t1)?;
+        let f = self.eval_term(*t1)?;
         self.state.clo.env = env;
-        let x = self.eval(*t2)?;
+        let x = self.eval_term(*t2)?;
         let a = self.heap_alloc(x);
         self.state.clo = f;
         self.args_push(a);
@@ -457,7 +459,7 @@ impl VM {
     fn run_match(&mut self) -> Result<(), RuntimeError> {
         let Term::Match(term, arms) = self.state.clo.term.clone() else { panic!() };
         let mut env = self.env_dup();
-        let v_scrut = self.eval(*term)?;
+        let v_scrut = self.eval_term(*term)?;
         for (pat, body) in arms {
             if let Some(bindings) = match_pat(&pat, &v_scrut) {
                 env.extend(bindings);
@@ -472,17 +474,19 @@ impl VM {
     fn run_for(&mut self) -> Result<(), RuntimeError> {
         let Term::For(init, pred, next) = self.state.clo.term.clone() else { panic!() };
 
-        let env = self.env_dup();
+        let p_env = self.env_dup();
+        let n_env = self.env_dup();
+
         let a = {
-            let x = self.eval(*init)?;
+            let x = self.eval_term(*init)?;
             self.heap_alloc(x)
         };
 
-        self.state.clo.env = env.clone();
-        let pred = self.eval(*pred)?;
+        self.state.clo.env = p_env;
+        let pred = self.eval_term(*pred)?;
 
-        self.state.clo.env = env;
-        let next = self.eval(*next)?;
+        self.state.clo.env = n_env;
+        let next = self.eval_term(*next)?;
 
         loop {
             self.state.clo = pred.clone();
@@ -503,7 +507,7 @@ impl VM {
         let Term::Builtin(f) = self.state.clo.term.clone() else { panic!() };
         let a = self.args_pop();
         self.heap_load(a);
-        let x = self.eval_into_value()?;
+        let x = self.eval()?;
         let v = builtin(f, x)?;
         self.state.clo = v;
         Ok(())
