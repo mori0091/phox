@@ -144,7 +144,8 @@ impl VM {
         self.state.clone()
     }
 
-    pub fn run(&mut self) -> Result<Closure, RuntimeError> {
+    /// Evaluate the current closure and return the result closure.
+    pub fn eval(&mut self) -> Result<Closure, RuntimeError> {
         self.run_state_whnf()?;
         Ok(self.state.clo.clone())
     }
@@ -236,12 +237,6 @@ impl VM {
                 }
             }
         }
-    }
-
-    /// Evaluate the current closure and return the result closure.
-    fn eval(&mut self) -> Result<Closure, RuntimeError> {
-        self.run_state_whnf()?;
-        Ok(self.state.clo.clone())
     }
 
     /// Evaluates the given term in the current closure's environment and

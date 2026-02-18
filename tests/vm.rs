@@ -34,7 +34,7 @@ fn test_literal() {
     let term = Term::int(42);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(42));
 }
@@ -47,7 +47,7 @@ fn test_identity_function() {
     let app = Term::app(lam, arg);
 
     let mut vm = VM::new(GlobalEnv::new(), app);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(10));
 }
@@ -61,7 +61,7 @@ fn test_let() {
     let term = Term::let_(t1, t2);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(10));
 }
@@ -71,7 +71,7 @@ fn test_tuple() {
     let t = tuple2(Term::int(1), Term::int(2));
 
     let mut vm = VM::new(GlobalEnv::new(), t);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     match result {
         Closure{ term: Term::Tuple(2), env: xs } => {
@@ -90,7 +90,7 @@ fn test_tuple_access() {
     let term = Term::tuple_access(t, 1);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(2));
 }
@@ -105,7 +105,7 @@ fn test_match_var() {
     let term = Term::match_(scrut, vec![(pat, body)]);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(10));
 }
@@ -121,7 +121,7 @@ fn test_match_tuple() {
     let term = Term::match_(scrut, vec![(pat, body)]);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(1));
 }
@@ -134,7 +134,7 @@ fn test_con() {
     eprintln!("term = {:?}", term);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     eprintln!("result = {:?}", result);
 
@@ -169,7 +169,7 @@ fn test_record() {
     let term = record(labels.clone(), values.clone());
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     match result {
         Closure{ term: Term::Record(ix), env: xs } => {
@@ -192,7 +192,7 @@ fn test_field_access() {
     let term = Term::field_access(record, "y".to_string());
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(2));
 }
@@ -210,7 +210,7 @@ fn test_global_var() {
     let term = Term::GlobalVar(Symbol::local("x"));
 
     let mut vm = VM::new(global, term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(42));
 }
@@ -224,7 +224,7 @@ fn test_builtin_add() {
     );
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(42));
 }
@@ -244,7 +244,7 @@ fn test_tuple_closure_application() {
     let app = Term::app(first, Term::int(5));
 
     let mut vm = VM::new(GlobalEnv::new(), app);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(5));
 }
@@ -267,7 +267,7 @@ fn test_nested_tuple_closure_application() {
     let app = Term::app(second, Term::int(5));
 
     let mut vm = VM::new(GlobalEnv::new(), app);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(5));
 }
@@ -288,7 +288,7 @@ fn test_record_closure_application() {
     let app = Term::app(field, Term::int(7));
 
     let mut vm = VM::new(GlobalEnv::new(), app);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(7));
 }
@@ -314,7 +314,7 @@ fn test_con_closure_application() {
     let term = Term::match_(scrut, vec![(pat, body)]);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(3));
 }
@@ -335,7 +335,7 @@ fn test_strict_let_in_tuple_closure() {
     let term = Term::let_(lam, app);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(123));
 }
@@ -346,7 +346,7 @@ fn test_empty_block() {
     let term = Term::block(vec![]);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::unit());
 }
@@ -357,7 +357,7 @@ fn test_simple_sequence_block() {
     let term = Term::block(vec![Term::int(1), Term::int(2)]);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(2));
 }
@@ -377,7 +377,7 @@ fn test_block_with_expr_tail() {
     );
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(3));
 }
@@ -388,7 +388,7 @@ fn test_block_can_see_outer_scope() {
     let term = Term::let_(Term::int(1), Term::block(vec![Term::Var(0)]));
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(1));
 }
@@ -409,7 +409,7 @@ fn test_inner_scope_does_not_escape() {
     let term = Term::let_(Term::int(1), seq);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(1));
 }
@@ -430,7 +430,7 @@ fn test_nested_block_shadowing() {
     let term = Term::let_(Term::int(1), block);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(2));
 }
@@ -456,7 +456,7 @@ fn test_for_loop() {
     eprintln!("term: {:?}", term);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(100000));
 }
@@ -514,7 +514,7 @@ fn test_add_literals() {
     let term = i64_add(Term::int(1), Term::int(2));
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(3));
 }
@@ -555,7 +555,7 @@ fn test_for_loop_tuple() {
     let term = Term::for_(init, pred, next);
 
     let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.run().unwrap();
+    let result = vm.eval().unwrap();
 
     let result = result.env[result.env.len() - 1].borrow().term.clone();
 
