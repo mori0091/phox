@@ -469,6 +469,54 @@ fn test_for_loop() {
     assert_eq!(result.term, Term::int(100000));
 }
 
+pub fn i64_lt(a: Term, b: Term) -> Term {
+    // (<) = \x.\y. __i64_le__ (x, y);
+    let f = Term::lam(Term::lam(
+        Term::app(
+            Term::Builtin(Builtin::I64Lt),
+            tuple2(Term::Var(1), Term::Var(0))
+        )
+    ));
+    // (<) a b
+    Term::app(Term::app(f, a), b)
+}
+
+pub fn i64_add(a: Term, b: Term) -> Term {
+    // (+) = \x.\y. __i64_add__ (x, y);
+    let f = Term::lam(Term::lam(
+        Term::app(
+            Term::Builtin(Builtin::I64Add),
+            tuple2(Term::Var(1), Term::Var(0))
+        )
+    ));
+    // (+) a b
+    Term::app(Term::app(f, a), b)
+}
+
+pub fn i64_sub(a: Term, b: Term) -> Term {
+    // (-) = \x.\y. __i64_sub__ (x, y);
+    let f = Term::lam(Term::lam(
+        Term::app(
+            Term::Builtin(Builtin::I64Sub),
+            tuple2(Term::Var(1), Term::Var(0))
+        )
+    ));
+    // (-) a b
+    Term::app(Term::app(f, a), b)
+}
+
+pub fn i64_mul(a: Term, b: Term) -> Term {
+    // (*) = \x.\y. __i64_mul__ (x, y);
+    let f = Term::lam(Term::lam(
+        Term::app(
+            Term::Builtin(Builtin::I64Mul),
+            tuple2(Term::Var(1), Term::Var(0))
+        )
+    ));
+    // (*) a b
+    Term::app(Term::app(f, a), b)
+}
+
 #[test]
 fn test_add_literals() {
     let term = Term::app(
@@ -480,4 +528,47 @@ fn test_add_literals() {
     let result = vm.run().unwrap();
 
     assert_eq!(result.term, Term::int(3));
+}
+
+#[test]
+fn test_for_loop_tuple() {
+
+    // init = (5, 1);
+    let init = tuple2(Term::int(5), Term::int(1));
+
+    // pred = \(n, _). 0 < n;
+    //      = \x. match (x) { (n, _) => 0 < n };
+    let pred = {
+        let pat = Pat::Tuple(vec![Pat::Var, Pat::Wildcard]);
+        let body = i64_lt(Term::int(0), Term::Var(0));
+        Term::lam(
+            Term::match_(Term::Var(0), vec![
+                (pat, body)
+            ])
+        )
+    };
+
+    // next = \(n, a). (n-1, n*a);
+    //      = \x. match (x) { (n, a) => (n-1, n+a) };
+    let next = {
+        let pat = Pat::Tuple(vec![Pat::Var, Pat::Var]);
+        let body = tuple2(
+            i64_sub(Term::Var(1), Term::int(1)),
+            i64_mul(Term::Var(1), Term::Var(0))
+        );
+        Term::lam(
+            Term::match_(Term::Var(0), vec![
+                (pat, body)
+            ])
+        )
+    };
+
+    let term = Term::for_(init, pred, next);
+
+    let mut vm = VM::new(GlobalEnv::new(), term);
+    let result = vm.run().unwrap();
+
+    let result = result.env[result.env.len() - 1].borrow().term.clone();
+
+    assert_eq!(result, Term::int(120));
 }
