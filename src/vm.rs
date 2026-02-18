@@ -153,8 +153,22 @@ impl VM {
 // -------------------------------------------------------------
 // === VM internal evaluation APIs ===
 impl VM {
+    fn trim_env(&mut self, arity: usize) {
+        let len = self.state.clo.env.len();
+        if len > arity {
+            self.state.clo.env = self.state.clo.env.split_off(len - arity);
+            // eprintln!("[trim] {} -> {}", len, arity);
+        }
+    }
+
     fn run_state_whnf(&mut self) -> Result<(), RuntimeError> {
         loop {
+            match &self.state.clo.term {
+                Term::Tuple(arity) => self.trim_env(*arity),
+                Term::Con(_, arity) => self.trim_env(*arity),
+                Term::Record(labels) => self.trim_env(labels.len()),
+                _ => {}
+            }
             match &self.state.clo.term {
                 Term::Lam(_) | Term::Builtin(_) if self.state.args.is_empty() => {
                     if self.state.upds.is_empty() {
