@@ -248,15 +248,10 @@ impl VM {
             }).cloned()
     }
 
-    /// Make shared clone of Env
-    fn env_clone(&self) -> Env {
+    /// Duplicate Env
+    fn env_dup(&self) -> Env {
         self.state.clo.env.clone()
     }
-
-    // /// Duplicate Env
-    // fn env_dup(&self) -> Env {
-    //     self.state.clo.env.duplicate()
-    // }
 
     /// Push to AStack
     fn args_push(&self, a: Addr) {
@@ -361,7 +356,7 @@ impl VM {
     fn run_app(&mut self) -> Result<(), RuntimeError> {
         // strict App f x
         let Term::App(t1, t2) = self.state.clo.term.clone() else { panic!() };
-        let env = self.env_clone();
+        let env = self.env_dup();
         let f = self.eval(*t1)?;
         self.state.clo.env = env;
         let x = self.eval(*t2)?;
@@ -447,7 +442,7 @@ impl VM {
 
     fn run_match(&mut self) -> Result<(), RuntimeError> {
         let Term::Match(term, arms) = self.state.clo.term.clone() else { panic!() };
-        let mut env = self.env_clone();
+        let mut env = self.env_dup();
         let v_scrut = self.eval(*term)?;
         for (pat, body) in arms {
             if let Some(bindings) = match_pat(&pat, &v_scrut) {
@@ -463,7 +458,7 @@ impl VM {
     fn run_for(&mut self) -> Result<(), RuntimeError> {
         let Term::For(init, pred, next) = self.state.clo.term.clone() else { panic!() };
 
-        let env = self.env_clone();
+        let env = self.env_dup();
         let a = {
             let x = self.eval(*init)?;
             self.heap_alloc(x)
