@@ -1,7 +1,65 @@
 use phox::vm::*;
+use phox::module::*;
 
-pub fn let_(x: Term, e: Term) -> Term {
-    Term::let_(x, e)
+fn symbol<S: Into<String>>(s: S) -> Symbol {
+    let s = s.into();
+    if s.starts_with("::") {
+        let xs: Vec<_> = s.split("::").collect();
+        Symbol::Unique(Path::absolute(xs[1..].to_vec()))
+    }
+    else {
+        Symbol::local(s)
+    }
+}
+
+fn globals() -> GlobalEnv {
+    fn add_unary_op(global: &mut GlobalEnv, prim_sym: &str, prim: Builtin, sym: &str) {
+        global.insert(
+            symbol(prim_sym),
+            Term::Builtin(prim)
+        );
+        global.insert(
+            symbol(sym),
+            Term::GlobalVar(symbol(prim_sym))
+        );
+    }
+
+    fn add_binary_op(global: &mut GlobalEnv, prim_sym: &str, prim: Builtin, sym: &str) {
+        global.insert(
+            symbol(prim_sym),
+            Term::Builtin(prim)
+        );
+        global.insert(
+            symbol(sym),
+            Term::lam(Term::lam(
+                Term::app(
+                    Term::GlobalVar(symbol(prim_sym)),
+                    Term::Tuple(2)
+                )
+            ))
+        );
+    }
+
+    let mut global = GlobalEnv::new();
+
+    add_unary_op(&mut global, "::core::__i64_neg__", Builtin::I64Neg, "negate");
+
+    add_binary_op(&mut global, "::core::__i64_add__", Builtin::I64Add, "+");
+    add_binary_op(&mut global, "::core::__i64_sub__", Builtin::I64Sub, "-");
+    add_binary_op(&mut global, "::core::__i64_mul__", Builtin::I64Mul, "*");
+    add_binary_op(&mut global, "::core::__i64_div__", Builtin::I64Div, "/");
+    add_binary_op(&mut global, "::core::__i64_mod__", Builtin::I64Mod, "%");
+
+    add_binary_op(&mut global, "::core::__i64_eq__" , Builtin::I64Eq , "==");
+    add_binary_op(&mut global, "::core::__i64_neq__", Builtin::I64Neq, "!=");
+
+    add_binary_op(&mut global, "::core::__i64_le__", Builtin::I64Le, "<=");
+    add_binary_op(&mut global, "::core::__i64_lt__", Builtin::I64Lt, "<");
+    add_binary_op(&mut global, "::core::__i64_ge__", Builtin::I64Ge, ">=");
+    add_binary_op(&mut global, "::core::__i64_gt__", Builtin::I64Gt, ">");
+
+
+    global
 }
 
 pub fn tuple2(t1: Term, t2: Term) -> Term {
@@ -437,83 +495,38 @@ fn test_nested_block_shadowing() {
 
 #[test]
 fn test_for_loop() {
+    // init = 0;
     let init = Term::int(0);
 
     // pred = \x. x < 99999;
-    let pred = Term::lam(Term::app(
-        Term::Builtin(Builtin::I64Lt),
-        tuple2(Term::Var(0), Term::int(99999))
-    ));
+    let pred = Term::lam(
+        Term::app(Term::app(
+            Term::GlobalVar(symbol("<")), Term::Var(0)), Term::int(99999)
+        )
+    );
 
     // next = \x. x + 2;
-    let next = Term::lam(Term::app(
-        Term::Builtin(Builtin::I64Add),
-        tuple2(Term::Var(0), Term::int(2))
-    ));
+    let next = Term::lam(
+        Term::app(Term::app(
+            Term::GlobalVar(symbol("+")), Term::Var(0)), Term::int(2)
+        )
+    );
 
     let term = Term::for_(init, pred, next);
 
-    eprintln!("term: {:?}", term);
-
-    let mut vm = VM::new(GlobalEnv::new(), term);
+    let mut vm = VM::new(globals(), term);
     let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(100000));
 }
 
-pub fn i64_lt(a: Term, b: Term) -> Term {
-    // (<) = \x.\y. __i64_le__ (x, y);
-    let f = Term::lam(Term::lam(
-        Term::app(
-            Term::Builtin(Builtin::I64Lt),
-            tuple2(Term::Var(1), Term::Var(0))
-        )
-    ));
-    // (<) a b
-    Term::app(Term::app(f, a), b)
-}
-
-pub fn i64_add(a: Term, b: Term) -> Term {
-    // (+) = \x.\y. __i64_add__ (x, y);
-    let f = Term::lam(Term::lam(
-        Term::app(
-            Term::Builtin(Builtin::I64Add),
-            tuple2(Term::Var(1), Term::Var(0))
-        )
-    ));
-    // (+) a b
-    Term::app(Term::app(f, a), b)
-}
-
-pub fn i64_sub(a: Term, b: Term) -> Term {
-    // (-) = \x.\y. __i64_sub__ (x, y);
-    let f = Term::lam(Term::lam(
-        Term::app(
-            Term::Builtin(Builtin::I64Sub),
-            tuple2(Term::Var(1), Term::Var(0))
-        )
-    ));
-    // (-) a b
-    Term::app(Term::app(f, a), b)
-}
-
-pub fn i64_mul(a: Term, b: Term) -> Term {
-    // (*) = \x.\y. __i64_mul__ (x, y);
-    let f = Term::lam(Term::lam(
-        Term::app(
-            Term::Builtin(Builtin::I64Mul),
-            tuple2(Term::Var(1), Term::Var(0))
-        )
-    ));
-    // (*) a b
-    Term::app(Term::app(f, a), b)
-}
-
 #[test]
 fn test_add_literals() {
-    let term = i64_add(Term::int(1), Term::int(2));
+    let term = Term::app(Term::app(
+        Term::GlobalVar(symbol("+")), Term::int(1)), Term::int(2)
+    );
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
+    let mut vm = VM::new(globals(), term);
     let result = vm.eval().unwrap();
 
     assert_eq!(result.term, Term::int(3));
@@ -529,7 +542,9 @@ fn test_for_loop_tuple() {
     //      = \x. match (x) { (n, _) => 0 < n };
     let pred = {
         let pat = Pat::Tuple(vec![Pat::Var, Pat::Wildcard]);
-        let body = i64_lt(Term::int(0), Term::Var(0));
+        let body = Term::app(Term::app(
+            Term::GlobalVar(symbol("<")), Term::int(0)), Term::Var(0)
+        );
         Term::lam(
             Term::match_(Term::Var(0), vec![
                 (pat, body)
@@ -542,8 +557,12 @@ fn test_for_loop_tuple() {
     let next = {
         let pat = Pat::Tuple(vec![Pat::Var, Pat::Var]);
         let body = tuple2(
-            i64_sub(Term::Var(1), Term::int(1)),
-            i64_mul(Term::Var(1), Term::Var(0))
+            Term::app(Term::app(
+                Term::GlobalVar(symbol("-")), Term::Var(1)), Term::int(1)
+            ),
+            Term::app(Term::app(
+                Term::GlobalVar(symbol("*")), Term::Var(1)), Term::Var(0)
+            ),
         );
         Term::lam(
             Term::match_(Term::Var(0), vec![
@@ -552,12 +571,28 @@ fn test_for_loop_tuple() {
         )
     };
 
-    let term = Term::for_(init, pred, next);
+    let term = Term::tuple_access(Term::for_(init, pred, next), 1);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
+    let mut vm = VM::new(globals(), term);
     let result = vm.eval().unwrap();
 
-    let result = result.env[result.env.len() - 1].borrow().term.clone();
+    assert_eq!(result.term, Term::int(120));
+}
 
-    assert_eq!(result, Term::int(120));
+#[test]
+fn test_add_div() {
+    let a = Term::app(Term::app(
+        Term::GlobalVar(symbol("+")), Term::int(2)), Term::int(3)
+    );
+    let b = Term::app(Term::app(
+        Term::GlobalVar(symbol("+")), Term::int(1)), Term::int(1)
+    );
+    let term = Term::app(Term::app(
+        Term::GlobalVar(symbol("/")), a), b
+    );
+
+    let mut vm = VM::new(globals(), term);
+    let result = vm.eval().unwrap();
+
+    assert_eq!(result.term, Term::int(2));
 }
