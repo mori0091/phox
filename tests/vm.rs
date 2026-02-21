@@ -63,24 +63,15 @@ fn globals() -> GlobalEnv {
 }
 
 pub fn tuple2(t1: Term, t2: Term) -> Term {
-    let f = Term::lam(Term::lam(Term::Tuple(2)));
-    Term::app(Term::app(f, t1), t2)
+    Term::clo(Term::Tuple(2), vec![t1, t2])
 }
 
 pub fn record(ix: Vec<Label>, xs: Vec<Term>) -> Term {
-    let mut f = Term::Record(ix.clone());
-    for _ in 0..ix.len() {
-        f = Term::lam(f);
-    }
-    for x in xs {
-        f = Term::app(f, x);
-    }
-    f
+    Term::clo(Term::Record(ix), xs)
 }
 
 pub fn cons(x: Term, xs: Term) -> Term {
-    let f = Term::lam(Term::lam(Term::Con(Symbol::local("Cons"), 2)));
-    Term::app(Term::app(f, x), xs)
+    Term::clo(Term::Con(Symbol::local("Cons"), 2), vec![x, xs])
 }
 
 pub fn nil() -> Term {

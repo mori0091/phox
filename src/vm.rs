@@ -83,6 +83,17 @@ impl Term {
         e
     }
 
+    pub fn clo(t: Term, args: Vec<Term>) -> Term {
+        let mut f = t;
+        for _ in 0..args.len() {
+            f = Term::lam(f);
+        }
+        for x in args {
+            f = Term::app(f, x);
+        }
+        f
+    }
+
     pub fn unit() -> Term {
         Term::Lit(Lit::Unit)
     }
