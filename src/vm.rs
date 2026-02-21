@@ -33,7 +33,6 @@ pub enum Term {
     GlobalVar(Symbol),          // GlobalVar(usize) in future.
     Var(usize),                 // de Bruijn index
     App(Box<Term>, Box<Term>),  // strict App f x
-    Let(Box<Term>, Box<Term>),  // strict Let x in e
     Match(Box<Term>, Vec<(Pat, Term)>),
     For(Box<Term>, Box<Term>, Box<Term>), // `__for__ init pred next`
     TupleAccess(Box<Term>, usize),  // ex. `p.0`
@@ -53,9 +52,6 @@ impl Term {
     pub fn app(f: Term, x: Term) -> Term {
         Term::App(Box::new(f), Box::new(x))
     }
-    pub fn let_(x: Term, e: Term) -> Term {
-        Term::Let(Box::new(x), Box::new(e))
-    }
     pub fn match_(scrut: Term, arms: Vec<(Pat, Term)>) -> Term {
         Term::Match(Box::new(scrut), arms)
     }
@@ -67,6 +63,12 @@ impl Term {
     }
     pub fn field_access(r: Term, label: Label) -> Term {
         Term::FieldAccess(Box::new(r), label)
+    }
+
+    // ---------------------------------------------------------
+    // === syntax sugar ===
+    pub fn let_(x: Term, e: Term) -> Term {
+        Term::app(Term::lam(e), x)
     }
 
     pub fn block(mut xs: Vec<Term>) -> Term {
@@ -207,9 +209,6 @@ impl VM {
             Term::App(_, _) => {
                 self.run_app()
             }
-            Term::Let(_, _) => {
-                self.run_let()
-            }
             Term::Match(_, _) => {
                 self.run_match()
             }
@@ -230,6 +229,7 @@ impl VM {
             Term::Builtin(_) if !self.state.args.is_empty() => {
                 self.run_builtin()
             }
+
             _ => {
                 if !self.state.upds.is_empty() {
                     self.run_update();
@@ -418,12 +418,6 @@ impl VM {
             .cloned()?;
         self.state.clo.term = term;
         self.state.clo.env = Env::new();
-        Ok(())
-    }
-
-    fn run_let(&mut self) -> Result<(), RuntimeError> {
-        let Term::Let(t1, t2) = self.state.clo.term.clone() else { panic!() };
-        self.state.clo.term = Term::app(Term::lam(*t2), *t1);
         Ok(())
     }
 
