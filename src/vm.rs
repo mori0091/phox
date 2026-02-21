@@ -66,6 +66,17 @@ impl Term {
     }
 
     // ---------------------------------------------------------
+    pub fn unit() -> Term {
+        Term::Lit(Lit::Unit)
+    }
+    pub fn bool_(x: bool) -> Term {
+        Term::Lit(Lit::Bool(x))
+    }
+    pub fn int(x: i64) -> Term {
+        Term::Lit(Lit::Int(x))
+    }
+
+    // ---------------------------------------------------------
     // === syntax sugar ===
     pub fn let_(x: Term, e: Term) -> Term {
         Term::app(Term::lam(e), x)
@@ -92,16 +103,6 @@ impl Term {
             f = Term::app(f, x);
         }
         f
-    }
-
-    pub fn unit() -> Term {
-        Term::Lit(Lit::Unit)
-    }
-    pub fn bool_(x: bool) -> Term {
-        Term::Lit(Lit::Bool(x))
-    }
-    pub fn int(x: i64) -> Term {
-        Term::Lit(Lit::Int(x))
     }
 }
 
