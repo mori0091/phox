@@ -325,8 +325,7 @@ fn match_pat(pat: &Pat, val: &Closure) -> Option<Env> {
         (Pat::Con(name_p, args_p), Closure{ term: Term::Con(name_v, arity), env: args_v})
             if name_p == name_v && args_p.len() == *arity =>
         {
-            let n = args_v.len() - *arity;
-            for (p, v) in args_p.iter().zip(args_v[n..].iter()) {
+            for (p, v) in args_p.iter().zip(args_v.iter()) {
                 let sub = match_pat(p, &v.borrow())?;
                 env.extend(sub);
             }
@@ -334,8 +333,7 @@ fn match_pat(pat: &Pat, val: &Closure) -> Option<Env> {
         }
 
         (Pat::Tuple(pats), Closure{ term: Term::Tuple(arity), env: vals}) if pats.len() == *arity => {
-            let n = vals.len() - *arity;
-            for (p, v) in pats.iter().zip(vals[n..].iter()) {
+            for (p, v) in pats.iter().zip(vals.iter()) {
                 let sub = match_pat(p, &v.borrow())?;
                 env.extend(sub);
             }
@@ -343,10 +341,9 @@ fn match_pat(pat: &Pat, val: &Closure) -> Option<Env> {
         }
 
         (Pat::Record(fields1), Closure{ term: Term::Record(labels), env: vals}) => {
-            let n = vals.len() - labels.len();
             for (fname, p) in fields1 {
                 let i = labels.iter().position(|n| n == fname).unwrap();
-                let v = &vals[n+i].borrow();
+                let v = &vals[i].borrow();
                 let sub = match_pat(p, v)?;
                 env.extend(sub);
             }
@@ -434,9 +431,8 @@ impl VM {
         let Term::TupleAccess(term, index) = self.state.clo.term.clone() else { panic!() };
         self.state.clo.term = *term;
         self.run_state_whnf()?;
-        let Term::Tuple(arity) = self.state.clo.term.clone() else { panic!() };
-        let i = self.state.clo.env.len() + index - arity;
-        let a = self.state.clo.env[i].clone();
+        let Term::Tuple(_arity) = self.state.clo.term.clone() else { panic!() };
+        let a = self.state.clo.env[index].clone();
         self.heap_load(a);
         Ok(())
     }
@@ -446,10 +442,8 @@ impl VM {
         self.state.clo.term = *term;
         self.run_state_whnf()?;
         let Term::Record(fs) = &self.state.clo.term else { panic!() };
-        let arity = fs.len();
         let index = fs.iter().position(|s| *s == label).unwrap();
-        let i = self.state.clo.env.len() + index - arity;
-        let a = self.state.clo.env[i].clone();
+        let a = self.state.clo.env[index].clone();
         self.heap_load(a);
         Ok(())
     }
@@ -520,74 +514,63 @@ fn builtin(f: Builtin, x: Closure) -> Result<Closure, RuntimeError> {
         }
 
         Builtin::I64Eq => {
-            let n = x.env.len() - 2;
-            let Term::Lit(Lit::Int(a)) = x.env[n+0].borrow().term else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env[n+1].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(a)) = x.env[0].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(b)) = x.env[1].borrow().term else { panic!() };
             Term::Lit(Lit::Bool(a == b))
         }
         Builtin::I64Neq => {
-            let n = x.env.len() - 2;
-            let Term::Lit(Lit::Int(a)) = x.env[n+0].borrow().term else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env[n+1].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(a)) = x.env[0].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(b)) = x.env[1].borrow().term else { panic!() };
             Term::Lit(Lit::Bool(a != b))
         }
 
         Builtin::I64Lt => {
-            let n = x.env.len() - 2;
-            let Term::Lit(Lit::Int(a)) = x.env[n+0].borrow().term else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env[n+1].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(a)) = x.env[0].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(b)) = x.env[1].borrow().term else { panic!() };
             Term::Lit(Lit::Bool(a < b))
         }
         Builtin::I64Le => {
-            let n = x.env.len() - 2;
-            let Term::Lit(Lit::Int(a)) = x.env[n+0].borrow().term else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env[n+1].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(a)) = x.env[0].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(b)) = x.env[1].borrow().term else { panic!() };
             Term::Lit(Lit::Bool(a <= b))
         }
         Builtin::I64Gt => {
-            let n = x.env.len() - 2;
-            let Term::Lit(Lit::Int(a)) = x.env[n+0].borrow().term else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env[n+1].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(a)) = x.env[0].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(b)) = x.env[1].borrow().term else { panic!() };
             Term::Lit(Lit::Bool(a > b))
         }
         Builtin::I64Ge => {
-            let n = x.env.len() - 2;
-            let Term::Lit(Lit::Int(a)) = x.env[n+0].borrow().term else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env[n+1].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(a)) = x.env[0].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(b)) = x.env[1].borrow().term else { panic!() };
             Term::Lit(Lit::Bool(a >= b))
         }
 
         Builtin::I64Add => {
-            let n = x.env.len() - 2;
-            let Term::Lit(Lit::Int(a)) = x.env[n+0].borrow().term else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env[n+1].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(a)) = x.env[0].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(b)) = x.env[1].borrow().term else { panic!() };
             Term::Lit(Lit::Int(a + b))
         }
         Builtin::I64Sub => {
-            let n = x.env.len() - 2;
-            let Term::Lit(Lit::Int(a)) = x.env[n+0].borrow().term else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env[n+1].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(a)) = x.env[0].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(b)) = x.env[1].borrow().term else { panic!() };
             Term::Lit(Lit::Int(a - b))
         }
         Builtin::I64Mul => {
-            let n = x.env.len() - 2;
-            let Term::Lit(Lit::Int(a)) = x.env[n+0].borrow().term else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env[n+1].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(a)) = x.env[0].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(b)) = x.env[1].borrow().term else { panic!() };
             Term::Lit(Lit::Int(a * b))
         }
         Builtin::I64Div => {
-            let n = x.env.len() - 2;
-            let Term::Lit(Lit::Int(a)) = x.env[n+0].borrow().term else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env[n+1].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(a)) = x.env[0].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(b)) = x.env[1].borrow().term else { panic!() };
             if b == 0 {
                 return Err(RuntimeError::DivisionByZero);
             }
             Term::Lit(Lit::Int(a / b))
         }
         Builtin::I64Mod => {
-            let n = x.env.len() - 2;
-            let Term::Lit(Lit::Int(a)) = x.env[n+0].borrow().term else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env[n+1].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(a)) = x.env[0].borrow().term else { panic!() };
+            let Term::Lit(Lit::Int(b)) = x.env[1].borrow().term else { panic!() };
             if b == 0 {
                 return Err(RuntimeError::DivisionByZero);
             }
