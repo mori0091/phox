@@ -512,6 +512,29 @@ fn test_for_loop() {
 }
 
 #[test]
+fn test_for_loop2() {
+    // faster version of test_for_loop
+
+    // init = 0;
+    let init = Term::int(0);
+
+    // pred = \x. 99999 > x;
+    //      = |(99999 >);
+    let pred = Term::app(Term::GlobalVar(symbol(">")), Term::int(99999));
+
+    // next = \x. 2 + x;
+    //      = |(2 +);
+    let next = Term::app(Term::GlobalVar(symbol("+")), Term::int(2));
+
+    let term = Term::for_(init, pred, next);
+
+    let mut vm = VM::new(globals(), term);
+    let result = vm.eval().unwrap();
+
+    assert_eq!(result.term, Term::int(100000));
+}
+
+#[test]
 fn test_add_literals() {
     let term = Term::app(Term::app(
         Term::GlobalVar(symbol("+")), Term::int(1)), Term::int(2)
