@@ -38,6 +38,9 @@ pub enum Term {
     TupleAccess(Box<Term>, usize),  // ex. `p.0`
     FieldAccess(Box<Term>, Label),  // ex. `p.x`
 
+    Let(Box<Term>, Box<Term>),
+    LetRec(Box<Term>, Box<Term>),
+
     // values (as closure = (term, env))
     Lit(Lit),
     Con(ConId, usize),              // `Con "Cons" 2`, `Con "Nil" 0`
@@ -65,6 +68,16 @@ impl Term {
         Term::FieldAccess(Box::new(r), label)
     }
 
+    /// `let f = x in e` ; Short-circuit of `app(lam(e), x)`
+    pub fn let_(x: Term, e: Term) -> Term {
+        Term::Let(Box::new(x), Box::new(e))
+    }
+
+    /// `let rec f = x in e`
+    pub fn letrec(x: Term, e: Term) -> Term {
+        Term::LetRec(Box::new(x), Box::new(e))
+    }
+
     // ---------------------------------------------------------
     pub fn unit() -> Term {
         Term::Lit(Lit::Unit)
@@ -78,10 +91,6 @@ impl Term {
 
     // ---------------------------------------------------------
     // === syntax sugar ===
-    pub fn let_(x: Term, e: Term) -> Term {
-        Term::app(Term::lam(e), x)
-    }
-
     pub fn block(mut xs: Vec<Term>) -> Term {
         if xs.is_empty() {
             return Term::unit()
@@ -103,6 +112,30 @@ impl Term {
             f = Term::app(f, x);
         }
         f
+    }
+
+    /// (\p. e) ; Lambda abstraction that takes a pattern argument.
+    pub fn lam_p1(p: Pat, e: Term) -> Term {
+        Term::lam(Term::match_(Term::Var(0), vec![(p, e)]))
+    }
+
+    /// let p = x in e ; e's env.len() == 1 + |p|
+    pub fn let_p1(p: Pat, x: Term, e: Term) -> Term {
+        // Term::app(Term::lam_p1(p, e), x)
+        Term::let_(x, Term::match_(Term::Var(0), vec![(p, e)]))
+    }
+
+    /// let p = x in e ; e's env.len() == |p|
+    pub fn let_p0(p: Pat, x: Term, e: Term) -> Term {
+        Term::match_(x, vec![(p, e)])
+    }
+
+    /// if (cond) t f
+    pub fn if_(cond: Term, t: Term, f: Term) -> Term {
+        Term::match_(cond, vec![
+            (Pat::Lit(Lit::Bool(true)), t),
+            (Pat::Wildcard, f),
+        ])
     }
 }
 
@@ -242,6 +275,13 @@ impl VM {
                 self.run_builtin()
             }
 
+            Term::Let(_, _) => {
+                self.run_let()
+            }
+            Term::LetRec(_, _) => {
+                self.run_letrec()
+            }
+
             _ => {
                 if !self.state.upds.is_empty() {
                     self.run_update();
@@ -300,6 +340,12 @@ impl VM {
         let (a, args) = self.state.upds.pop().unwrap();
         self.state.args = args;
         a
+    }
+
+    /// Allocate fresh address
+    fn heap_alloc_reserved(&mut self) -> Addr {
+        let dummy = Closure { term: Term::unit(), env: Env::new() };
+        alloc(dummy)
     }
 
     /// Allocate fresh address and store closure
@@ -394,6 +440,31 @@ impl VM {
         self.state.clo.term = *e;
         let a = self.args_pop();
         self.state.clo.env.push(a);
+    }
+
+    fn run_let(&mut self) -> Result<(), RuntimeError> {
+        let Term::Let(x, e) = self.state.clo.term.clone() else { panic!() };
+        let env = self.env_dup();
+        let x = self.eval_term(*x)?;
+        let a = self.heap_alloc(x);
+        self.state.clo.env = env;
+        self.state.clo.env.push(a);
+        self.state.clo.term = *e;
+        Ok(())
+    }
+
+    fn run_letrec(&mut self) -> Result<(), RuntimeError> {
+        let Term::LetRec(x, e) = self.state.clo.term.clone() else { panic!() };
+        let env = self.env_dup();
+        let a = self.heap_alloc_reserved();
+        self.state.clo.env.push(a.clone());
+        self.state.clo.term = *x;
+        self.run_state_whnf()?;
+        self.heap_store(a.clone());
+        self.state.clo.env = env;
+        self.state.clo.env.push(a);
+        self.state.clo.term = *e;
+        Ok(())
     }
 
     fn run_access(&mut self) -> Result<(), RuntimeError> {

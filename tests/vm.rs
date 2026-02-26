@@ -610,3 +610,98 @@ fn test_add_div() {
 
     assert_eq!(result.term, Term::int(2));
 }
+
+#[test]
+fn test_lambda_with_pattern_arg() {
+    let f = Term::lam_p1(
+        Pat::Tuple(vec![Pat::Var, Pat::Var]),
+        Term::app(Term::app(Term::GlobalVar(symbol("+")), Term::Var(1)), Term::Var(0))
+    );
+    let x = tuple2(Term::int(42), Term::int(1));
+    let term = Term::app(f, x);
+
+    let mut vm = VM::new(globals(), term);
+    let result = vm.eval().unwrap();
+
+    assert_eq!(result.term, Term::int(43));
+}
+
+#[test]
+fn test_nested_lambda_with_pattern_arg() {
+    // f = \a.\(b,c). a * (b + c);
+    let f = Term::lam_p1(Pat::Var, Term::lam_p1(Pat::Tuple(vec![Pat::Var, Pat::Var]),
+            Term::app(Term::app(
+                Term::GlobalVar(symbol("*")), Term::Var(3)), // Hmm...
+                      Term::app(Term::app(
+                          Term::GlobalVar(symbol("+")), Term::Var(1)), Term::Var(0)
+                      )
+                )
+            )
+        );
+
+    let a = Term::int(2);
+    let x = tuple2(Term::int(42), Term::int(1));
+    let term = Term::app(Term::app(f, a), x);
+
+    let mut vm = VM::new(globals(), term);
+    let result = vm.eval().unwrap();
+
+    assert_eq!(result.term, Term::int(86));
+}
+
+#[test]
+fn test_fact() {
+    // `let rec fact = \n. if (n <= 0) 1 else n * (fact (n - 1))`
+    let fact = {
+        let f = Term::Var(1);
+        let n = Term::Var(0);
+        let cond = Term::app(Term::app(
+            Term::GlobalVar(symbol("<=")), n.clone()), Term::int(0)
+        );
+        let texpr = Term::int(1);
+        let fexpr = Term::app(Term::app(
+            Term::GlobalVar(symbol("*")), n.clone()), Term::app(
+            f, Term::app(Term::app(
+                Term::GlobalVar(symbol("-")), n), Term::int(1)
+            ))
+        );
+        Term::lam(Term::if_(cond, texpr, fexpr))
+    };
+
+    let term = Term::letrec(fact, Term::app(Term::Var(0), Term::int(5)));
+
+    let mut vm = VM::new(globals(), term);
+    let result = vm.eval().unwrap();
+
+    assert_eq!(result.term, Term::int(120));
+}
+
+#[test]
+fn test_fact_global() {
+    // `fact = \n. if (n <= 0) 1 else n * (fact (n - 1))`
+    let fact = {
+        let f = Term::GlobalVar(symbol("fact"));
+        let n = Term::Var(0);
+        let cond = Term::app(Term::app(
+            Term::GlobalVar(symbol("<=")), n.clone()), Term::int(0)
+        );
+        let texpr = Term::int(1);
+        let fexpr = Term::app(Term::app(
+            Term::GlobalVar(symbol("*")), n.clone()), Term::app(
+            f, Term::app(Term::app(
+                Term::GlobalVar(symbol("-")), n), Term::int(1)
+            ))
+        );
+        Term::lam(Term::if_(cond, texpr, fexpr))
+    };
+
+    let mut gvars = globals();
+    gvars.insert(symbol("fact"), fact);
+
+    let term = Term::app(Term::GlobalVar(symbol("fact")), Term::int(5));
+
+    let mut vm = VM::new(gvars, term);
+    let result = vm.eval().unwrap();
+
+    assert_eq!(result.term, Term::int(120));
+}
