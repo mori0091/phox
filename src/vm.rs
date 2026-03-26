@@ -172,19 +172,19 @@ pub struct State {
 
 // -------------------------------------------------------------
 pub struct VM {
-    global: GlobalEnv,
+    globals: GlobalEnv,
     state: State,
 }
 
 impl VM {
-    pub fn new(global: GlobalEnv, term: Term) -> Self {
+    pub fn new(globals: GlobalEnv, term: Term) -> Self {
         let state = State {
             clo: Closure { term, env: Env::new() },
             args: AStack::new(),
             upds: UStack::new(),
             // heap: Heap::new(),
         };
-        VM { global, state }
+        VM { globals, state }
     }
 
     pub fn state(&self) -> State {
@@ -496,7 +496,7 @@ impl VM {
 impl VM {
     fn run_global_access(&mut self) -> Result<(), RuntimeError> {
         let Term::GlobalVar(v) = &self.state.clo.term else { panic!() };
-        let term = self.global.get(v)
+        let term = self.globals.get(v)
             .ok_or_else(|| RuntimeError::GlobalVariableNotFound(v.clone()))
             .cloned()?;
         self.state.clo.term = term;
@@ -508,7 +508,11 @@ impl VM {
         let Term::TupleAccess(term, index) = self.state.clo.term.clone() else { panic!() };
         self.state.clo.term = *term;
         self.run_state_whnf()?;
-        let Term::Tuple(_arity) = self.state.clo.term.clone() else { panic!() };
+        if let Term::Con(_, 1) = &self.state.clo.term {
+            let a = self.state.clo.env[0].clone();
+            self.heap_load(a);
+        }
+        let Term::Tuple(_arity) = &self.state.clo.term else { panic!() };
         let a = self.state.clo.env[index].clone();
         self.heap_load(a);
         Ok(())
@@ -518,6 +522,10 @@ impl VM {
         let Term::FieldAccess(term, label) = self.state.clo.term.clone() else { panic!() };
         self.state.clo.term = *term;
         self.run_state_whnf()?;
+        if let Term::Con(_, 1) = &self.state.clo.term {
+            let a = self.state.clo.env[0].clone();
+            self.heap_load(a);
+        }
         let Term::Record(fs) = &self.state.clo.term else { panic!() };
         let index = fs.iter().position(|s| *s == label).unwrap();
         let a = self.state.clo.env[index].clone();
