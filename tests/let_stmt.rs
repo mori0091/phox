@@ -1,5 +1,12 @@
 use phox::api::*;
 
+// [Note]
+// In the case of `let rec p = e;`,
+// - `p` must be a variable pattern.
+// In the case of `let p = e;`,
+// - At the top level of a module, `p` must be a variable pattern.
+// - Within a local scope, any pattern can be used for `p`.
+
 #[test]
 fn test_let_simple() {
     // let x = 10 ; x + 1
@@ -10,8 +17,12 @@ fn test_let_simple() {
 
 #[test]
 fn test_let_shadowing() {
+    // [!NOTE]
+    // > "Shadowing" is permitted only within a local scope.
+    // > At the top level, `let x = x + 1` causes "infinite recursive call".
+
     // let x = 5 ; let x = x + 1 ; x * 2
-    let (val, sch) = eval("let x = 5 ; let x = x + 1 ; x * 2").unwrap();
+    let (val, sch) = eval("{let x = 5 ; let x = x + 1 ; x * 2}").unwrap();
     assert_eq!(format!("{}", val), "12");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
@@ -91,14 +102,14 @@ fn test_pat_var() {
 
 #[test]
 fn test_pat_wildcard() {
-    let (val, sch) = eval("let _ = 42 ; 0").unwrap();
+    let (val, sch) = eval("{let _ = 42 ; 0}").unwrap();
     assert_eq!(format!("{}", val), "0");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
 
 #[test]
 fn test_pat_lit() {
-    let (val, sch) = eval("let 1 = 1 ; 99").unwrap();
+    let (val, sch) = eval("{let 1 = 1 ; 99}").unwrap();
     assert_eq!(format!("{}", val), "99");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
@@ -106,14 +117,14 @@ fn test_pat_lit() {
 // --------------
 #[test]
 fn test_pat_tuple_simple() {
-    let (val, sch) = eval("let (x, y) = (1, 2) ; x + y").unwrap();
+    let (val, sch) = eval("{let (x, y) = (1, 2) ; x + y}").unwrap();
     assert_eq!(format!("{}", val), "3");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
 
 #[test]
 fn test_pat_tuple_nested() {
-    let (val, sch) = eval("let (x, (y, z)) = (1, (2, 3)) ; x + y + z").unwrap();
+    let (val, sch) = eval("{let (x, (y, z)) = (1, (2, 3)) ; x + y + z}").unwrap();
     assert_eq!(format!("{}", val), "6");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
@@ -121,14 +132,14 @@ fn test_pat_tuple_nested() {
 // --------------
 #[test]
 fn test_pat_con_list() {
-    let (val, sch) = eval("let Cons x xs = Cons 1 (Cons 2 Nil) ; x").unwrap();
+    let (val, sch) = eval("{let Cons x xs = Cons 1 (Cons 2 Nil) ; x}").unwrap();
     assert_eq!(format!("{}", val), "1");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
 
 #[test]
 fn test_pat_con_list_nested() {
-    let (val, sch) = eval("let Cons x (Cons y ys) = Cons 1 (Cons 2 Nil) ; x + y").unwrap();
+    let (val, sch) = eval("{let Cons x (Cons y ys) = Cons 1 (Cons 2 Nil) ; x + y}").unwrap();
     assert_eq!(format!("{}", val), "3");
     assert_eq!(format!("{}", sch.pretty()), "Int");
 }
@@ -137,13 +148,13 @@ fn test_pat_con_list_nested() {
 #[test]
 #[should_panic]
 fn test_pat_tuple_mismatch() {
-    let _ = eval("let (x, y) = (1,) ; x").unwrap();
+    let _ = eval("{let (x, y) = (1,) ; x}").unwrap();
 }
 
 #[test]
 #[should_panic]
 fn test_pat_con_mismatch() {
-    let _ = eval("let Cons x xs = Nil ; x").unwrap();
+    let _ = eval("{let Cons x xs = Nil ; x}").unwrap();
 }
 
 // --------------
