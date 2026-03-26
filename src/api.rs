@@ -242,7 +242,7 @@ impl PhoxEngine {
         let sch = self.compile_items(module, items)?;
         let term = self.lower_items(items)?;
         let val = self.eval_term(&term)
-                      .map_err(|e| Error::Message(format!("runtime error: {e:?}")))?;
+                      .map_err(|e| Error::Message(format!("runtime error: {e}")))?;
         Ok((val, sch))
     }
 

@@ -1,6 +1,30 @@
 use super::*;
 use std::fmt;
 
+impl fmt::Display for RuntimeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            // ---- Runtime errors that may be caused by a programming error.
+            RuntimeError::DivisionByZero =>
+                write!(f, "division by zero"),
+            RuntimeError::NonExhaustiveMatch(clo) =>
+                write!(f, "non-exhaustive match: no pattern matched value `{}`", clo),
+
+            // ---- Runtime errors that shouldn't normally occur.
+            RuntimeError::Fatal =>
+                write!(f, "fatal error"),
+            RuntimeError::GlobalVariableNotFound(sym) =>
+                write!(f, "global variable not found: `{}`", sym),
+            RuntimeError::VariableNotFound(index) =>
+                write!(f, "local variable not found: `?{}`", index),
+            RuntimeError::DanglingReadPointer =>
+                write!(f, "read from dangling pointer"),
+            RuntimeError::DanglingWritePointer =>
+                write!(f, "write to dangling pointer"),
+        }
+    }
+}
+
 impl fmt::Display for Pat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

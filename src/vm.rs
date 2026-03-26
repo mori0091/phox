@@ -12,8 +12,12 @@ pub use crate::runtime::Builtin;
 // -------------------------------------------------------------
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RuntimeError {
-    Fatal,
+    // ---- Runtime errors that may be caused by a programming error.
     DivisionByZero,
+    NonExhaustiveMatch(Closure),
+
+    // ---- Runtime errors that shouldn't normally occur.
+    Fatal,
     GlobalVariableNotFound(Symbol),
     VariableNotFound(usize),
     DanglingReadPointer,
@@ -25,7 +29,7 @@ pub type ConId = Symbol;
 pub type Label = String;        // label of record field or region
 
 // -------------------------------------------------------------
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Term {
     // functions
     Lam(Box<Term>),             // de Bruijn Index
@@ -141,7 +145,7 @@ impl Term {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Pat {
     Wildcard,                   // `_`
     Lit(Lit),                   // `()`, `true`, `1`, etc.
@@ -152,7 +156,7 @@ pub enum Pat {
 }
 
 // -------------------------------------------------------------
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Closure {
     pub term: Term,
     pub env: Env,
@@ -547,7 +551,7 @@ impl VM {
                 return Ok(())
             }
         }
-        panic!("non-exhaustive match: no pattern matched value {:?}", v_scrut)
+        Err(RuntimeError::NonExhaustiveMatch(v_scrut))
     }
 
     fn run_for(&mut self) -> Result<(), RuntimeError> {
