@@ -15,6 +15,10 @@ pub use crate::typesys::Pretty;
 
 use crate::interpreter::*;
 
+use crate::coreir::CoreIR;
+use crate::vmir::VMIR;
+use crate::vm;
+
 mod bootstrap;
 use bootstrap::*;
 
@@ -32,6 +36,7 @@ pub struct PhoxEngine {
     pub module_value_envs: IndexMap<Path, ValueEnv>,   // value_env for each modules
     pub starlet_env: StarletEnv,                      // starlet_env ; the set of `SchemeTeamplate<TypedStarlet>`s for each defined `*let`.
     pub impl_env: ImplEnv,                            // impl_env ; the set of `SchemeTeamplate<TypedImpl>`s for each defined `impl`.
+    pub globals: vm::GlobalEnv,
 }
 
 impl PhoxEngine {
@@ -45,6 +50,7 @@ impl PhoxEngine {
             module_value_envs: IndexMap::new(),
             starlet_env: StarletEnv::new(),
             impl_env: ImplEnv::new(),
+            globals: vm::GlobalEnv::new(),
         };
 
         match phox.boot() {
@@ -102,7 +108,7 @@ pub fn parse(src: &str) -> Result<Program, ParseError<usize, Token, LexicalError
 }
 
 /// Parse, infer type scheme, and evaluate of a program.
-pub fn eval(src: &str) -> Result<(Value, TypeScheme), Error> {
+pub fn eval(src: &str) -> Result<(vm::Closure, TypeScheme), Error> {
     let mut phox = PhoxEngine::new();
     phox.run(src)
 }
@@ -162,14 +168,6 @@ impl PhoxEngine {
         apply_trait_impls_item(self, module, item)
     }
 
-    /// Evaluate an item.
-    pub fn eval_item(&mut self, module: &RefModule, item: &mut Item) -> Result<Value, Error> {
-        let env = &mut self.get_value_env(module);
-        let val = eval_item(self, module, env, &item)
-            .map_err(|e| Error::Message(format!("eval error: {e}")))?;
-        Ok(val)
-    }
-
     // ---------------------------------------------------------
 
     /// Infer type scheme for each items.
@@ -202,18 +200,8 @@ impl PhoxEngine {
         Ok(())
     }
 
-    /// Evaluate for each items.
-    pub fn eval_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<Value, Error> {
-        let mut last = None;
-        for item in items {
-            let ret = self.eval_item(module, item)?;
-            last = Some(ret);
-        }
-        last.ok_or_else(|| Error::Message(format!("program contained no expression")))
-    }
-
-    /// Resolve and infer type scheme for each items, then evaluate them.
-    pub fn run_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(Value, TypeScheme), Error> {
+    /// Resolve and infer type scheme for each items.
+    pub fn compile_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<TypeScheme, Error> {
         // let mod_path = module.borrow().path().pretty();
         // eprintln!("mod {mod_path}", );
 
@@ -228,28 +216,68 @@ impl PhoxEngine {
         // eprintln!("  {mod_path} apply...");
         self.apply_items(module, items)?;
 
-        // eprintln!("  {mod_path} eval...");
-        let val = self.eval_items(module, items)?;
-
-        // eprintln!("  {mod_path} done");
-        // eprintln!();
-
         let icx = &mut self.get_infer_ctx(module);
         let sch = generalize(&mut self.ctx, icx, &ty);
+        Ok(sch)
+    }
+
+    /// Lower (compiled) items into VM term(s).
+    pub fn lower_items(&mut self, items: &mut Vec<Item>) -> Result<vm::Term, Error> {
+        let mut core = CoreIR::new();
+        core.lower(items)?;
+        let mut vmir = VMIR::new();
+        vmir.lower(&core)?;
+        self.globals.extend(vmir.globals);
+        Ok(vmir.term)
+    }
+
+    /// Evaluate VM term.
+    pub fn eval_term(&mut self, term: &vm::Term) -> Result<vm::Closure, vm::RuntimeError> {
+        let mut vm = vm::VM::new(self.globals.clone(), term.clone());
+        vm.eval()
+    }
+
+    /// Resolve and infer type scheme for each items, then evaluate them.
+    pub fn run_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(vm::Closure, TypeScheme), Error> {
+        let sch = self.compile_items(module, items)?;
+        let term = self.lower_items(items)?;
+        let val = self.eval_term(&term)
+                      .map_err(|e| Error::Message(format!("runtime error: {e:?}")))?;
         Ok((val, sch))
     }
 
     /// Parse, resolve, infer type scheme, and evaluate a program source code.
-    pub fn run_mod(&mut self, module: &RefModule, src: &str) -> Result<(Value, TypeScheme), Error> {
+    pub fn run_mod(&mut self, module: &RefModule, src: &str) -> Result<(vm::Closure, TypeScheme), Error> {
         let mut items = parse(src)
             .map_err(|e| Error::Message(format!("parse error: {e:?}")))?;
         self.run_items(module, &mut items)
     }
 
     /// Parse, resolve, infer type scheme, and evaluate a program source code in "::__main__" module.
-    pub fn run(&mut self, src: &str) -> Result<(Value, TypeScheme), Error> {
+    pub fn run(&mut self, src: &str) -> Result<(vm::Closure, TypeScheme), Error> {
         let module = self.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
         self.run_mod(&module, src)
+    }
+}
+
+// -------------------------------------------------------------
+impl PhoxEngine {
+    /// Evaluate a (compiled) item with AST evaluator (for test).
+    pub fn eval_item(&mut self, module: &RefModule, item: &mut Item) -> Result<Value, Error> {
+        let env = &mut self.get_value_env(module);
+        let val = eval_item(self, module, env, &item)
+            .map_err(|e| Error::Message(format!("eval error: {e}")))?;
+        Ok(val)
+    }
+
+    /// Evaluate for each (compiled) items with AST evaluator (for test)
+    pub fn eval_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<Value, Error> {
+        let mut last = None;
+        for item in items {
+            let ret = self.eval_item(module, item)?;
+            last = Some(ret);
+        }
+        last.ok_or_else(|| Error::Message(format!("program contained no expression")))
     }
 }
 
