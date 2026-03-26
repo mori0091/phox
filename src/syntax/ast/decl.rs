@@ -15,7 +15,9 @@ pub enum Decl {
     Mod(String, Option<Vec<Item>>), // `mod bar;`
     Use(PathGlob),              // `use ::foo::bar;`
 
-    Type(RawTypeDef),           // parsed, "raw" type decl.
+    RawType(RawTypeDef),        // parsed, "raw" type decl.
+    NamedType(TypeDef),         // resolved, "named" type decl.
+
     Trait(RawTrait),            // parsed, "raw" trait decl.
 
     RawImpl(RawImpl),           // parsed, "raw" impl decl.
@@ -43,7 +45,9 @@ impl fmt::Display for Decl {
             },
             Decl::Use(p)       => write!(f, "use {}", p),
 
-            Decl::Type(raw) => write!(f, "{:?}", raw),
+            Decl::RawType(raw) => write!(f, "{:?}", raw),
+            Decl::NamedType(named) => write!(f, "{:?}", named),
+
             Decl::Trait(raw) => write!(f, "{:?}", raw),
 
             Decl::RawImpl(raw) => write!(f, "{:?}", raw),

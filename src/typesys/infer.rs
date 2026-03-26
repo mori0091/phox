@@ -68,8 +68,14 @@ pub fn infer_decl(
     match decl {
         Decl::Mod(_, _) |
         Decl::Use(_)    |
-        Decl::Type(_)   |
         Decl::Trait(_) => {
+            Ok((Type::unit(), vec![]))
+        }
+
+        Decl::RawType(_) => {
+            unreachable!()
+        }
+        Decl::NamedType(_) => {
             Ok((Type::unit(), vec![]))
         }
 

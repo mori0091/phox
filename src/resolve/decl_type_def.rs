@@ -1,26 +1,4 @@
-use crate::interpreter::*;
-use crate::syntax::ast::{Expr, Pat};
 use super::*;
-
-fn make_con(name: &Symbol, arity: usize) -> Value {
-    let mut args = Vec::with_capacity(arity);
-    let mut vars = Vec::with_capacity(arity);
-    for i in 0..arity {
-        let v = format!("a{}", i);
-        args.push(v.clone());
-        vars.push(Expr::unresolved_var(v));
-    }
-    let mut e = Expr::con(name.clone(), vars);
-    for v in args.iter().rev() {
-        e = Expr::abs(Pat::unresolved_var(v), e)
-    }
-
-    match e.body {
-        ExprBody::Con(name, _)   => Value::Con(name, vec![]),
-        ExprBody::Abs(pat, body) => Value::Closure { pat, body, env: ValueEnv::new() },
-        _ => unreachable!(),
-    }
-}
 
 // -------------------------------------------------------------
 // === type decl ===
@@ -29,48 +7,9 @@ pub fn resolve_decl_type_def(
     module: &RefModule,
     symbol_env: &mut SymbolEnv,
     raw: &RawTypeDef,
-) -> Result<(), Error> {
-    let TypeDef::SumType {
-        name: ty_ctor_name,
-        params: ty_ctor_params,
-        variants,
-    } = &resolve_raw_type_def(phox, module, symbol_env, raw)?;
-
-    let icx = &mut phox.get_infer_ctx(module);
-    let env = &mut phox.get_value_env(module);
-
-    // kind を構築
-    let mut kind = Kind::Type;
-    for _ in ty_ctor_params.iter().rev() {
-        kind = Kind::Fun(Box::new(Kind::Type), Box::new(kind));
-    }
-    icx.put_kind(ty_ctor_name.clone(), kind);
-
-    // 各コンストラクタを登録
-    for v in variants {
-        // Type scheme of the data constructor `v`.
-        icx.put_type_scheme(
-            v.name(),
-            v.as_scheme(ty_ctor_name, ty_ctor_params)
-        );
-        // Value of the data constructor `v`.
-        env.insert(
-            v.name(),
-            make_con(&v.name(), v.arity())
-        );
-    }
-
-    Ok(())
-}
-
-fn resolve_raw_type_def(
-    phox: &mut PhoxEngine,
-    module: &RefModule,
-    symbol_env: &mut SymbolEnv,
-    raw: &RawTypeDef,
 ) -> Result<TypeDef, Error> {
     match raw {
-        RawTypeDef::SumType { name, params, variants } => {
+        RawTypeDef { name, params, variants } => {
             let mut param_map = TyParMap::new();
             let mut param_ids = Vec::new();
             for p in params {
@@ -85,7 +24,7 @@ fn resolve_raw_type_def(
                 resolved_variants.push(rv);
             }
             let symbol = make_symbol(phox, module, symbol_env, &name)?;
-            Ok(TypeDef::SumType {
+            Ok(TypeDef {
                 name: symbol,
                 params: param_ids,
                 variants: resolved_variants,

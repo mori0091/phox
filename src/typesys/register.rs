@@ -23,14 +23,38 @@ pub fn register_item(
 
 pub fn register_decl(
     phox: &mut PhoxEngine,
-    _module: &RefModule,
+    module: &RefModule,
     decl: &mut Decl,
 ) -> Result<(), Error> {
     match decl {
         Decl::Mod(_, _) |
         Decl::Use(_)    |
-        Decl::Type(_)   |
         Decl::Trait(_) => {
+            Ok(())
+        }
+
+        Decl::RawType(_) => {
+            unreachable!();
+        }
+        Decl::NamedType(named) => {
+            let icx = &mut phox.get_infer_ctx(module);
+
+            // kind を構築
+            let mut kind = Kind::Type;
+            for _ in named.params.iter().rev() {
+                kind = Kind::Fun(Box::new(Kind::Type), Box::new(kind));
+            }
+            icx.put_kind(named.name.clone(), kind);
+
+            // 各コンストラクタの型スキームを登録
+            for v in named.variants.iter() {
+                // Type scheme of the data constructor `v`.
+                icx.put_type_scheme(
+                    v.name(),
+                    v.as_scheme(&named.name, &named.params)
+                );
+            }
+
             Ok(())
         }
 

@@ -15,7 +15,10 @@ pub fn eval_item(
     item: &Item,
 ) -> Result<Value, Error> {
     match &item.body {
-        ItemBody::Decl(_) => Ok(Value::Lit(Lit::Unit)),
+        ItemBody::Decl(decl) => {
+            eval_decl(phox, module, env, decl)?;
+            Ok(Value::Lit(Lit::Unit))
+        }
         ItemBody::Stmt(stmt) => {
             eval_stmt(phox, module, env, stmt)?;
             Ok(Value::Lit(Lit::Unit))
@@ -23,6 +26,48 @@ pub fn eval_item(
         ItemBody::Expr(expr) => {
             eval_expr(phox, module, env, expr)
         }
+    }
+}
+
+fn make_con(name: &Symbol, arity: usize) -> Value {
+    let mut args = Vec::with_capacity(arity);
+    let mut vars = Vec::with_capacity(arity);
+    for i in 0..arity {
+        let v = format!("a{}", i);
+        args.push(v.clone());
+        vars.push(Expr::local_var(v));
+    }
+    let mut e = Expr::con(name.clone(), vars);
+    for v in args.iter().rev() {
+        e = Expr::abs(Pat::local_var(v), e)
+    }
+
+    match e.body {
+        ExprBody::Con(name, _)   => Value::Con(name, vec![]),
+        ExprBody::Abs(pat, body) => Value::Closure { pat, body, env: ValueEnv::new() },
+        _ => unreachable!(),
+    }
+}
+
+pub fn eval_decl(
+    phox: &mut PhoxEngine,
+    module: &RefModule,
+    _env: &mut ValueEnv,
+    decl: &Decl,
+) -> Result<(), Error> {
+    match decl {
+        Decl::NamedType(named) => {
+            let env = &mut phox.get_value_env(module);
+            for v in named.variants.iter() {
+                // Value of the data constructor `v`.
+                env.insert(
+                    v.name(),
+                    make_con(&v.name(), v.arity())
+                );
+            }
+            Ok(())
+        }
+        _ => Ok(()),
     }
 }
 

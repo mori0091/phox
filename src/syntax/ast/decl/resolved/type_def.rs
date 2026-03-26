@@ -1,17 +1,15 @@
 use super::*;
 
 // -------------------------------------------------------------
-#[derive(Clone, Debug)]
-pub enum TypeDef {
-    SumType {
-        name: Symbol,           // Type constructor name of the ADT type
-        params: Vec<TypeVarId>, // Type variables of the ADT type
-        variants: Vec<Variant>, // Constructor variants
-    }
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TypeDef {
+    pub name: Symbol,           // Type constructor name of the ADT type
+    pub params: Vec<TypeVarId>, // Type variables of the ADT type
+    pub variants: Vec<Variant>, // Constructor variants
 }
 
 // -------------------------------------------------------------
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Variant {
     Unit(Symbol),               // ex. `None, `Nil`,
     Tuple(Symbol, Vec<Type>),   // ex. `Some a`, `Result a e`,

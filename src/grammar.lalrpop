@@ -139,7 +139,7 @@ pub LocalItem: Item = {
 Decl: Decl = {
     DeclMod,
     DeclUse,
-    DeclType => Decl::Type(<>),
+    DeclType => Decl::RawType(<>),
     DeclTrait => Decl::Trait(<>),
     DeclImpl => Decl::RawImpl(<>),
     DeclStarlet => Decl::RawStarlet(<>),
@@ -162,19 +162,19 @@ DeclUse: Decl = {
 // === ADT type declarations ===
 DeclType: RawTypeDef = {
     "type" <name:ConIdent> <params:TypeParams> "=" <variants:VariantList>
-        => RawTypeDef::SumType {
+        => RawTypeDef {
             name: name.clone(),
             params: params,
             variants: variants,
         },
     "type" <name:ConIdent> <params:TypeParams> "=" <tuple:TypeTuple>
-        => RawTypeDef::SumType {
+        => RawTypeDef {
             name: name.clone(),
             params: params,
             variants: vec![RawVariant::Tuple(name.clone(), vec![tuple])],
         },
     "type" <name:ConIdent> <params:TypeParams> "=" <record:TypeRecord>
-        => RawTypeDef::SumType {
+        => RawTypeDef {
             name: name.clone(),
             params: params,
             variants: vec![RawVariant::Tuple(name.clone(), vec![record])],

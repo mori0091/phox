@@ -4,13 +4,11 @@ use crate::syntax::ast::Expr;
 // ----------------------------------------------
 /// パース直後の型定義（まだ型変数は名前のまま）
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum RawTypeDef {
+pub struct RawTypeDef {
     /// 代数的データ型 (sum type)
-    SumType {
-        name: String,              // 型名 (例: "Option")
-        params: Vec<String>,       // 型パラメータ名 (例: ["a"])
-        variants: Vec<RawVariant>, // バリアント群
-    },
+    pub name: String,              // 型名 (例: "Option")
+    pub params: Vec<String>,       // 型パラメータ名 (例: ["a"])
+    pub variants: Vec<RawVariant>, // バリアント群
 }
 
 /// バリアント(データ構築子)定義

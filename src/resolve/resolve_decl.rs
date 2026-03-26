@@ -51,9 +51,15 @@ pub fn resolve_decl(
             resolve_stmt_use(phox, module, symbol_env, pathglob)
         }
 
-        Decl::Type(raw) => {
-            resolve_decl_type_def(phox, module, symbol_env, raw)
+        Decl::RawType(raw) => {
+            let named = resolve_decl_type_def(phox, module, symbol_env, raw)?;
+            *decl = Decl::NamedType(named);
+            Ok(())
         }
+        Decl::NamedType(_) => {
+            Ok(())
+        }
+
         Decl::Trait(raw) => {
             resolve_decl_trait(phox, module, symbol_env, raw)
         }
