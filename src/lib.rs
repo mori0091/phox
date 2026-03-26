@@ -12,6 +12,8 @@ pub mod module;
 pub mod error;
 
 pub mod runtime;
+pub mod coreir;
+pub mod vmir;
 pub mod vm;
 
 pub mod collection;
