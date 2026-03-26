@@ -11,6 +11,15 @@ pub fn resolve_pat(
     match pat {
         Pat::Wildcard | Pat::Lit(_) => Ok(()),
         Pat::Var(symbol) => {
+            if symbol_env.is_local() {
+                if let Symbol::Unresolved(path) = symbol {
+                    let name = path.to_string();
+                    let sym = Symbol::local(&name);
+                    symbol_env.insert(path.clone(), sym.clone());
+                    *symbol = sym;
+                    return Ok(())
+                }
+            }
             resolve_symbol(phox, module, symbol_env, symbol)
         }
         Pat::Con(symbol, args) => {
