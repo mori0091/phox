@@ -77,6 +77,9 @@ impl Expr {
     pub fn expr(e: ExprBody) -> Self {
         Expr { span:(0,0), body: e, ty: None }
     }
+    pub fn local_var<S: Into<String>>(s: S) -> Self {
+        Expr::expr(ExprBody::Var(Symbol::local(s)))
+    }
     pub fn unresolved_var<S: Into<String>>(s: S) -> Self {
         Expr::expr(ExprBody::Var(Symbol::unresolved(s)))
     }

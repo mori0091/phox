@@ -13,6 +13,9 @@ pub enum Pat {
 }
 
 impl Pat {
+    pub fn local_var<S: Into<String>>(s: S) -> Self {
+        Pat::Var(Symbol::local(s))
+    }
     pub fn unresolved_var<S: Into<String>>(s: S) -> Self {
         Pat::Var(Symbol::unresolved(s))
     }
