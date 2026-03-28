@@ -82,8 +82,7 @@ pub fn nil() -> Term {
 fn test_literal() {
     let term = Term::int(42);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(42));
 }
@@ -95,8 +94,7 @@ fn test_identity_function() {
     let arg = Term::int(10);
     let app = Term::app(lam, arg);
 
-    let mut vm = VM::new(GlobalEnv::new(), app);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), app).unwrap();
 
     assert_eq!(result.term, Term::int(10));
 }
@@ -109,8 +107,7 @@ fn test_let() {
     let t2 = Term::Var(0);
     let term = Term::let_(t1, t2);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(10));
 }
@@ -119,8 +116,7 @@ fn test_let() {
 fn test_tuple() {
     let t = tuple2(Term::int(1), Term::int(2));
 
-    let mut vm = VM::new(GlobalEnv::new(), t);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), t).unwrap();
 
     match result {
         Closure{ term: Term::Tuple(2), env: xs } => {
@@ -138,8 +134,7 @@ fn test_tuple_access() {
 
     let term = Term::tuple_access(t, 1);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(2));
 }
@@ -153,8 +148,7 @@ fn test_match_var() {
 
     let term = Term::match_(scrut, vec![(pat, body)]);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(10));
 }
@@ -169,8 +163,7 @@ fn test_match_tuple() {
 
     let term = Term::match_(scrut, vec![(pat, body)]);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(1));
 }
@@ -182,8 +175,7 @@ fn test_con() {
 
     eprintln!("term = {:?}", term);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     eprintln!("result = {:?}", result);
 
@@ -217,8 +209,7 @@ fn test_record() {
     let values = vec![Term::int(1), Term::int(2)];
     let term = record(labels.clone(), values.clone());
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     match result {
         Closure{ term: Term::Record(ix), env: xs } => {
@@ -240,8 +231,7 @@ fn test_field_access() {
 
     let term = Term::field_access(record, "y".to_string());
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(2));
 }
@@ -250,16 +240,15 @@ fn test_field_access() {
 // x
 #[test]
 fn test_global_var() {
-    let mut global = GlobalEnv::new();
-    global.insert(
+    let mut gvars = GlobalEnv::new();
+    gvars.insert(
         Symbol::local("x"),
         Term::int(42)
     );
 
     let term = Term::GlobalVar(Symbol::local("x"));
 
-    let mut vm = VM::new(global, term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&gvars, term).unwrap();
 
     assert_eq!(result.term, Term::int(42));
 }
@@ -272,8 +261,7 @@ fn test_builtin_add() {
         tuple2(Term::int(41), Term::int(1))
     );
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(42));
 }
@@ -292,8 +280,7 @@ fn test_tuple_closure_application() {
     // ((\x. x), 10).0 5
     let app = Term::app(first, Term::int(5));
 
-    let mut vm = VM::new(GlobalEnv::new(), app);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), app).unwrap();
 
     assert_eq!(result.term, Term::int(5));
 }
@@ -315,8 +302,7 @@ fn test_nested_tuple_closure_application() {
     // apply to 5
     let app = Term::app(second, Term::int(5));
 
-    let mut vm = VM::new(GlobalEnv::new(), app);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), app).unwrap();
 
     assert_eq!(result.term, Term::int(5));
 }
@@ -336,8 +322,7 @@ fn test_record_closure_application() {
 
     let app = Term::app(field, Term::int(7));
 
-    let mut vm = VM::new(GlobalEnv::new(), app);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), app).unwrap();
 
     assert_eq!(result.term, Term::int(7));
 }
@@ -362,8 +347,7 @@ fn test_con_closure_application() {
 
     let term = Term::match_(scrut, vec![(pat, body)]);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(3));
 }
@@ -383,8 +367,7 @@ fn test_strict_let_in_tuple_closure() {
 
     let term = Term::let_(lam, app);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(123));
 }
@@ -394,8 +377,7 @@ fn test_strict_let_in_tuple_closure() {
 fn test_empty_block() {
     let term = Term::block(vec![]);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::unit());
 }
@@ -405,8 +387,7 @@ fn test_empty_block() {
 fn test_simple_sequence_block() {
     let term = Term::block(vec![Term::int(1), Term::int(2)]);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(2));
 }
@@ -425,8 +406,7 @@ fn test_block_with_expr_tail() {
         )
     );
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(3));
 }
@@ -436,8 +416,7 @@ fn test_block_with_expr_tail() {
 fn test_block_can_see_outer_scope() {
     let term = Term::let_(Term::int(1), Term::block(vec![Term::Var(0)]));
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(1));
 }
@@ -457,8 +436,7 @@ fn test_inner_scope_does_not_escape() {
     // outer: let x = 1 in seq
     let term = Term::let_(Term::int(1), seq);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(1));
 }
@@ -478,8 +456,7 @@ fn test_nested_block_shadowing() {
     // outer-most: let x = 1 in block
     let term = Term::let_(Term::int(1), block);
 
-    let mut vm = VM::new(GlobalEnv::new(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
     assert_eq!(result.term, Term::int(2));
 }
@@ -505,8 +482,7 @@ fn test_for_loop() {
 
     let term = Term::for_(init, pred, next);
 
-    let mut vm = VM::new(globals(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&globals(), term).unwrap();
 
     assert_eq!(result.term, Term::int(100000));
 }
@@ -528,8 +504,7 @@ fn test_for_loop2() {
 
     let term = Term::for_(init, pred, next);
 
-    let mut vm = VM::new(globals(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&globals(), term).unwrap();
 
     assert_eq!(result.term, Term::int(100000));
 }
@@ -540,8 +515,7 @@ fn test_add_literals() {
         Term::GlobalVar(symbol("+")), Term::int(1)), Term::int(2)
     );
 
-    let mut vm = VM::new(globals(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&globals(), term).unwrap();
 
     assert_eq!(result.term, Term::int(3));
 }
@@ -587,8 +561,7 @@ fn test_for_loop_tuple() {
 
     let term = Term::tuple_access(Term::for_(init, pred, next), 1);
 
-    let mut vm = VM::new(globals(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&globals(), term).unwrap();
 
     assert_eq!(result.term, Term::int(120));
 }
@@ -605,8 +578,7 @@ fn test_add_div() {
         Term::GlobalVar(symbol("/")), a), b
     );
 
-    let mut vm = VM::new(globals(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&globals(), term).unwrap();
 
     assert_eq!(result.term, Term::int(2));
 }
@@ -620,8 +592,7 @@ fn test_lambda_with_pattern_arg() {
     let x = tuple2(Term::int(42), Term::int(1));
     let term = Term::app(f, x);
 
-    let mut vm = VM::new(globals(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&globals(), term).unwrap();
 
     assert_eq!(result.term, Term::int(43));
 }
@@ -643,8 +614,7 @@ fn test_nested_lambda_with_pattern_arg() {
     let x = tuple2(Term::int(42), Term::int(1));
     let term = Term::app(Term::app(f, a), x);
 
-    let mut vm = VM::new(globals(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&globals(), term).unwrap();
 
     assert_eq!(result.term, Term::int(86));
 }
@@ -670,8 +640,7 @@ fn test_fact() {
 
     let term = Term::letrec(fact, Term::app(Term::Var(0), Term::int(5)));
 
-    let mut vm = VM::new(globals(), term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&globals(), term).unwrap();
 
     assert_eq!(result.term, Term::int(120));
 }
@@ -700,8 +669,7 @@ fn test_fact_global() {
 
     let term = Term::app(Term::GlobalVar(symbol("fact")), Term::int(5));
 
-    let mut vm = VM::new(gvars, term);
-    let result = vm.eval().unwrap();
+    let result = VM::run(&gvars, term).unwrap();
 
     assert_eq!(result.term, Term::int(120));
 }

@@ -177,13 +177,19 @@ pub struct State {
 }
 
 // -------------------------------------------------------------
-pub struct VM {
-    globals: GlobalEnv,
+pub struct VM<'a> {
+    globals: &'a GlobalEnv,
     state: State,
 }
 
-impl VM {
-    pub fn new(globals: GlobalEnv, term: Term) -> Self {
+impl <'a> VM<'a> {
+    pub fn run(globals: &'a GlobalEnv, term: Term) -> Result<Closure, RuntimeError> {
+        VM::new(globals, term).eval()
+    }
+}
+
+impl <'a> VM<'a> {
+    pub fn new(globals: &'a GlobalEnv, term: Term) -> Self {
         let state = State {
             clo: Closure { term, env: Env::new() },
             args: AStack::new(),
@@ -191,10 +197,6 @@ impl VM {
             // heap: Heap::new(),
         };
         VM { globals, state }
-    }
-
-    pub fn state(&self) -> State {
-        self.state.clone()
     }
 
     /// Evaluate the current closure and return the result closure.
@@ -206,7 +208,7 @@ impl VM {
 
 // -------------------------------------------------------------
 // === VM internal evaluation APIs ===
-impl VM {
+impl VM<'_> {
     fn trim_env0(&mut self) {
         self.state.clo.env.clear();
     }
@@ -310,7 +312,7 @@ impl VM {
 
 // -------------------------------------------------------------
 // === VM internal APIs ===
-impl VM {
+impl VM<'_> {
     /// Lookup pointer of the variable.
     fn env_get(&self, v: usize) -> Result<Addr, RuntimeError> {
         let index = self.state.clo.env.len() - v - 1;
@@ -420,7 +422,7 @@ fn match_pat(pat: &Pat, val: &Closure) -> Option<Env> {
 
 // -------------------------------------------------------------
 // === VM basic state transitions ("lazy Krivine machine", Lang(2007)) ===
-impl VM {
+impl VM<'_> {
     // fn run_app(&mut self) {
     //     let Term::App(t1, t2) = self.state.clo.term.clone() else { panic!() };
     //     let c = Closure { term: *t2, env: self.env_dup() };
@@ -499,7 +501,7 @@ impl VM {
 }
 
 // === VM extended state transitions ===
-impl VM {
+impl VM<'_> {
     fn run_global_access(&mut self) -> Result<(), RuntimeError> {
         let Term::GlobalVar(v) = &self.state.clo.term else { panic!() };
         let term = self.globals.get(v)

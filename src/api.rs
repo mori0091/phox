@@ -233,8 +233,7 @@ impl PhoxEngine {
 
     /// Evaluate VM term.
     pub fn eval_term(&mut self, term: &vm::Term) -> Result<vm::Closure, vm::RuntimeError> {
-        let mut vm = vm::VM::new(self.globals.clone(), term.clone());
-        vm.eval()
+        vm::VM::run(&self.globals, term.clone())
     }
 
     /// Resolve and infer type scheme for each items, then evaluate them.
