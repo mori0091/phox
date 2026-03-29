@@ -171,7 +171,7 @@ type UStack = Vec<(Addr, AStack)>;
 // -------------------------------------------------------------
 #[derive(Clone, Debug)]
 pub struct State {
-    pub clo: Closure,
+    pub datum: Closure,
     pub args: AStack,
     pub upds: UStack,
 }
@@ -191,7 +191,7 @@ impl <'a> VM<'a> {
 impl <'a> VM<'a> {
     pub fn new(globals: &'a GlobalEnv, term: Term) -> Self {
         let state = State {
-            clo: Closure { term, env: Env::new() },
+            datum: Closure { term, env: Env::new() },
             args: AStack::new(),
             upds: UStack::new(),
             // heap: Heap::new(),
@@ -202,35 +202,25 @@ impl <'a> VM<'a> {
     /// Evaluate the current closure and return the result closure.
     pub fn eval(&mut self) -> Result<Closure, RuntimeError> {
         self.run_state_whnf()?;
-        Ok(self.state.clo.clone())
+        Ok(self.state.datum.clone())
     }
 }
 
 // -------------------------------------------------------------
 // === VM internal evaluation APIs ===
 impl VM<'_> {
-    fn trim_env0(&mut self) {
-        self.state.clo.env.clear();
-    }
-    fn trim_env(&mut self, arity: usize) {
-        let len = self.state.clo.env.len();
-        if len > arity {
-            self.state.clo.env = self.state.clo.env.split_off(len - arity);
-        }
-    }
-
     fn run_state_whnf(&mut self) -> Result<(), RuntimeError> {
         loop {
-            match &self.state.clo.term {
-                Term::Lit(_) => self.trim_env0(),
-                Term::Tuple(arity) => self.trim_env(*arity),
-                Term::Con(_, arity) => self.trim_env(*arity),
-                Term::Record(labels) => self.trim_env(labels.len()),
+            match self.term() {
+                Term::Lit(_) => self.env_clear(),
+                Term::Tuple(arity) => self.env_trim(*arity),
+                Term::Con(_, arity) => self.env_trim(*arity),
+                Term::Record(labels) => self.env_trim(labels.len()),
                 _ => {}
             }
-            match &self.state.clo.term {
-                Term::Lam(_) | Term::Builtin(_) if self.state.args.is_empty() => {
-                    if self.state.upds.is_empty() {
+            match self.term() {
+                Term::Lam(_) | Term::Builtin(_) if self.args_is_empty() => {
+                    if self.upds_is_empty() {
                         return Ok(());
                     }
                     else {
@@ -238,10 +228,10 @@ impl VM<'_> {
                     }
                 }
                 Term::Lit(_) | Term::Con(_, _) | Term::Tuple(_) | Term::Record(_) => {
-                    if self.state.upds.is_empty() {
+                    if self.upds_is_empty() {
                         return Ok(());
                     }
-                    if self.state.args.is_empty() {
+                    if self.args_is_empty() {
                         return Err(RuntimeError::DanglingWritePointer);
                     }
                 }
@@ -252,7 +242,7 @@ impl VM<'_> {
     }
 
     fn run_state(&mut self) -> Result<(), RuntimeError> {
-        match &mut self.state.clo.term {
+        match self.term() {
             Term::GlobalVar(_) => {
                 self.run_global_access()
             }
@@ -275,11 +265,11 @@ impl VM<'_> {
                 self.run_field_access()
             }
 
-            Term::Lam(_) if !self.state.args.is_empty() => {
+            Term::Lam(_) if !self.args_is_empty() => {
                 self.run_lam();
                 Ok(())
             }
-            Term::Builtin(_) if !self.state.args.is_empty() => {
+            Term::Builtin(_) if !self.args_is_empty() => {
                 self.run_builtin()
             }
 
@@ -291,7 +281,7 @@ impl VM<'_> {
             }
 
             _ => {
-                if !self.state.upds.is_empty() {
+                if !self.upds_is_empty() {
                     self.run_update();
                     Ok(())
                 }
@@ -305,7 +295,7 @@ impl VM<'_> {
     /// Evaluates the given term in the current closure's environment and
     /// returns the resulting closure.
     fn eval_term(&mut self, term: Term) -> Result<Closure, RuntimeError> {
-        self.state.clo.term = term;
+        self.term_replace(term);
         self.eval()
     }
 }
@@ -313,10 +303,42 @@ impl VM<'_> {
 // -------------------------------------------------------------
 // === VM internal APIs ===
 impl VM<'_> {
+    fn term(&self) -> &Term {
+        &self.state.datum.term
+    }
+
+    fn term_replace(&mut self, term: Term) {
+        self.state.datum.term = term;
+    }
+
+    fn env(&self) -> &Env {
+        &self.state.datum.env
+    }
+
+    fn env_replace(&mut self, env: Env) {
+        self.state.datum.env = env;
+    }
+
+    fn env_clear(&mut self) {
+        self.state.datum.env.clear();
+    }
+
+    fn env_trim(&mut self, arity: usize) {
+        let env = &mut self.state.datum.env;
+        let len = env.len();
+        if len > arity {
+            *env = env.split_off(len - arity);
+        }
+    }
+
+    fn env_push(&mut self, a: Addr) {
+        self.state.datum.env.push(a);
+    }
+
     /// Lookup pointer of the variable.
     fn env_get(&self, v: usize) -> Result<Addr, RuntimeError> {
-        let index = self.state.clo.env.len() - v - 1;
-        self.state.clo.env.get(index)
+        let index = self.env().len() - v - 1;
+        self.env().get(index)
             .ok_or_else(|| {
                 RuntimeError::VariableNotFound(v)
             }).cloned()
@@ -324,7 +346,11 @@ impl VM<'_> {
 
     /// Duplicate Env
     fn env_dup(&self) -> Env {
-        self.state.clo.env.clone()
+        self.env().clone()
+    }
+
+    fn args_is_empty(&self) -> bool {
+        self.state.args.is_empty()
     }
 
     /// Push to AStack
@@ -335,6 +361,10 @@ impl VM<'_> {
     /// Pop from AStack
     fn args_pop(&mut self) -> Addr {
         self.state.args.pop().unwrap()
+    }
+
+    fn upds_is_empty(&self) -> bool {
+        self.state.upds.is_empty()
     }
 
     /// Push (a, args) to UStack and clear AStack
@@ -363,12 +393,12 @@ impl VM<'_> {
 
     /// Load closure from heap.
     fn heap_load(&mut self, a: Addr) {
-        self.state.clo = a.borrow().clone();
+        self.state.datum = a.borrow().clone();
     }
 
     /// Store closure to heap.
     fn heap_store(&mut self, a: Addr) {
-        *a.borrow_mut() = self.state.clo.clone();
+        *a.borrow_mut() = self.state.datum.clone();
     }
 }
 
@@ -424,64 +454,64 @@ fn match_pat(pat: &Pat, val: &Closure) -> Option<Env> {
 // === VM basic state transitions ("lazy Krivine machine", Lang(2007)) ===
 impl VM<'_> {
     // fn run_app(&mut self) {
-    //     let Term::App(t1, t2) = self.state.clo.term.clone() else { panic!() };
+    //     let Term::App(t1, t2) = self.term().clone() else { panic!() };
     //     let c = Closure { term: *t2, env: self.env_dup() };
     //     let a = self.heap_alloc(c);
     //     self.args_push(a);
-    //     self.state.clo.term = *t1;
+    //     self.term_replace(*t1);
     // }
     fn run_app(&mut self) -> Result<(), RuntimeError> {
         // strict App f x
-        let Term::App(t1, t2) = self.state.clo.term.clone() else { panic!() };
+        let Term::App(t1, t2) = self.term().clone() else { panic!() };
         let env = self.env_dup();
         let f = self.eval_term(*t1)?;
-        self.state.clo.env = env;
+        self.env_replace(env);
         let x = self.eval_term(*t2)?;
         let a = self.heap_alloc(x);
-        self.state.clo = f;
+        self.state.datum = f;
         self.args_push(a);
         Ok(())
     }
 
     fn run_lam(&mut self) {
-        let Term::Lam(e) = self.state.clo.term.clone() else { panic!() };
-        self.state.clo.term = *e;
+        let Term::Lam(e) = self.term().clone() else { panic!() };
+        self.term_replace(*e);
         let a = self.args_pop();
-        self.state.clo.env.push(a);
+        self.env_push(a);
     }
 
     fn run_let(&mut self) -> Result<(), RuntimeError> {
-        let Term::Let(x, e) = self.state.clo.term.clone() else { panic!() };
+        let Term::Let(x, e) = self.term().clone() else { panic!() };
         let env = self.env_dup();
         let x = self.eval_term(*x)?;
         let a = self.heap_alloc(x);
-        self.state.clo.env = env;
-        self.state.clo.env.push(a);
-        self.state.clo.term = *e;
+        self.env_replace(env);
+        self.env_push(a);
+        self.term_replace(*e);
         Ok(())
     }
 
     fn run_letrec(&mut self) -> Result<(), RuntimeError> {
-        let Term::LetRec(x, e) = self.state.clo.term.clone() else { panic!() };
+        let Term::LetRec(x, e) = self.term().clone() else { panic!() };
         let env = self.env_dup();
         let a = self.heap_alloc_reserved();
-        self.state.clo.env.push(a.clone());
-        self.state.clo.term = *x;
+        self.env_push(a.clone());
+        self.term_replace(*x);
         self.run_state_whnf()?;
         self.heap_store(a.clone());
-        self.state.clo.env = env;
-        self.state.clo.env.push(a);
-        self.state.clo.term = *e;
+        self.env_replace(env);
+        self.env_push(a);
+        self.term_replace(*e);
         Ok(())
     }
 
     fn run_access(&mut self) -> Result<(), RuntimeError> {
-        let Term::Var(v) = &self.state.clo.term else { panic!() };
+        let Term::Var(v) = self.term() else { panic!() };
         // ACCESS
         let a = self.env_get(*v)?;
         self.heap_load(a.clone());    // clo <- heap[a]
 
-        match self.state.clo.term {
+        match self.term() {
             Term::Lam(_) | Term::Builtin(_) | Term::Lit(_) | Term::Con(_, _) | Term::Tuple(_) | Term::Record(_) => {
                 // no need to UPDATE
                 return Ok(());
@@ -503,53 +533,53 @@ impl VM<'_> {
 // === VM extended state transitions ===
 impl VM<'_> {
     fn run_global_access(&mut self) -> Result<(), RuntimeError> {
-        let Term::GlobalVar(v) = &self.state.clo.term else { panic!() };
+        let Term::GlobalVar(v) = self.term() else { panic!() };
         let term = self.globals.get(v)
             .ok_or_else(|| RuntimeError::GlobalVariableNotFound(v.clone()))
             .cloned()?;
-        self.state.clo.term = term;
-        self.state.clo.env = Env::new();
+        self.term_replace(term);
+        self.env_clear();
         Ok(())
     }
 
     fn run_tuple_access(&mut self) -> Result<(), RuntimeError> {
-        let Term::TupleAccess(term, index) = self.state.clo.term.clone() else { panic!() };
-        self.state.clo.term = *term;
+        let Term::TupleAccess(term, index) = self.term().clone() else { panic!() };
+        self.term_replace(*term);
         self.run_state_whnf()?;
-        if let Term::Con(_, 1) = &self.state.clo.term {
-            let a = self.state.clo.env[0].clone();
+        if let Term::Con(_, 1) = self.term() {
+            let a = self.env()[0].clone();
             self.heap_load(a);
         }
-        let Term::Tuple(_arity) = &self.state.clo.term else { panic!() };
-        let a = self.state.clo.env[index].clone();
+        let Term::Tuple(_arity) = self.term() else { panic!() };
+        let a = self.env()[index].clone();
         self.heap_load(a);
         Ok(())
     }
 
     fn run_field_access(&mut self) -> Result<(), RuntimeError> {
-        let Term::FieldAccess(term, label) = self.state.clo.term.clone() else { panic!() };
-        self.state.clo.term = *term;
+        let Term::FieldAccess(term, label) = self.term().clone() else { panic!() };
+        self.term_replace(*term);
         self.run_state_whnf()?;
-        if let Term::Con(_, 1) = &self.state.clo.term {
-            let a = self.state.clo.env[0].clone();
+        if let Term::Con(_, 1) = self.term() {
+            let a = self.env()[0].clone();
             self.heap_load(a);
         }
-        let Term::Record(fs) = &self.state.clo.term else { panic!() };
+        let Term::Record(fs) = self.term() else { panic!() };
         let index = fs.iter().position(|s| *s == label).unwrap();
-        let a = self.state.clo.env[index].clone();
+        let a = self.env()[index].clone();
         self.heap_load(a);
         Ok(())
     }
 
     fn run_match(&mut self) -> Result<(), RuntimeError> {
-        let Term::Match(term, arms) = self.state.clo.term.clone() else { panic!() };
+        let Term::Match(term, arms) = self.term().clone() else { panic!() };
         let mut env = self.env_dup();
         let v_scrut = self.eval_term(*term)?;
         for (pat, body) in arms {
             if let Some(bindings) = match_pat(&pat, &v_scrut) {
                 env.extend(bindings);
-                self.state.clo.term = body;
-                self.state.clo.env = env;
+                self.term_replace(body);
+                self.env_replace(env);
                 return Ok(())
             }
         }
@@ -557,7 +587,7 @@ impl VM<'_> {
     }
 
     fn run_for(&mut self) -> Result<(), RuntimeError> {
-        let Term::For(init, pred, next) = self.state.clo.term.clone() else { panic!() };
+        let Term::For(init, pred, next) = self.term().clone() else { panic!() };
 
         let p_env = self.env_dup();
         let n_env = self.env_dup();
@@ -567,19 +597,19 @@ impl VM<'_> {
             self.heap_alloc(x)
         };
 
-        self.state.clo.env = p_env;
+        self.env_replace(p_env);
         let pred = self.eval_term(*pred)?;
 
-        self.state.clo.env = n_env;
+        self.env_replace(n_env);
         let next = self.eval_term(*next)?;
 
         loop {
-            self.state.clo = pred.clone();
+            self.state.datum = pred.clone();
             self.args_push(a.clone());
             self.run_state_whnf()?;
-            let Term::Lit(Lit::Bool(b)) = self.state.clo.term else { panic!() };
+            let Term::Lit(Lit::Bool(b)) = self.term() else { panic!() };
             if !b { break; }
-            self.state.clo = next.clone();
+            self.state.datum = next.clone();
             self.args_push(a.clone());
             self.run_state_whnf()?;
             self.heap_store(a.clone());
@@ -589,12 +619,12 @@ impl VM<'_> {
     }
 
     fn run_builtin(&mut self) -> Result<(), RuntimeError> {
-        let Term::Builtin(f) = self.state.clo.term.clone() else { panic!() };
+        let Term::Builtin(f) = self.term().clone() else { panic!() };
         let a = self.args_pop();
         self.heap_load(a);
         let x = self.eval()?;
         let v = builtin(f, x)?;
-        self.state.clo = v;
+        self.state.datum = v;
         Ok(())
     }
 }
