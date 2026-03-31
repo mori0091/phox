@@ -63,10 +63,21 @@ impl fmt::Display for Pat {
     }
 }
 
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Unit => write!(f, "()"),
+            Value::Bool(b) => write!(f, "{b}"),
+            Value::I64(i) => write!(f, "{i}"),
+        }
+    }
+}
+
 impl fmt::Display for Datum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Datum::Clo(c) => write!(f, "{}", c),
+            Datum::Val(v) => write!(f, "{}", v),
         }
     }
 }
@@ -160,12 +171,17 @@ impl fmt::Display for Closure {
                 xs.push(c.pretty());
                 for arg in self.env.iter() {
                     let x = arg.borrow().clone();
-                    match x.term() {
-                        Term::Con(_, arity) if *arity > 0 => {
-                            xs.push(format!("({})", x));
+                    match &x {
+                        Datum::Val(v) => {
+                            xs.push(format!("{}", v));
                         }
-                        _ => {
-                            xs.push(format!("{}", x));
+                        Datum::Clo(c) => match &c.term {
+                            Term::Con(_, arity) if *arity > 0 => {
+                                xs.push(format!("({})", x));
+                            }
+                            _ => {
+                                xs.push(format!("{}", x));
+                            }
                         }
                     }
                 }

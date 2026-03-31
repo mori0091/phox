@@ -170,29 +170,51 @@ type UStack = Vec<(Addr, AStack)>;
 
 // -------------------------------------------------------------
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Value {
+    Unit,
+    Bool(bool),
+    I64(i64),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Datum {
     Clo(Closure),
+    Val(Value),
 }
 
 impl Datum {
+    pub fn value(&self) -> &Value {
+        match self {
+            Datum::Val(v) => v,
+            _ => panic!(),
+        }
+    }
     pub fn term(&self) -> &Term {
         match self {
             Datum::Clo(c) => &c.term,
+            _ => panic!(),
         }
     }
     pub fn env(&self) -> &Env {
         match self {
             Datum::Clo(c) => &c.env,
+            _ => panic!(),
         }
     }
     pub fn env_at(&self, index: usize) -> Datum {
         self.env()[index].borrow().clone()
     }
+}
 
-    // for internal use only
-    fn env_term_at(&self, index: usize) -> Term {
-        self.env()[index].borrow().term().clone()
+// -------------------------------------------------------------
+// === VM internal Datum accessor APIs ===
+impl Datum {
+    fn env_value_at(&self, index: usize) -> Value {
+        self.env()[index].borrow().value().clone()
     }
+    // fn env_term_at(&self, index: usize) -> Term {
+    //     self.env()[index].borrow().term().clone()
+    // }
 }
 
 // -------------------------------------------------------------
@@ -238,8 +260,27 @@ impl <'a> VM<'a> {
 impl VM<'_> {
     fn run_state_whnf(&mut self) -> Result<(), RuntimeError> {
         loop {
+            if let Datum::Val(_) = &self.state.datum {
+                return Ok(())
+            }
             match self.term() {
-                Term::Lit(_) => self.env_clear(),
+                Term::Lit(x) => {
+                    // self.env_clear();
+                    let val = match x {
+                        Lit::Unit => Value::Unit,
+                        Lit::Bool(b) => Value::Bool(*b),
+                        Lit::Int(i) => Value::I64(*i),
+                    };
+                    self.set_value(val);
+                    if self.upds_is_empty() {
+                        return Ok(());
+                    }
+                    if self.args_is_empty() {
+                        return Err(RuntimeError::DanglingWritePointer);
+                    }
+                    self.run_update();
+                    return Ok(());
+                }
                 Term::Tuple(arity) => self.env_trim(*arity),
                 Term::Con(_, arity) => self.env_trim(*arity),
                 Term::Record(labels) => self.env_trim(labels.len()),
@@ -254,7 +295,7 @@ impl VM<'_> {
                         return Err(RuntimeError::DanglingWritePointer);
                     }
                 }
-                Term::Lit(_) | Term::Con(_, _) | Term::Tuple(_) | Term::Record(_) => {
+                Term::Con(_, _) | Term::Tuple(_) | Term::Record(_) => {
                     if self.upds_is_empty() {
                         return Ok(());
                     }
@@ -330,27 +371,37 @@ impl VM<'_> {
 // -------------------------------------------------------------
 // === VM internal APIs ===
 impl VM<'_> {
+    fn set_value(&mut self, val: Value) {
+        self.state.datum = Datum::Val(val);
+    }
+
+    fn value(&self) -> &Value {
+        self.state.datum.value()
+    }
+
+    fn set_closure(&mut self, term: Term, env: Env) {
+        self.state.datum = Datum::Clo(Closure { term, env });
+    }
+
     fn term(&self) -> &Term {
-        match &self.state.datum {
-            Datum::Clo(c) => &c.term,
-        }
+        self.state.datum.term()
     }
 
     fn term_replace(&mut self, term: Term) {
         match &mut self.state.datum {
             Datum::Clo(c) => c.term = term,
+            _ => panic!(),
         }
     }
 
     fn env(&self) -> &Env {
-        match &self.state.datum {
-            Datum::Clo(c) => &c.env,
-        }
+        self.state.datum.env()
     }
 
     fn env_mut(&mut self) -> &mut Env {
         match &mut self.state.datum {
             Datum::Clo(c) => &mut c.env,
+            _ => panic!(),
         }
     }
 
@@ -358,9 +409,9 @@ impl VM<'_> {
         *self.env_mut() = env;
     }
 
-    fn env_clear(&mut self) {
-        self.env_mut().clear();
-    }
+    // fn env_clear(&mut self) {
+    //     self.env_mut().clear();
+    // }
 
     fn env_trim(&mut self, arity: usize) {
         let env = self.env_mut();
@@ -450,7 +501,9 @@ fn match_pat(pat: &Pat, val: &Datum) -> Option<Env> {
     match (pat, val) {
         (Pat::Wildcard, _) => Some(env),
 
-        (Pat::Lit(p), Datum::Clo(Closure{ term: Term::Lit(v), ..})) if p == v => Some(env),
+        (Pat::Lit(Lit::Unit), Datum::Val(Value::Unit)) => Some(env),
+        (Pat::Lit(Lit::Bool(p)), Datum::Val(Value::Bool(x))) if p == x => Some(env),
+        (Pat::Lit(Lit::Int(p)), Datum::Val(Value::I64(x))) if p == x => Some(env),
 
         (Pat::Var, v) => {
             env.push(alloc(v.clone()));
@@ -494,7 +547,7 @@ fn match_pat(pat: &Pat, val: &Datum) -> Option<Env> {
 impl VM<'_> {
     // fn run_app(&mut self) {
     //     let Term::App(t1, t2) = self.term().clone() else { panic!() };
-    //     let c = Closure { term: *t2, env: self.env_dup() };
+    //     let c = Datum::Clo(Closure { term: *t2, env: self.env_dup() });
     //     let a = self.heap_alloc(c);
     //     self.args_push(a);
     //     self.term_replace(*t1);
@@ -521,26 +574,24 @@ impl VM<'_> {
 
     fn run_let(&mut self) -> Result<(), RuntimeError> {
         let Term::Let(x, e) = self.term().clone() else { panic!() };
-        let env = self.env_dup();
+        let mut env = self.env_dup();
         let x = self.eval_term(*x)?;
         let a = self.heap_alloc(x);
-        self.env_replace(env);
-        self.env_push(a);
-        self.term_replace(*e);
+        env.push(a);
+        self.set_closure(*e, env);
         Ok(())
     }
 
     fn run_letrec(&mut self) -> Result<(), RuntimeError> {
         let Term::LetRec(x, e) = self.term().clone() else { panic!() };
-        let env = self.env_dup();
+        let mut env = self.env_dup();
         let a = self.heap_alloc_reserved();
         self.env_push(a.clone());
         self.term_replace(*x);
         self.run_state_whnf()?;
         self.heap_store(a.clone());
-        self.env_replace(env);
-        self.env_push(a);
-        self.term_replace(*e);
+        env.push(a);
+        self.set_closure(*e, env);
         Ok(())
     }
 
@@ -550,8 +601,12 @@ impl VM<'_> {
         let a = self.env_get(*v)?;
         self.heap_load(a.clone());    // clo <- heap[a]
 
+        if let Datum::Val(_) = self.state.datum {
+            // no need to UPDATE
+            return Ok(());
+        }
         match self.term() {
-            Term::Lam(_) | Term::Builtin(_) | Term::Lit(_) | Term::Con(_, _) | Term::Tuple(_) | Term::Record(_) => {
+            Term::Lam(_) | Term::Builtin(_) | Term::Con(_, _) | Term::Tuple(_) | Term::Record(_) => {
                 // no need to UPDATE
                 return Ok(());
             }
@@ -576,8 +631,7 @@ impl VM<'_> {
         let term = self.globals.get(v)
             .ok_or_else(|| RuntimeError::GlobalVariableNotFound(v.clone()))
             .cloned()?;
-        self.term_replace(term);
-        self.env_clear();
+        self.set_closure(term, Env::new());
         Ok(())
     }
 
@@ -617,8 +671,7 @@ impl VM<'_> {
         for (pat, body) in arms {
             if let Some(bindings) = match_pat(&pat, &v_scrut) {
                 env.extend(bindings);
-                self.term_replace(body);
-                self.env_replace(env);
+                self.state.datum = Datum::Clo(Closure { term: body, env });
                 return Ok(())
             }
         }
@@ -636,17 +689,17 @@ impl VM<'_> {
             self.heap_alloc(x)
         };
 
-        self.env_replace(p_env);
-        let pred = self.eval_term(*pred)?;
+        self.set_closure(*pred, p_env);
+        let pred = self.eval()?;
 
-        self.env_replace(n_env);
-        let next = self.eval_term(*next)?;
+        self.set_closure(*next, n_env);
+        let next = self.eval()?;
 
         loop {
             self.state.datum = pred.clone();
             self.args_push(a.clone());
             self.run_state_whnf()?;
-            let Term::Lit(Lit::Bool(b)) = self.term() else { panic!() };
+            let Value::Bool(b) = self.value() else { panic!() };
             if !b { break; }
             self.state.datum = next.clone();
             self.args_push(a.clone());
@@ -669,75 +722,75 @@ impl VM<'_> {
 }
 
 fn builtin(f: Builtin, x: Datum) -> Result<Datum, RuntimeError> {
-    let term = match f {
+    let val = match f {
         Builtin::I64Neg => {
-            let Term::Lit(Lit::Int(a)) = x.term() else { panic!() };
-            Term::Lit(Lit::Int(-a))
+            let Value::I64(a) = x.value() else { panic!() };
+            Value::I64(-a)
         }
 
         Builtin::I64Eq => {
-            let Term::Lit(Lit::Int(a)) = x.env_term_at(0) else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env_term_at(1) else { panic!() };
-            Term::Lit(Lit::Bool(a == b))
+            let Value::I64(a) = x.env_value_at(0) else { panic!() };
+            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            Value::Bool(a == b)
         }
         Builtin::I64Neq => {
-            let Term::Lit(Lit::Int(a)) = x.env_term_at(0) else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env_term_at(1) else { panic!() };
-            Term::Lit(Lit::Bool(a != b))
+            let Value::I64(a) = x.env_value_at(0) else { panic!() };
+            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            Value::Bool(a != b)
         }
 
         Builtin::I64Lt => {
-            let Term::Lit(Lit::Int(a)) = x.env_term_at(0) else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env_term_at(1) else { panic!() };
-            Term::Lit(Lit::Bool(a < b))
+            let Value::I64(a) = x.env_value_at(0) else { panic!() };
+            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            Value::Bool(a < b)
         }
         Builtin::I64Le => {
-            let Term::Lit(Lit::Int(a)) = x.env_term_at(0) else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env_term_at(1) else { panic!() };
-            Term::Lit(Lit::Bool(a <= b))
+            let Value::I64(a) = x.env_value_at(0) else { panic!() };
+            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            Value::Bool(a <= b)
         }
         Builtin::I64Gt => {
-            let Term::Lit(Lit::Int(a)) = x.env_term_at(0) else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env_term_at(1) else { panic!() };
-            Term::Lit(Lit::Bool(a > b))
+            let Value::I64(a) = x.env_value_at(0) else { panic!() };
+            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            Value::Bool(a > b)
         }
         Builtin::I64Ge => {
-            let Term::Lit(Lit::Int(a)) = x.env_term_at(0) else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env_term_at(1) else { panic!() };
-            Term::Lit(Lit::Bool(a >= b))
+            let Value::I64(a) = x.env_value_at(0) else { panic!() };
+            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            Value::Bool(a >= b)
         }
 
         Builtin::I64Add => {
-            let Term::Lit(Lit::Int(a)) = x.env_term_at(0) else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env_term_at(1) else { panic!() };
-            Term::Lit(Lit::Int(a + b))
+            let Value::I64(a) = x.env_value_at(0) else { panic!() };
+            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            Value::I64(a + b)
         }
         Builtin::I64Sub => {
-            let Term::Lit(Lit::Int(a)) = x.env_term_at(0) else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env_term_at(1) else { panic!() };
-            Term::Lit(Lit::Int(a - b))
+            let Value::I64(a) = x.env_value_at(0) else { panic!() };
+            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            Value::I64(a - b)
         }
         Builtin::I64Mul => {
-            let Term::Lit(Lit::Int(a)) = x.env_term_at(0) else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env_term_at(1) else { panic!() };
-            Term::Lit(Lit::Int(a * b))
+            let Value::I64(a) = x.env_value_at(0) else { panic!() };
+            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            Value::I64(a * b)
         }
         Builtin::I64Div => {
-            let Term::Lit(Lit::Int(a)) = x.env_term_at(0) else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env_term_at(1) else { panic!() };
+            let Value::I64(a) = x.env_value_at(0) else { panic!() };
+            let Value::I64(b) = x.env_value_at(1) else { panic!() };
             if b == 0 {
                 return Err(RuntimeError::DivisionByZero);
             }
-            Term::Lit(Lit::Int(a / b))
+            Value::I64(a / b)
         }
         Builtin::I64Mod => {
-            let Term::Lit(Lit::Int(a)) = x.env_term_at(0) else { panic!() };
-            let Term::Lit(Lit::Int(b)) = x.env_term_at(1) else { panic!() };
+            let Value::I64(a) = x.env_value_at(0) else { panic!() };
+            let Value::I64(b) = x.env_value_at(1) else { panic!() };
             if b == 0 {
                 return Err(RuntimeError::DivisionByZero);
             }
-            Term::Lit(Lit::Int(a % b))
+            Value::I64(a % b)
         }
     };
-    Ok(Datum::Clo(Closure { term, env: Env::new() }))
+    Ok(Datum::Val(val))
 }
