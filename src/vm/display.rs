@@ -63,6 +63,14 @@ impl fmt::Display for Pat {
     }
 }
 
+impl fmt::Display for Datum {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Datum::Clo(c) => write!(f, "{}", c),
+        }
+    }
+}
+
 impl Term {
     fn enclose(&self) -> String {
         match self {
@@ -152,7 +160,7 @@ impl fmt::Display for Closure {
                 xs.push(c.pretty());
                 for arg in self.env.iter() {
                     let x = arg.borrow().clone();
-                    match &x.term {
+                    match x.term() {
                         Term::Con(_, arity) if *arity > 0 => {
                             xs.push(format!("({})", x));
                         }

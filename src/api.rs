@@ -108,7 +108,7 @@ pub fn parse(src: &str) -> Result<Program, ParseError<usize, Token, LexicalError
 }
 
 /// Parse, infer type scheme, and evaluate of a program.
-pub fn eval(src: &str) -> Result<(vm::Closure, TypeScheme), Error> {
+pub fn eval(src: &str) -> Result<(vm::Datum, TypeScheme), Error> {
     let mut phox = PhoxEngine::new();
     phox.run(src)
 }
@@ -232,12 +232,12 @@ impl PhoxEngine {
     }
 
     /// Evaluate VM term.
-    pub fn eval_term(&mut self, term: &vm::Term) -> Result<vm::Closure, vm::RuntimeError> {
+    pub fn eval_term(&mut self, term: &vm::Term) -> Result<vm::Datum, vm::RuntimeError> {
         vm::VM::run(&self.globals, term.clone())
     }
 
     /// Resolve and infer type scheme for each items, then evaluate them.
-    pub fn run_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(vm::Closure, TypeScheme), Error> {
+    pub fn run_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(vm::Datum, TypeScheme), Error> {
         let sch = self.compile_items(module, items)?;
         let term = self.lower_items(items)?;
         let val = self.eval_term(&term)
@@ -246,14 +246,14 @@ impl PhoxEngine {
     }
 
     /// Parse, resolve, infer type scheme, and evaluate a program source code.
-    pub fn run_mod(&mut self, module: &RefModule, src: &str) -> Result<(vm::Closure, TypeScheme), Error> {
+    pub fn run_mod(&mut self, module: &RefModule, src: &str) -> Result<(vm::Datum, TypeScheme), Error> {
         let mut items = parse(src)
             .map_err(|e| Error::Message(format!("parse error: {e:?}")))?;
         self.run_items(module, &mut items)
     }
 
     /// Parse, resolve, infer type scheme, and evaluate a program source code in "::__main__" module.
-    pub fn run(&mut self, src: &str) -> Result<(vm::Closure, TypeScheme), Error> {
+    pub fn run(&mut self, src: &str) -> Result<(vm::Datum, TypeScheme), Error> {
         let module = self.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
         self.run_mod(&module, src)
     }
