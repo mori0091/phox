@@ -108,7 +108,7 @@ pub fn parse(src: &str) -> Result<Program, ParseError<usize, Token, LexicalError
 }
 
 /// Parse, infer type scheme, and evaluate of a program.
-pub fn eval(src: &str) -> Result<(vm::Datum, TypeScheme), Error> {
+pub fn eval(src: &str) -> Result<(vm::Term, TypeScheme), Error> {
     let mut phox = PhoxEngine::new();
     phox.run(src)
 }
@@ -221,39 +221,39 @@ impl PhoxEngine {
         Ok(sch)
     }
 
-    /// Lower (compiled) items into VM term(s).
-    pub fn lower_items(&mut self, items: &mut Vec<Item>) -> Result<vm::Term, Error> {
+    /// Lower (compiled) items into VM code.
+    pub fn lower_items(&mut self, items: &mut Vec<Item>) -> Result<vm::Code, Error> {
         let mut core = CoreIR::new();
         core.lower(items)?;
         let mut vmir = VMIR::new();
         vmir.lower(&core)?;
         self.globals.extend(vmir.globals);
-        Ok(vmir.term)
+        Ok(vmir.code)
     }
 
-    /// Evaluate VM term.
-    pub fn eval_term(&mut self, term: &vm::Term) -> Result<vm::Datum, vm::RuntimeError> {
-        vm::VM::run(&self.globals, term.clone())
+    /// Evaluate VM code.
+    pub fn eval_code(&mut self, code: &vm::Code) -> Result<vm::Term, vm::RuntimeError> {
+        vm::VM::run(&self.globals, code.clone())
     }
 
     /// Resolve and infer type scheme for each items, then evaluate them.
-    pub fn run_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(vm::Datum, TypeScheme), Error> {
+    pub fn run_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<(vm::Term, TypeScheme), Error> {
         let sch = self.compile_items(module, items)?;
-        let term = self.lower_items(items)?;
-        let val = self.eval_term(&term)
+        let code = self.lower_items(items)?;
+        let val = self.eval_code(&code)
                       .map_err(|e| Error::Message(format!("runtime error: {e}")))?;
         Ok((val, sch))
     }
 
     /// Parse, resolve, infer type scheme, and evaluate a program source code.
-    pub fn run_mod(&mut self, module: &RefModule, src: &str) -> Result<(vm::Datum, TypeScheme), Error> {
+    pub fn run_mod(&mut self, module: &RefModule, src: &str) -> Result<(vm::Term, TypeScheme), Error> {
         let mut items = parse(src)
             .map_err(|e| Error::Message(format!("parse error: {e:?}")))?;
         self.run_items(module, &mut items)
     }
 
     /// Parse, resolve, infer type scheme, and evaluate a program source code in "::__main__" module.
-    pub fn run(&mut self, src: &str) -> Result<(vm::Datum, TypeScheme), Error> {
+    pub fn run(&mut self, src: &str) -> Result<(vm::Term, TypeScheme), Error> {
         let module = self.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
         self.run_mod(&module, src)
     }

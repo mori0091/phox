@@ -6,14 +6,14 @@ use crate::vm;
 
 pub struct VMIR {
     pub globals: vm::GlobalEnv,
-    pub term: vm::Term,
+    pub code: vm::Code,
 }
 
 impl VMIR {
     pub fn new() -> VMIR {
         VMIR {
             globals: vm::GlobalEnv::new(),
-            term: vm::Term::unit(),
+            code: vm::Code::unit(),
         }
     }
 
@@ -27,7 +27,7 @@ impl VMIR {
             let e = lower_expr(&mut vec![], e)?;
             es.push(e);
         }
-        self.term = vm::Term::block(es);
+        self.code = vm::Code::block(es);
         Ok(())
     }
 }
@@ -70,27 +70,27 @@ fn lower_pat(env: &mut Vec<Symbol>, p: &ast::Pat) -> vm::Pat {
     }
 }
 
-fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Term, Error> {
+fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Code, Error> {
     match expr {
         CoreExpr::Let(p, x, e) => {
             let x = lower_expr(&mut env.clone(), x)?;
             let p = lower_pat(env, p);
             let e = lower_expr(env, e)?;
-            Ok(vm::Term::let_p0(p, x, e))
+            Ok(vm::Code::let_p0(p, x, e))
         }
         CoreExpr::LetRec(s, x, e) => {
             de_bruijn_index_push(env, s);
             let x = lower_expr(&mut env.clone(), x)?;
             let e = lower_expr(env, e)?;
-            Ok(vm::Term::letrec(x, e))
+            Ok(vm::Code::letrec(x, e))
         }
 
         CoreExpr::GlobalVar(sym) => {
-            Ok(vm::Term::GlobalVar(sym.clone()))
+            Ok(vm::Code::GlobalVar(sym.clone()))
         }
         CoreExpr::Var(sym) => {
             let index = de_bruijn_index_lookup(env, sym)?;
-            Ok(vm::Term::Var(index))
+            Ok(vm::Code::Var(index))
         }
 
         CoreExpr::Lam(pat, expr) => {
@@ -98,23 +98,23 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Term, Error>
                 ast::Pat::Var(v) => {
                     de_bruijn_index_push(env, v);
                     let e = lower_expr(env, expr)?;
-                    Ok(vm::Term::lam(e))
+                    Ok(vm::Code::lam(e))
                 }
                 _ => {
                     de_bruijn_index_push(env, &Symbol::local("?"));
                     let p = lower_pat(env, pat);
                     let e = lower_expr(env, expr)?;
-                    Ok(vm::Term::lam_p1(p, e))
+                    Ok(vm::Code::lam_p1(p, e))
                 }
             }
         }
         CoreExpr::App(f, x) => {
             let f = lower_expr(&mut env.clone(), f)?;
             let x = lower_expr(env, x)?;
-            Ok(vm::Term::app(f, x))
+            Ok(vm::Code::app(f, x))
         }
         CoreExpr::Builtin(b) => {
-            Ok(vm::Term::Builtin(b.clone()))
+            Ok(vm::Code::Builtin(b.clone()))
         }
         CoreExpr::Match(scrut, arms) => {
             let scrut = lower_expr(env, scrut)?;
@@ -125,26 +125,26 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Term, Error>
                 let e = lower_expr(env, e)?;
                 xs.push((p, e));
             }
-            Ok(vm::Term::match_(scrut, xs))
+            Ok(vm::Code::match_(scrut, xs))
         }
         CoreExpr::For(init, pred, next) => {
             let init = lower_expr(&mut env.clone(), init)?;
             let pred = lower_expr(&mut env.clone(), pred)?;
             let next = lower_expr(env, next)?;
-            Ok(vm::Term::for_(init, pred, next))
+            Ok(vm::Code::for_(init, pred, next))
         }
 
         CoreExpr::TupleAccess(t, index) => {
             let t = lower_expr(env, t)?;
-            Ok(vm::Term::tuple_access(t, *index))
+            Ok(vm::Code::tuple_access(t, *index))
         }
         CoreExpr::FieldAccess(r, label) => {
             let r = lower_expr(env, r)?;
-            Ok(vm::Term::field_access(r, label.clone()))
+            Ok(vm::Code::field_access(r, label.clone()))
         }
 
         CoreExpr::Lit(x) => {
-            Ok(vm::Term::Lit(x.clone()))
+            Ok(vm::Code::Lit(x.clone()))
         }
         CoreExpr::Con(name, xs) => {
             let mut args = Vec::with_capacity(xs.len());
@@ -152,8 +152,8 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Term, Error>
                 let e = lower_expr(&mut env.clone(), x)?;
                 args.push(e);
             }
-            let t = vm::Term::Con(name.clone(), args.len());
-            Ok(vm::Term::clo(t, args))
+            let t = vm::Code::Con(name.clone(), args.len());
+            Ok(vm::Code::clo(t, args))
         }
         CoreExpr::Tuple(xs) => {
             let mut args = Vec::with_capacity(xs.len());
@@ -161,8 +161,8 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Term, Error>
                 let e = lower_expr(&mut env.clone(), x)?;
                 args.push(e);
             }
-            let t = vm::Term::Tuple(args.len());
-            Ok(vm::Term::clo(t, args))
+            let t = vm::Code::Tuple(args.len());
+            Ok(vm::Code::clo(t, args))
         }
         CoreExpr::Record(fs) => {
             let mut ix = Vec::with_capacity(fs.len());
@@ -172,8 +172,8 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Term, Error>
                 args.push(e);
                 ix.push(f.clone())
             }
-            let t = vm::Term::Record(ix);
-            Ok(vm::Term::clo(t, args))
+            let t = vm::Code::Record(ix);
+            Ok(vm::Code::clo(t, args))
         }
     }
 }

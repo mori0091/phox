@@ -16,25 +16,25 @@ fn globals() -> GlobalEnv {
     fn add_unary_op(global: &mut GlobalEnv, prim_sym: &str, prim: Builtin, sym: &str) {
         global.insert(
             symbol(prim_sym),
-            Term::Builtin(prim)
+            Code::Builtin(prim)
         );
         global.insert(
             symbol(sym),
-            Term::GlobalVar(symbol(prim_sym))
+            Code::GlobalVar(symbol(prim_sym))
         );
     }
 
     fn add_binary_op(global: &mut GlobalEnv, prim_sym: &str, prim: Builtin, sym: &str) {
         global.insert(
             symbol(prim_sym),
-            Term::Builtin(prim)
+            Code::Builtin(prim)
         );
         global.insert(
             symbol(sym),
-            Term::lam(Term::lam(
-                Term::app(
-                    Term::GlobalVar(symbol(prim_sym)),
-                    Term::Tuple(2)
+            Code::lam(Code::lam(
+                Code::app(
+                    Code::GlobalVar(symbol(prim_sym)),
+                    Code::Tuple(2)
                 )
             ))
         );
@@ -62,27 +62,27 @@ fn globals() -> GlobalEnv {
     global
 }
 
-pub fn tuple2(t1: Term, t2: Term) -> Term {
-    Term::clo(Term::Tuple(2), vec![t1, t2])
+pub fn tuple2(t1: Code, t2: Code) -> Code {
+    Code::clo(Code::Tuple(2), vec![t1, t2])
 }
 
-pub fn record(ix: Vec<Label>, xs: Vec<Term>) -> Term {
-    Term::clo(Term::Record(ix), xs)
+pub fn record(ix: Vec<Label>, xs: Vec<Code>) -> Code {
+    Code::clo(Code::Record(ix), xs)
 }
 
-pub fn cons(x: Term, xs: Term) -> Term {
-    Term::clo(Term::Con(Symbol::local("Cons"), 2), vec![x, xs])
+pub fn cons(x: Code, xs: Code) -> Code {
+    Code::clo(Code::Con(Symbol::local("Cons"), 2), vec![x, xs])
 }
 
-pub fn nil() -> Term {
-    Term::Con(Symbol::local("Nil"), 0)
+pub fn nil() -> Code {
+    Code::Con(Symbol::local("Nil"), 0)
 }
 
 #[test]
 fn test_literal() {
-    let term = Term::int(42);
+    let code = Code::int(42);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(42));
 }
@@ -90,9 +90,9 @@ fn test_literal() {
 // (\x. x) 10
 #[test]
 fn test_identity_function() {
-    let lam = Term::lam(Term::Var(0));
-    let arg = Term::int(10);
-    let app = Term::app(lam, arg);
+    let lam = Code::lam(Code::Var(0));
+    let arg = Code::int(10);
+    let app = Code::app(lam, arg);
 
     let result = VM::run(&GlobalEnv::new(), app).unwrap();
 
@@ -103,32 +103,32 @@ fn test_identity_function() {
 // => Let(10, x)
 #[test]
 fn test_let() {
-    let t1 = Term::int(10);
-    let t2 = Term::Var(0);
-    let term = Term::let_(t1, t2);
+    let t1 = Code::int(10);
+    let t2 = Code::Var(0);
+    let code = Code::let_(t1, t2);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(10));
 }
 
 #[test]
 fn test_tuple() {
-    let t = tuple2(Term::int(1), Term::int(2));
+    let t = tuple2(Code::int(1), Code::int(2));
 
     let result = VM::run(&GlobalEnv::new(), t).unwrap();
 
-    assert_eq!(result, Datum::Val(Value::Tuple(vec![Datum::Val(Value::I64(1)), Datum::Val(Value::I64(2))])));
+    assert_eq!(result, Term::Val(Value::Tuple(vec![Term::Val(Value::I64(1)), Term::Val(Value::I64(2))])));
     assert_eq!(result.to_string(), "(1, 2)".to_string());
 }
 
 #[test]
 fn test_tuple_access() {
-    let t = tuple2(Term::int(1), Term::int(2));
+    let t = tuple2(Code::int(1), Code::int(2));
 
-    let term = Term::tuple_access(t, 1);
+    let code = Code::tuple_access(t, 1);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(2));
 }
@@ -136,13 +136,13 @@ fn test_tuple_access() {
 // match 10 with x -> x
 #[test]
 fn test_match_var() {
-    let scrut = Term::int(10);
+    let scrut = Code::int(10);
     let pat = Pat::Var;
-    let body = Term::Var(0);
+    let body = Code::Var(0);
 
-    let term = Term::match_(scrut, vec![(pat, body)]);
+    let code = Code::match_(scrut, vec![(pat, body)]);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(10));
 }
@@ -150,14 +150,14 @@ fn test_match_var() {
 // match (1, 2) with (x, y) -> x
 #[test]
 fn test_match_tuple() {
-    let scrut = tuple2(Term::int(1), Term::int(2));
+    let scrut = tuple2(Code::int(1), Code::int(2));
 
     let pat = Pat::Tuple(vec![Pat::Var, Pat::Var]);
-    let body = Term::Var(1);    // x
+    let body = Code::Var(1);    // x
 
-    let term = Term::match_(scrut, vec![(pat, body)]);
+    let code = Code::match_(scrut, vec![(pat, body)]);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(1));
 }
@@ -165,9 +165,9 @@ fn test_match_tuple() {
 // Cons 1 (Cons 2 Nil)
 #[test]
 fn test_con() {
-    let term = cons(Term::int(1), cons(Term::int(2), nil()));
+    let code = cons(Code::int(1), cons(Code::int(2), nil()));
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.to_string(), "Cons 1 (Cons 2 Nil)".to_string());
 }
@@ -175,12 +175,12 @@ fn test_con() {
 #[test]
 fn test_record() {
     let labels = vec!["x".to_string(), "y".to_string()];
-    let values = vec![Term::int(1), Term::int(2)];
-    let term = record(labels.clone(), values);
+    let values = vec![Code::int(1), Code::int(2)];
+    let code = record(labels.clone(), values);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
-    assert_eq!(result, Datum::Val(Value::Record(labels, vec![Datum::Val(Value::I64(1)), Datum::Val(Value::I64(2))])));
+    assert_eq!(result, Term::Val(Value::Record(labels, vec![Term::Val(Value::I64(1)), Term::Val(Value::I64(2))])));
     assert_eq!(result.to_string(), "@{ x = 1, y = 2 }".to_string());
 }
 
@@ -188,12 +188,12 @@ fn test_record() {
 #[test]
 fn test_field_access() {
     let labels = vec!["x".to_string(), "y".to_string()];
-    let values = vec![Term::int(1), Term::int(2)];
+    let values = vec![Code::int(1), Code::int(2)];
     let record = record(labels.clone(), values);
 
-    let term = Term::field_access(record, "y".to_string());
+    let code = Code::field_access(record, "y".to_string());
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(2));
 }
@@ -205,12 +205,12 @@ fn test_global_var() {
     let mut gvars = GlobalEnv::new();
     gvars.insert(
         Symbol::local("x"),
-        Term::int(42)
+        Code::int(42)
     );
 
-    let term = Term::GlobalVar(Symbol::local("x"));
+    let code = Code::GlobalVar(Symbol::local("x"));
 
-    let result = VM::run(&gvars, term).unwrap();
+    let result = VM::run(&gvars, code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(42));
 }
@@ -218,12 +218,12 @@ fn test_global_var() {
 #[test]
 fn test_builtin_add() {
     // (add 41 1)
-    let term = Term::app(
-        Term::Builtin(Builtin::I64Add),
-        tuple2(Term::int(41), Term::int(1))
+    let code = Code::app(
+        Code::Builtin(Builtin::I64Add),
+        tuple2(Code::int(41), Code::int(1))
     );
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(42));
 }
@@ -231,16 +231,16 @@ fn test_builtin_add() {
 #[test]
 fn test_tuple_closure_application() {
     // λx. x
-    let lam = Term::lam(Term::Var(0));
+    let lam = Code::lam(Code::Var(0));
 
     // ( (\x. x), 10 )
-    let tuple = tuple2(lam, Term::int(10));
+    let tuple = tuple2(lam, Code::int(10));
 
     // ((\x. x), 10).0
-    let first = Term::tuple_access(tuple, 0);
+    let first = Code::tuple_access(tuple, 0);
 
     // ((\x. x), 10).0 5
-    let app = Term::app(first, Term::int(5));
+    let app = Code::app(first, Code::int(5));
 
     let result = VM::run(&GlobalEnv::new(), app).unwrap();
 
@@ -252,17 +252,17 @@ fn test_tuple_closure_application() {
 #[test]
 fn test_nested_tuple_closure_application() {
     // λx. x
-    let lam1 = Term::lam(Term::Var(0));
+    let lam1 = Code::lam(Code::Var(0));
     // λy. y
-    let lam2 = Term::lam(Term::Var(0));
+    let lam2 = Code::lam(Code::Var(0));
 
     let tuple = tuple2(lam1, lam2);
 
     // second element: index 1
-    let second = Term::tuple_access(tuple, 1);
+    let second = Code::tuple_access(tuple, 1);
 
     // apply to 5
-    let app = Term::app(second, Term::int(5));
+    let app = Code::app(second, Code::int(5));
 
     let result = VM::run(&GlobalEnv::new(), app).unwrap();
 
@@ -273,16 +273,16 @@ fn test_nested_tuple_closure_application() {
 // // => 7
 #[test]
 fn test_record_closure_application() {
-    let lam = Term::lam(Term::Var(0));
+    let lam = Code::lam(Code::Var(0));
 
     let rec = record(
         vec!["f".to_string(), "n".to_string()],
-        vec![lam, Term::int(10)],
+        vec![lam, Code::int(10)],
     );
 
-    let field = Term::field_access(rec, "f".to_string());
+    let field = Code::field_access(rec, "f".to_string());
 
-    let app = Term::app(field, Term::int(7));
+    let app = Code::app(field, Code::int(7));
 
     let result = VM::run(&GlobalEnv::new(), app).unwrap();
 
@@ -295,7 +295,7 @@ fn test_record_closure_application() {
 // // => 3
 #[test]
 fn test_con_closure_application() {
-    let lam = Term::lam(Term::Var(0));
+    let lam = Code::lam(Code::Var(0));
 
     let scrut = cons(lam, nil());
 
@@ -305,11 +305,11 @@ fn test_con_closure_application() {
     );
 
     // f 3  → Var(1) 3
-    let body = Term::app(Term::Var(1), Term::int(3));
+    let body = Code::app(Code::Var(1), Code::int(3));
 
-    let term = Term::match_(scrut, vec![(pat, body)]);
+    let code = Code::match_(scrut, vec![(pat, body)]);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(3));
 }
@@ -319,17 +319,17 @@ fn test_con_closure_application() {
 // => 123
 #[test]
 fn test_strict_let_in_tuple_closure() {
-    let lam = Term::lam(Term::Var(0));
+    let lam = Code::lam(Code::Var(0));
 
-    let tuple = tuple2(Term::Var(0), Term::int(99));
+    let tuple = tuple2(Code::Var(0), Code::int(99));
 
-    let access = Term::tuple_access(tuple, 0);
+    let access = Code::tuple_access(tuple, 0);
 
-    let app = Term::app(access, Term::int(123));
+    let app = Code::app(access, Code::int(123));
 
-    let term = Term::let_(lam, app);
+    let code = Code::let_(lam, app);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(123));
 }
@@ -337,9 +337,9 @@ fn test_strict_let_in_tuple_closure() {
 // {()}
 #[test]
 fn test_empty_block() {
-    let term = Term::block(vec![]);
+    let code = Code::block(vec![]);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::Unit);
 }
@@ -347,9 +347,9 @@ fn test_empty_block() {
 // { 1; 2 }
 #[test]
 fn test_simple_sequence_block() {
-    let term = Term::block(vec![Term::int(1), Term::int(2)]);
+    let code = Code::block(vec![Code::int(1), Code::int(2)]);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(2));
 }
@@ -357,18 +357,18 @@ fn test_simple_sequence_block() {
 // { let x = 1; let y = 2; x + y }
 #[test]
 fn test_block_with_expr_tail() {
-    let term = Term::let_(
-        Term::int(1),
-        Term::let_(
-            Term::int(2),
-            Term::app(
-                Term::Builtin(Builtin::I64Add),
-                tuple2(Term::Var(1), Term::Var(0)),
+    let code = Code::let_(
+        Code::int(1),
+        Code::let_(
+            Code::int(2),
+            Code::app(
+                Code::Builtin(Builtin::I64Add),
+                tuple2(Code::Var(1), Code::Var(0)),
             )
         )
     );
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(3));
 }
@@ -376,9 +376,9 @@ fn test_block_with_expr_tail() {
 // { let x = 1; { x } }
 #[test]
 fn test_block_can_see_outer_scope() {
-    let term = Term::let_(Term::int(1), Term::block(vec![Term::Var(0)]));
+    let code = Code::let_(Code::int(1), Code::block(vec![Code::Var(0)]));
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(1));
 }
@@ -387,18 +387,18 @@ fn test_block_can_see_outer_scope() {
 #[test]
 fn test_inner_scope_does_not_escape() {
     // inner: let y = 2 in Var(0)
-    let inner = Term::let_(Term::int(2), Term::Var(0));
+    let inner = Code::let_(Code::int(2), Code::Var(0));
 
     // block: { inner }
-    let block = Term::block(vec![inner]);
+    let block = Code::block(vec![inner]);
 
     // seq: let _ = block in x
-    let seq = Term::let_(block, Term::Var(1));
+    let seq = Code::let_(block, Code::Var(1));
 
     // outer: let x = 1 in seq
-    let term = Term::let_(Term::int(1), seq);
+    let code = Code::let_(Code::int(1), seq);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(1));
 }
@@ -407,18 +407,18 @@ fn test_inner_scope_does_not_escape() {
 #[test]
 fn test_nested_block_shadowing() {
     // inner-most: { Var(0) }
-    let inner = Term::block(vec![Term::Var(0)]);
+    let inner = Code::block(vec![Code::Var(0)]);
 
     // middle: let x = 2 in inner
-    let middle = Term::let_(Term::int(2), inner);
+    let middle = Code::let_(Code::int(2), inner);
 
     // outer block: { middle }
-    let block = Term::block(vec![middle]);
+    let block = Code::block(vec![middle]);
 
     // outer-most: let x = 1 in block
-    let term = Term::let_(Term::int(1), block);
+    let code = Code::let_(Code::int(1), block);
 
-    let result = VM::run(&GlobalEnv::new(), term).unwrap();
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(2));
 }
@@ -426,25 +426,25 @@ fn test_nested_block_shadowing() {
 #[test]
 fn test_for_loop() {
     // init = 0;
-    let init = Term::int(0);
+    let init = Code::int(0);
 
     // pred = \x. x < 99999;
-    let pred = Term::lam(
-        Term::app(Term::app(
-            Term::GlobalVar(symbol("<")), Term::Var(0)), Term::int(99999)
+    let pred = Code::lam(
+        Code::app(Code::app(
+            Code::GlobalVar(symbol("<")), Code::Var(0)), Code::int(99999)
         )
     );
 
     // next = \x. x + 2;
-    let next = Term::lam(
-        Term::app(Term::app(
-            Term::GlobalVar(symbol("+")), Term::Var(0)), Term::int(2)
+    let next = Code::lam(
+        Code::app(Code::app(
+            Code::GlobalVar(symbol("+")), Code::Var(0)), Code::int(2)
         )
     );
 
-    let term = Term::for_(init, pred, next);
+    let coce = Code::for_(init, pred, next);
 
-    let result = VM::run(&globals(), term).unwrap();
+    let result = VM::run(&globals(), coce).unwrap();
 
     assert_eq!(result.value(), &Value::I64(100000));
 }
@@ -454,30 +454,30 @@ fn test_for_loop2() {
     // faster version of test_for_loop
 
     // init = 0;
-    let init = Term::int(0);
+    let init = Code::int(0);
 
     // pred = \x. 99999 > x;
     //      = |(99999 >);
-    let pred = Term::app(Term::GlobalVar(symbol(">")), Term::int(99999));
+    let pred = Code::app(Code::GlobalVar(symbol(">")), Code::int(99999));
 
     // next = \x. 2 + x;
     //      = |(2 +);
-    let next = Term::app(Term::GlobalVar(symbol("+")), Term::int(2));
+    let next = Code::app(Code::GlobalVar(symbol("+")), Code::int(2));
 
-    let term = Term::for_(init, pred, next);
+    let code = Code::for_(init, pred, next);
 
-    let result = VM::run(&globals(), term).unwrap();
+    let result = VM::run(&globals(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(100000));
 }
 
 #[test]
 fn test_add_literals() {
-    let term = Term::app(Term::app(
-        Term::GlobalVar(symbol("+")), Term::int(1)), Term::int(2)
+    let code = Code::app(Code::app(
+        Code::GlobalVar(symbol("+")), Code::int(1)), Code::int(2)
     );
 
-    let result = VM::run(&globals(), term).unwrap();
+    let result = VM::run(&globals(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(3));
 }
@@ -486,17 +486,17 @@ fn test_add_literals() {
 fn test_for_loop_tuple() {
 
     // init = (5, 1);
-    let init = tuple2(Term::int(5), Term::int(1));
+    let init = tuple2(Code::int(5), Code::int(1));
 
     // pred = \(n, _). 0 < n;
     //      = \x. match (x) { (n, _) => 0 < n };
     let pred = {
         let pat = Pat::Tuple(vec![Pat::Var, Pat::Wildcard]);
-        let body = Term::app(Term::app(
-            Term::GlobalVar(symbol("<")), Term::int(0)), Term::Var(0)
+        let body = Code::app(Code::app(
+            Code::GlobalVar(symbol("<")), Code::int(0)), Code::Var(0)
         );
-        Term::lam(
-            Term::match_(Term::Var(0), vec![
+        Code::lam(
+            Code::match_(Code::Var(0), vec![
                 (pat, body)
             ])
         )
@@ -507,54 +507,54 @@ fn test_for_loop_tuple() {
     let next = {
         let pat = Pat::Tuple(vec![Pat::Var, Pat::Var]);
         let body = tuple2(
-            Term::app(Term::app(
-                Term::GlobalVar(symbol("-")), Term::Var(1)), Term::int(1)
+            Code::app(Code::app(
+                Code::GlobalVar(symbol("-")), Code::Var(1)), Code::int(1)
             ),
-            Term::app(Term::app(
-                Term::GlobalVar(symbol("*")), Term::Var(1)), Term::Var(0)
+            Code::app(Code::app(
+                Code::GlobalVar(symbol("*")), Code::Var(1)), Code::Var(0)
             ),
         );
-        Term::lam(
-            Term::match_(Term::Var(0), vec![
+        Code::lam(
+            Code::match_(Code::Var(0), vec![
                 (pat, body)
             ])
         )
     };
 
-    let term = Term::tuple_access(Term::for_(init, pred, next), 1);
+    let code = Code::tuple_access(Code::for_(init, pred, next), 1);
 
-    let result = VM::run(&globals(), term).unwrap();
+    let result = VM::run(&globals(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(120));
 }
 
 #[test]
 fn test_add_div() {
-    let a = Term::app(Term::app(
-        Term::GlobalVar(symbol("+")), Term::int(2)), Term::int(3)
+    let a = Code::app(Code::app(
+        Code::GlobalVar(symbol("+")), Code::int(2)), Code::int(3)
     );
-    let b = Term::app(Term::app(
-        Term::GlobalVar(symbol("+")), Term::int(1)), Term::int(1)
+    let b = Code::app(Code::app(
+        Code::GlobalVar(symbol("+")), Code::int(1)), Code::int(1)
     );
-    let term = Term::app(Term::app(
-        Term::GlobalVar(symbol("/")), a), b
+    let code = Code::app(Code::app(
+        Code::GlobalVar(symbol("/")), a), b
     );
 
-    let result = VM::run(&globals(), term).unwrap();
+    let result = VM::run(&globals(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(2));
 }
 
 #[test]
 fn test_lambda_with_pattern_arg() {
-    let f = Term::lam_p1(
+    let f = Code::lam_p1(
         Pat::Tuple(vec![Pat::Var, Pat::Var]),
-        Term::app(Term::app(Term::GlobalVar(symbol("+")), Term::Var(1)), Term::Var(0))
+        Code::app(Code::app(Code::GlobalVar(symbol("+")), Code::Var(1)), Code::Var(0))
     );
-    let x = tuple2(Term::int(42), Term::int(1));
-    let term = Term::app(f, x);
+    let x = tuple2(Code::int(42), Code::int(1));
+    let code = Code::app(f, x);
 
-    let result = VM::run(&globals(), term).unwrap();
+    let result = VM::run(&globals(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(43));
 }
@@ -562,21 +562,21 @@ fn test_lambda_with_pattern_arg() {
 #[test]
 fn test_nested_lambda_with_pattern_arg() {
     // f = \a.\(b,c). a * (b + c);
-    let f = Term::lam_p1(Pat::Var, Term::lam_p1(Pat::Tuple(vec![Pat::Var, Pat::Var]),
-            Term::app(Term::app(
-                Term::GlobalVar(symbol("*")), Term::Var(3)), // Hmm...
-                      Term::app(Term::app(
-                          Term::GlobalVar(symbol("+")), Term::Var(1)), Term::Var(0)
+    let f = Code::lam_p1(Pat::Var, Code::lam_p1(Pat::Tuple(vec![Pat::Var, Pat::Var]),
+            Code::app(Code::app(
+                Code::GlobalVar(symbol("*")), Code::Var(3)), // Hmm...
+                      Code::app(Code::app(
+                          Code::GlobalVar(symbol("+")), Code::Var(1)), Code::Var(0)
                       )
                 )
             )
         );
 
-    let a = Term::int(2);
-    let x = tuple2(Term::int(42), Term::int(1));
-    let term = Term::app(Term::app(f, a), x);
+    let a = Code::int(2);
+    let x = tuple2(Code::int(42), Code::int(1));
+    let code = Code::app(Code::app(f, a), x);
 
-    let result = VM::run(&globals(), term).unwrap();
+    let result = VM::run(&globals(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(86));
 }
@@ -585,24 +585,24 @@ fn test_nested_lambda_with_pattern_arg() {
 fn test_fact() {
     // `let rec fact = \n. if (n <= 0) 1 else n * (fact (n - 1))`
     let fact = {
-        let f = Term::Var(1);
-        let n = Term::Var(0);
-        let cond = Term::app(Term::app(
-            Term::GlobalVar(symbol("<=")), n.clone()), Term::int(0)
+        let f = Code::Var(1);
+        let n = Code::Var(0);
+        let cond = Code::app(Code::app(
+            Code::GlobalVar(symbol("<=")), n.clone()), Code::int(0)
         );
-        let texpr = Term::int(1);
-        let fexpr = Term::app(Term::app(
-            Term::GlobalVar(symbol("*")), n.clone()), Term::app(
-            f, Term::app(Term::app(
-                Term::GlobalVar(symbol("-")), n), Term::int(1)
+        let texpr = Code::int(1);
+        let fexpr = Code::app(Code::app(
+            Code::GlobalVar(symbol("*")), n.clone()), Code::app(
+            f, Code::app(Code::app(
+                Code::GlobalVar(symbol("-")), n), Code::int(1)
             ))
         );
-        Term::lam(Term::if_(cond, texpr, fexpr))
+        Code::lam(Code::if_(cond, texpr, fexpr))
     };
 
-    let term = Term::letrec(fact, Term::app(Term::Var(0), Term::int(5)));
+    let code = Code::letrec(fact, Code::app(Code::Var(0), Code::int(5)));
 
-    let result = VM::run(&globals(), term).unwrap();
+    let result = VM::run(&globals(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(120));
 }
@@ -611,27 +611,27 @@ fn test_fact() {
 fn test_fact_global() {
     // `fact = \n. if (n <= 0) 1 else n * (fact (n - 1))`
     let fact = {
-        let f = Term::GlobalVar(symbol("fact"));
-        let n = Term::Var(0);
-        let cond = Term::app(Term::app(
-            Term::GlobalVar(symbol("<=")), n.clone()), Term::int(0)
+        let f = Code::GlobalVar(symbol("fact"));
+        let n = Code::Var(0);
+        let cond = Code::app(Code::app(
+            Code::GlobalVar(symbol("<=")), n.clone()), Code::int(0)
         );
-        let texpr = Term::int(1);
-        let fexpr = Term::app(Term::app(
-            Term::GlobalVar(symbol("*")), n.clone()), Term::app(
-            f, Term::app(Term::app(
-                Term::GlobalVar(symbol("-")), n), Term::int(1)
+        let texpr = Code::int(1);
+        let fexpr = Code::app(Code::app(
+            Code::GlobalVar(symbol("*")), n.clone()), Code::app(
+            f, Code::app(Code::app(
+                Code::GlobalVar(symbol("-")), n), Code::int(1)
             ))
         );
-        Term::lam(Term::if_(cond, texpr, fexpr))
+        Code::lam(Code::if_(cond, texpr, fexpr))
     };
 
     let mut gvars = globals();
     gvars.insert(symbol("fact"), fact);
 
-    let term = Term::app(Term::GlobalVar(symbol("fact")), Term::int(5));
+    let code = Code::app(Code::GlobalVar(symbol("fact")), Code::int(5));
 
-    let result = VM::run(&gvars, term).unwrap();
+    let result = VM::run(&gvars, code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(120));
 }
