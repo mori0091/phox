@@ -50,8 +50,8 @@ fn globals() -> GlobalEnv {
     add_binary_op(&mut global, "::core::__i64_div__", Builtin::I64Div, "/");
     add_binary_op(&mut global, "::core::__i64_mod__", Builtin::I64Mod, "%");
 
-    add_binary_op(&mut global, "::core::__i64_eq__" , Builtin::I64Eq , "==");
-    add_binary_op(&mut global, "::core::__i64_neq__", Builtin::I64Neq, "!=");
+    add_binary_op(&mut global, "::core::__i64_eq__", Builtin::I64Eq , "==");
+    add_binary_op(&mut global, "::core::__i64_ne__", Builtin::I64Neq, "!=");
 
     add_binary_op(&mut global, "::core::__i64_le__", Builtin::I64Le, "<=");
     add_binary_op(&mut global, "::core::__i64_lt__", Builtin::I64Lt, "<");
@@ -118,10 +118,8 @@ fn test_tuple() {
 
     let result = VM::run(&GlobalEnv::new(), t).unwrap();
 
-    assert_eq!(result.term(), &Term::Tuple(2));
-    assert_eq!(result.env().len(), 2);
-    assert_eq!(result.env_at(0).value(), &Value::I64(1));
-    assert_eq!(result.env_at(1).value(), &Value::I64(2));
+    assert_eq!(result, Datum::Val(Value::Tuple(vec![Datum::Val(Value::I64(1)), Datum::Val(Value::I64(2))])));
+    assert_eq!(result.to_string(), "(1, 2)".to_string());
 }
 
 #[test]
@@ -171,14 +169,7 @@ fn test_con() {
 
     let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
-    assert_eq!(result.term(), &Term::Con(Symbol::local("Cons"), 2));
-    assert_eq!(result.env().len(), 2);
-    assert_eq!(result.env_at(0).value(), &Value::I64(1));
-    assert_eq!(result.env_at(1).term(), &Term::Con(Symbol::local("Cons"), 2));
-    assert_eq!(result.env_at(1).env().len(), 2);
-    assert_eq!(result.env_at(1).env_at(0).value(), &Value::I64(2));
-    assert_eq!(result.env_at(1).env_at(1).term(), &Term::Con(Symbol::local("Nil"), 0));
-    assert_eq!(result.env_at(1).env_at(1).env().len(), 0);
+    assert_eq!(result.to_string(), "Cons 1 (Cons 2 Nil)".to_string());
 }
 
 #[test]
@@ -189,10 +180,8 @@ fn test_record() {
 
     let result = VM::run(&GlobalEnv::new(), term).unwrap();
 
-    assert_eq!(result.term(), &Term::Record(labels));
-    assert_eq!(result.env().len(), 2);
-    assert_eq!(result.env_at(0).value(), &Value::I64(1));
-    assert_eq!(result.env_at(1).value(), &Value::I64(2));
+    assert_eq!(result, Datum::Val(Value::Record(labels, vec![Datum::Val(Value::I64(1)), Datum::Val(Value::I64(2))])));
+    assert_eq!(result.to_string(), "@{ x = 1, y = 2 }".to_string());
 }
 
 // { x = 1, y = 2 }.y

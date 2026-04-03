@@ -152,7 +152,7 @@ pub enum Pat {
     Var,                        // `x` (unnamed; de Bruijn index)
     Con(ConId, Vec<Pat>),       // `Cons x xs`
     Tuple(Vec<Pat>),            // `(p,)`, `(p1, p2)`
-    Record(Vec<(String, Pat)>),
+    Record(Vec<(Label, Pat)>),
 }
 
 // -------------------------------------------------------------
@@ -174,6 +174,9 @@ pub enum Value {
     Unit,
     Bool(bool),
     I64(i64),
+    Con(Symbol, Vec<Datum>),
+    Tuple(Vec<Datum>),
+    Record(Vec<Label>, Vec<Datum>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -204,17 +207,6 @@ impl Datum {
     pub fn env_at(&self, index: usize) -> Datum {
         self.env()[index].borrow().clone()
     }
-}
-
-// -------------------------------------------------------------
-// === VM internal Datum accessor APIs ===
-impl Datum {
-    fn env_value_at(&self, index: usize) -> Value {
-        self.env()[index].borrow().value().clone()
-    }
-    // fn env_term_at(&self, index: usize) -> Term {
-    //     self.env()[index].borrow().term().clone()
-    // }
 }
 
 // -------------------------------------------------------------
@@ -271,22 +263,17 @@ impl VM<'_> {
                         Lit::Bool(b) => Value::Bool(*b),
                         Lit::Int(i) => Value::I64(*i),
                     };
-                    self.set_value(val);
-                    if self.upds_is_empty() {
-                        return Ok(());
-                    }
-                    if self.args_is_empty() {
-                        return Err(RuntimeError::DanglingWritePointer);
-                    }
-                    self.run_update();
-                    return Ok(());
+                    return self.run_state_value(val);
                 }
-                Term::Tuple(arity) => self.env_trim(*arity),
-                Term::Con(_, arity) => self.env_trim(*arity),
-                Term::Record(labels) => self.env_trim(labels.len()),
-                _ => {}
-            }
-            match self.term() {
+                Term::Con(c, arity) => {
+                    return self.run_state_value(Value::Con(c.clone(), self.env_values(*arity)));
+                }
+                Term::Tuple(arity) => {
+                    return self.run_state_value(Value::Tuple(self.env_values(*arity)));
+                }
+                Term::Record(labels) => {
+                    return self.run_state_value(Value::Record(labels.clone(), self.env_values(labels.len())));
+                }
                 Term::Lam(_) | Term::Builtin(_) if self.args_is_empty() => {
                     if self.upds_is_empty() {
                         return Ok(());
@@ -295,18 +282,22 @@ impl VM<'_> {
                         return Err(RuntimeError::DanglingWritePointer);
                     }
                 }
-                Term::Con(_, _) | Term::Tuple(_) | Term::Record(_) => {
-                    if self.upds_is_empty() {
-                        return Ok(());
-                    }
-                    if self.args_is_empty() {
-                        return Err(RuntimeError::DanglingWritePointer);
-                    }
-                }
                 _ => {}
             }
             self.run_state()?;
         }
+    }
+
+    fn run_state_value(&mut self, val: Value) -> Result<(), RuntimeError> {
+        self.set_value(val);
+        if self.upds_is_empty() {
+            return Ok(());
+        }
+        if self.args_is_empty() {
+            return Err(RuntimeError::DanglingWritePointer);
+        }
+        self.run_update();
+        Ok(())
     }
 
     fn run_state(&mut self) -> Result<(), RuntimeError> {
@@ -409,16 +400,11 @@ impl VM<'_> {
         *self.env_mut() = env;
     }
 
-    // fn env_clear(&mut self) {
-    //     self.env_mut().clear();
-    // }
-
-    fn env_trim(&mut self, arity: usize) {
-        let env = self.env_mut();
-        let len = env.len();
-        if len > arity {
-            *env = env.split_off(len - arity);
-        }
+    fn env_values(&self, arity: usize) -> Vec<Datum> {
+        let env = self.env();
+        let idx = env.len() - arity;
+        let vals: Vec<_> = env[idx..].iter().map(|a| a.borrow().clone()).collect();
+        vals
     }
 
     fn env_push(&mut self, a: Addr) {
@@ -471,13 +457,13 @@ impl VM<'_> {
     }
 
     /// Allocate fresh address
-    fn heap_alloc_reserved(&mut self) -> Addr {
-        let dummy = Datum::Clo(Closure { term: Term::unit(), env: Env::new() });
+    fn heap_alloc_reserved(&self) -> Addr {
+        let dummy = Datum::Val(Value::Unit);
         alloc(dummy)
     }
 
     /// Allocate fresh address and store closure
-    fn heap_alloc(&mut self, c: Datum) -> Addr {
+    fn heap_alloc(&self, c: Datum) -> Addr {
         alloc(c)
     }
 
@@ -487,7 +473,7 @@ impl VM<'_> {
     }
 
     /// Store closure to heap.
-    fn heap_store(&mut self, a: Addr) {
+    fn heap_store(&self, a: Addr) {
         *a.borrow_mut() = self.state.datum.clone();
     }
 }
@@ -510,28 +496,28 @@ fn match_pat(pat: &Pat, val: &Datum) -> Option<Env> {
             Some(env)
         }
 
-        (Pat::Con(name_p, args_p), Datum::Clo(Closure{ term: Term::Con(name_v, arity), env: args_v}))
-            if name_p == name_v && args_p.len() == *arity =>
+        (Pat::Con(name_p, args_p), Datum::Val(Value::Con(name_v, args_v)))
+            if name_p == name_v && args_p.len() == args_v.len() =>
         {
             for (p, v) in args_p.iter().zip(args_v.iter()) {
-                let sub = match_pat(p, &v.borrow())?;
+                let sub = match_pat(p, v)?;
                 env.extend(sub);
             }
             Some(env)
         }
 
-        (Pat::Tuple(pats), Datum::Clo(Closure{ term: Term::Tuple(arity), env: vals})) if pats.len() == *arity => {
+        (Pat::Tuple(pats), Datum::Val(Value::Tuple(vals))) if pats.len() == vals.len() => {
             for (p, v) in pats.iter().zip(vals.iter()) {
-                let sub = match_pat(p, &v.borrow())?;
+                let sub = match_pat(p, v)?;
                 env.extend(sub);
             }
             Some(env)
         }
 
-        (Pat::Record(fields1), Datum::Clo(Closure{ term: Term::Record(labels), env: vals})) => {
-            for (fname, p) in fields1 {
+        (Pat::Record(fields), Datum::Val(Value::Record(labels, vals))) => {
+            for (fname, p) in fields {
                 let i = labels.iter().position(|n| n == fname).unwrap();
-                let v = &vals[i].borrow();
+                let v = &vals[i];
                 let sub = match_pat(p, v)?;
                 env.extend(sub);
             }
@@ -639,13 +625,12 @@ impl VM<'_> {
         let Term::TupleAccess(term, index) = self.term().clone() else { panic!() };
         self.term_replace(*term);
         self.run_state_whnf()?;
-        if let Term::Con(_, 1) = self.term() {
-            let a = self.env()[0].clone();
-            self.heap_load(a);
+        if let Value::Con(_, args) = self.value() {
+            if args.len() != 1 { panic!() }
+            self.state.datum = args[0].clone();
         }
-        let Term::Tuple(_arity) = self.term() else { panic!() };
-        let a = self.env()[index].clone();
-        self.heap_load(a);
+        let Value::Tuple(args) = self.value() else { panic!() };
+        self.state.datum = args[index].clone();
         Ok(())
     }
 
@@ -653,14 +638,13 @@ impl VM<'_> {
         let Term::FieldAccess(term, label) = self.term().clone() else { panic!() };
         self.term_replace(*term);
         self.run_state_whnf()?;
-        if let Term::Con(_, 1) = self.term() {
-            let a = self.env()[0].clone();
-            self.heap_load(a);
+        if let Value::Con(_, args) = self.value() {
+            if args.len() != 1 { panic!() }
+            self.state.datum = args[0].clone();
         }
-        let Term::Record(fs) = self.term() else { panic!() };
+        let Value::Record(fs, args) = self.value() else { panic!() };
         let index = fs.iter().position(|s| *s == label).unwrap();
-        let a = self.env()[index].clone();
-        self.heap_load(a);
+        self.state.datum = args[index].clone();
         Ok(())
     }
 
@@ -721,6 +705,18 @@ impl VM<'_> {
     }
 }
 
+// -------------------------------------------------------------
+impl Datum {
+    fn as_i64_pair(&self) -> (&i64, &i64) {
+        if let Value::Tuple(es) = self.value() {
+            if let [Datum::Val(Value::I64(a)), Datum::Val(Value::I64(b))] = es.as_slice() {
+                return (a, b)
+            }
+        }
+        panic!()
+    }
+}
+
 fn builtin(f: Builtin, x: Datum) -> Result<Datum, RuntimeError> {
     let val = match f {
         Builtin::I64Neg => {
@@ -729,64 +725,53 @@ fn builtin(f: Builtin, x: Datum) -> Result<Datum, RuntimeError> {
         }
 
         Builtin::I64Eq => {
-            let Value::I64(a) = x.env_value_at(0) else { panic!() };
-            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            let (a, b) = x.as_i64_pair();
             Value::Bool(a == b)
         }
         Builtin::I64Neq => {
-            let Value::I64(a) = x.env_value_at(0) else { panic!() };
-            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            let (a, b) = x.as_i64_pair();
             Value::Bool(a != b)
         }
 
         Builtin::I64Lt => {
-            let Value::I64(a) = x.env_value_at(0) else { panic!() };
-            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            let (a, b) = x.as_i64_pair();
             Value::Bool(a < b)
         }
         Builtin::I64Le => {
-            let Value::I64(a) = x.env_value_at(0) else { panic!() };
-            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            let (a, b) = x.as_i64_pair();
             Value::Bool(a <= b)
         }
         Builtin::I64Gt => {
-            let Value::I64(a) = x.env_value_at(0) else { panic!() };
-            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            let (a, b) = x.as_i64_pair();
             Value::Bool(a > b)
         }
         Builtin::I64Ge => {
-            let Value::I64(a) = x.env_value_at(0) else { panic!() };
-            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            let (a, b) = x.as_i64_pair();
             Value::Bool(a >= b)
         }
 
         Builtin::I64Add => {
-            let Value::I64(a) = x.env_value_at(0) else { panic!() };
-            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            let (a, b) = x.as_i64_pair();
             Value::I64(a + b)
         }
         Builtin::I64Sub => {
-            let Value::I64(a) = x.env_value_at(0) else { panic!() };
-            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            let (a, b) = x.as_i64_pair();
             Value::I64(a - b)
         }
         Builtin::I64Mul => {
-            let Value::I64(a) = x.env_value_at(0) else { panic!() };
-            let Value::I64(b) = x.env_value_at(1) else { panic!() };
+            let (a, b) = x.as_i64_pair();
             Value::I64(a * b)
         }
         Builtin::I64Div => {
-            let Value::I64(a) = x.env_value_at(0) else { panic!() };
-            let Value::I64(b) = x.env_value_at(1) else { panic!() };
-            if b == 0 {
+            let (a, b) = x.as_i64_pair();
+            if *b == 0 {
                 return Err(RuntimeError::DivisionByZero);
             }
             Value::I64(a / b)
         }
         Builtin::I64Mod => {
-            let Value::I64(a) = x.env_value_at(0) else { panic!() };
-            let Value::I64(b) = x.env_value_at(1) else { panic!() };
-            if b == 0 {
+            let (a, b) = x.as_i64_pair();
+            if *b == 0 {
                 return Err(RuntimeError::DivisionByZero);
             }
             Value::I64(a % b)

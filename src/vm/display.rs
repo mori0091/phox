@@ -69,6 +69,49 @@ impl fmt::Display for Value {
             Value::Unit => write!(f, "()"),
             Value::Bool(b) => write!(f, "{b}"),
             Value::I64(i) => write!(f, "{i}"),
+            Value::Con(c, args) => {
+                let mut xs = Vec::with_capacity(1 + args.len());
+                xs.push(c.pretty());
+                for arg in args {
+                    match arg {
+                        Datum::Clo(_) => {
+                            xs.push(format!("({})", arg));
+                        }
+                        Datum::Val(Value::Con(_, ys)) if ys.len() > 0 => {
+                            xs.push(format!("({})", arg));
+                        }
+                        _ => {
+                            xs.push(format!("{}", arg));
+                        }
+                    }
+                }
+                write!(f, "{}", xs.join(" "))
+            }
+            Value::Tuple(args) => {
+                match args.len() {
+                    0 => unreachable!(),
+                    1 => write!(f, "({},)", args[0]),
+                    n => {
+                        let mut xs = Vec::with_capacity(n);
+                        for arg in args {
+                            xs.push(format!("{}", arg));
+                        }
+                        write!(f, "({})", xs.join(", "))
+                    }
+                }
+            }
+            Value::Record(ix, args) => {
+                match ix.len() {
+                    0 => write!(f, "@{{}}"),
+                    n => {
+                        let mut xs = Vec::with_capacity(n);
+                        for (label, val) in ix.iter().zip(args.iter()) {
+                            xs.push(format!("{} = {}", label, val));
+                        }
+                        write!(f, "@{{ {} }}", xs.join(", "))
+                    }
+                }
+            }
         }
     }
 }
