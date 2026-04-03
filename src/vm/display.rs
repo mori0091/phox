@@ -36,7 +36,7 @@ impl fmt::Display for Pat {
                 ys.push(c.pretty());
                 for x in xs {
                     match x {
-                        Pat::Con(_, _) => ys.push(format!("({})", x)),
+                        Pat::Con(_, zs) if zs.len() > 0 => ys.push(format!("({})", x)),
                         _ => ys.push(format!("{}", x)),
                     }
                 }
@@ -63,15 +63,77 @@ impl fmt::Display for Pat {
     }
 }
 
-impl Term {
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Unit => write!(f, "()"),
+            Value::Bool(b) => write!(f, "{b}"),
+            Value::I64(i) => write!(f, "{i}"),
+            Value::Con(c, args) => {
+                let mut xs = Vec::with_capacity(1 + args.len());
+                xs.push(c.pretty());
+                for arg in args {
+                    match arg {
+                        Term::Clo(_) => {
+                            xs.push(format!("({})", arg));
+                        }
+                        Term::Val(Value::Con(_, ys)) if ys.len() > 0 => {
+                            xs.push(format!("({})", arg));
+                        }
+                        _ => {
+                            xs.push(format!("{}", arg));
+                        }
+                    }
+                }
+                write!(f, "{}", xs.join(" "))
+            }
+            Value::Tuple(args) => {
+                match args.len() {
+                    0 => unreachable!(),
+                    1 => write!(f, "({},)", args[0]),
+                    n => {
+                        let mut xs = Vec::with_capacity(n);
+                        for arg in args {
+                            xs.push(format!("{}", arg));
+                        }
+                        write!(f, "({})", xs.join(", "))
+                    }
+                }
+            }
+            Value::Record(ix, args) => {
+                match ix.len() {
+                    0 => write!(f, "@{{}}"),
+                    n => {
+                        let mut xs = Vec::with_capacity(n);
+                        for (label, val) in ix.iter().zip(args.iter()) {
+                            xs.push(format!("{} = {}", label, val));
+                        }
+                        write!(f, "@{{ {} }}", xs.join(", "))
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl fmt::Display for Term {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Term::Clo(c) => write!(f, "{}", c),
+            Term::Val(v) => write!(f, "{}", v),
+        }
+    }
+}
+
+impl Code {
     fn enclose(&self) -> String {
         match self {
-            Term::App(_, _)    |
-            Term::Lam(_)       |
-            Term::Match(_, _)  |
-            Term::For(_, _, _) |
-            Term ::Let(_, _)   |
-            Term::LetRec(_, _) => {
+            Code::App(_, _)    |
+            Code::Lam(_)       |
+            Code::Match(_, _)  |
+            Code::For(_, _, _) |
+            Code ::Let(_, _)   |
+            Code::LetRec(_, _) => {
                 format!("({})", self)
             }
             _ => {
@@ -81,24 +143,24 @@ impl Term {
     }
 }
 
-impl fmt::Display for Term {
+impl fmt::Display for Code {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Term::Lam(e) => {
+            Code::Lam(e) => {
                 write!(f, "λ.{}", e)
             }
-            Term::Builtin(b) => {
+            Code::Builtin(b) => {
                 write!(f, "<builtin({:?})>", b)
             }
-            Term::GlobalVar(s) => {
+            Code::GlobalVar(s) => {
                 write!(f, "{}", s.pretty())
             }
-            Term::Var(v) => {
+            Code::Var(v) => {
                 write!(f, "?{}", v)
             }
-            Term::App(fun, x) => {
+            Code::App(fun, x) => {
                 match **fun {
-                    Term::App(_, _) => {
+                    Code::App(_, _) => {
                         write!(f, "{} {}", fun, x.enclose())
                     }
                     _ => {
@@ -106,38 +168,38 @@ impl fmt::Display for Term {
                     }
                 }
             }
-            Term::Match(scrut, arms) => {
+            Code::Match(scrut, arms) => {
                 let mut xs = Vec::with_capacity(arms.len());
                 for (p, e) in arms {
                     xs.push(format!("  {} => {}", p, e));
                 }
                 write!(f, "match ({}) {{\n{}\n}}", scrut, xs.join(",\n"))
             }
-            Term::For(i, p, n) => {
+            Code::For(i, p, n) => {
                 write!(f, "__for__ ({}; {}; {})", i, p, n)
             }
-            Term::TupleAccess(t, i) => {
+            Code::TupleAccess(t, i) => {
                 write!(f, "{}.{}", t.enclose(), i)
             }
-            Term::FieldAccess(r, i) => {
+            Code::FieldAccess(r, i) => {
                 write!(f, "{}.{}", r.enclose(), i)
             }
-            Term::Let(x, e) => {
+            Code::Let(x, e) => {
                 write!(f, "let ? = {} in\n{}", x, e)
             }
-            Term::LetRec(x, e) => {
+            Code::LetRec(x, e) => {
                 write!(f, "let rec ? = {} in\n{}", x, e)
             }
-            Term::Lit(x) => {
+            Code::Lit(x) => {
                 write!(f, "{}", x)
             }
-            Term::Con(c, arity) => {
+            Code::Con(c, arity) => {
                 write!(f, "<Con({}, {})>", c.pretty(), arity)
             }
-            Term::Tuple(arity) => {
+            Code::Tuple(arity) => {
                 write!(f, "<Tuple({})>", arity)
             }
-            Term::Record(ix) => {
+            Code::Record(ix) => {
                 write!(f, "<Record({})>", ix.join(", "))
             }
         }
@@ -146,24 +208,29 @@ impl fmt::Display for Term {
 
 impl fmt::Display for Closure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.term {
-            Term::Con(c, arity) => {
+        match &self.code {
+            Code::Con(c, arity) => {
                 let mut xs = Vec::with_capacity(1 + arity);
                 xs.push(c.pretty());
                 for arg in self.env.iter() {
                     let x = arg.borrow().clone();
-                    match &x.term {
-                        Term::Con(_, arity) if *arity > 0 => {
-                            xs.push(format!("({})", x));
+                    match &x {
+                        Term::Val(v) => {
+                            xs.push(format!("{}", v));
                         }
-                        _ => {
-                            xs.push(format!("{}", x));
+                        Term::Clo(c) => match &c.code {
+                            Code::Con(_, arity) if *arity > 0 => {
+                                xs.push(format!("({})", x));
+                            }
+                            _ => {
+                                xs.push(format!("{}", x));
+                            }
                         }
                     }
                 }
                 write!(f, "{}", xs.join(" "))
             }
-            Term::Tuple(arity) => {
+            Code::Tuple(arity) => {
                 match arity {
                     0 => unreachable!(),
                     1 => write!(f, "({},)", self.env[0].borrow()),
@@ -176,7 +243,7 @@ impl fmt::Display for Closure {
                     }
                 }
             }
-            Term::Record(ix) => {
+            Code::Record(ix) => {
                 match ix.len() {
                     0 => write!(f, "@{{}}"),
                     n => {
