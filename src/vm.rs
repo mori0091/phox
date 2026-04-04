@@ -49,8 +49,8 @@ pub enum Code {
 
     // values (as closure = (term, env))
     Lit(Lit),
-    Con(ConId, usize),              // `Con "Cons" 2`, `Con "Nil" 0`
     Tuple(usize),                   // `Tuple 2`, `Tuple 1`
+    Con(ConId, usize),              // `Con "Cons" 2`, `Con "Nil" 0`
     Record(Vec<Label>),
 }
 
@@ -149,8 +149,8 @@ pub enum Pat {
     Wildcard,                   // `_`
     Lit(Lit),                   // `()`, `true`, `1`, etc.
     Var,                        // `x` (unnamed; de Bruijn index)
-    Con(ConId, Vec<Pat>),       // `Cons x xs`
     Tuple(Vec<Pat>),            // `(p,)`, `(p1, p2)`
+    Con(ConId, Vec<Pat>),       // `Cons x xs`
     Record(Vec<(Label, Pat)>),
 }
 
@@ -173,8 +173,8 @@ pub enum Value {
     Unit,
     Bool(bool),
     I64(i64),
-    Con(Symbol, Vec<Term>),
     Tuple(Vec<Term>),
+    Con(ConId, Vec<Term>),
     Record(Vec<Label>, Vec<Term>),
 }
 
@@ -584,28 +584,34 @@ impl VM<'_> {
         let Code::Var(v) = self.code() else { panic!() };
         // ACCESS
         let a = self.env_get(*v)?;
-        self.heap_load(a.clone());    // clo <- heap[a]
+        self.heap_load(a.clone()); // term <- heap[a]
 
-        if let Term::Val(_) = self.state.term {
-            // no need to UPDATE
-            return Ok(());
-        }
-        match self.code() {
-            Code::Lam(_) | Code::Builtin(_) | Code::Con(_, _) | Code::Tuple(_) | Code::Record(_) => {
+        match &self.state.term {
+            Term::Val(_) => {
                 // no need to UPDATE
-                return Ok(());
+                Ok(())
             }
-            _ => {
-                // schedule UPDATE
-                self.upds_push(a);
-                return Ok(())
+            Term::Clo(c) => match c.code {
+                Code::Lam(_)     |
+                Code::Builtin(_) |
+                Code::Tuple(_)   |
+                Code::Con(_, _)  |
+                Code::Record(_) => {
+                    // no need to UPDATE
+                    Ok(())
+                }
+                _ => {
+                    // schedule UPDATE
+                    self.upds_push(a);
+                    Ok(())
+                }
             }
         }
     }
 
     fn run_update(&mut self) {
         let a = self.upds_pop();
-        self.heap_store(a);      // heap[a] <- clo
+        self.heap_store(a);     // heap[a] <- term
     }
 }
 
@@ -620,27 +626,33 @@ impl VM<'_> {
         Ok(())
     }
 
-    fn run_tuple_access(&mut self) -> Result<(), RuntimeError> {
-        let Code::TupleAccess(term, index) = self.code().clone() else { panic!() };
-        self.code_replace(*term);
-        self.run_state_whnf()?;
+    // Unwrap if the current term was a "newtype pattern".
+    fn run_unwrap(&mut self) {
         if let Value::Con(_, args) = self.value() {
             if args.len() != 1 { panic!() }
             self.state.term = args[0].clone();
         }
+    }
+
+    fn run_tuple_access(&mut self) -> Result<(), RuntimeError> {
+        let Code::TupleAccess(code, index) = self.code().clone() else { panic!() };
+        self.code_replace(*code);
+        self.run_state_whnf()?;
+
+        self.run_unwrap();
+
         let Value::Tuple(args) = self.value() else { panic!() };
         self.state.term = args[index].clone();
         Ok(())
     }
 
     fn run_field_access(&mut self) -> Result<(), RuntimeError> {
-        let Code::FieldAccess(term, label) = self.code().clone() else { panic!() };
-        self.code_replace(*term);
+        let Code::FieldAccess(code, label) = self.code().clone() else { panic!() };
+        self.code_replace(*code);
         self.run_state_whnf()?;
-        if let Value::Con(_, args) = self.value() {
-            if args.len() != 1 { panic!() }
-            self.state.term = args[0].clone();
-        }
+
+        self.run_unwrap();
+
         let Value::Record(fs, args) = self.value() else { panic!() };
         let index = fs.iter().position(|s| *s == label).unwrap();
         self.state.term = args[index].clone();
@@ -648,9 +660,9 @@ impl VM<'_> {
     }
 
     fn run_match(&mut self) -> Result<(), RuntimeError> {
-        let Code::Match(term, arms) = self.code().clone() else { panic!() };
+        let Code::Match(code, arms) = self.code().clone() else { panic!() };
         let mut env = self.env_dup();
-        let v_scrut = self.eval_code(*term)?;
+        let v_scrut = self.eval_code(*code)?;
         for (pat, body) in arms {
             if let Some(bindings) = match_pat(&pat, &v_scrut) {
                 env.extend(bindings);
