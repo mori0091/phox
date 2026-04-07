@@ -535,7 +535,8 @@ pub fn infer_expr(
             let (t_base, c_base) = infer_expr(phox, module, icx, base)?;
             css.extend(c_base);
 
-            match t_base {
+            let mut css = solve_with_residual(phox, css)?;
+            match t_base.repr(&mut phox.ctx.ty) {
                 Type::Record(fields) => {
                     if let Some((_, ty)) = fields.iter().find(|(fname, _)| fname == field) {
                         (ty.clone(), css)
@@ -569,7 +570,8 @@ pub fn infer_expr(
             let (t_base, c_base) = infer_expr(phox, module, icx, base)?;
             css.extend(c_base);
 
-            match t_base {
+            let mut css = solve_with_residual(phox, css)?;
+            match t_base.repr(&mut phox.ctx.ty) {
                 Type::Tuple(elems) => {
                     if *index < elems.len() {
                         (elems[*index].clone(), css)

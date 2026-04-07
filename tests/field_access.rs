@@ -251,3 +251,45 @@ fn test_newtype_parametric_tuple_field_access_function_lambda_pat() {
     assert_eq!(format!("{}", val), "true");
     assert_eq!(format!("{}", sch.pretty()), "Bool");
 }
+
+// ----
+
+#[test]
+fn test_newtype_tuple_access() {
+    let (val, sch) = eval("type P a = (a,a); (P(1,2)).0").unwrap();
+    assert_eq!(format!("{}", val), "1");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_tuple_access_local_let() {
+    let (val, sch) = eval("type P a = (a,a); { let p = P(1,2); p.1 }").unwrap();
+    assert_eq!(format!("{}", val), "2");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_record_field() {
+    let (val, sch) = eval("type R a = @{ x:a, y:a }; (R@{x=1,y=2}).x").unwrap();
+    assert_eq!(format!("{}", val), "1");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_record_field_local_let() {
+    let (val, sch) = eval("type R a = @{ x:a, y:a }; { let r = R@{x=3,y=4}; r.y }").unwrap();
+    assert_eq!(format!("{}", val), "4");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_tuple_wrong_field() {
+    let err = eval("type P a = (a,a); (P(1,2)).x").unwrap_err();
+    assert!(format!("{}", err).contains("expected a record"));
+}
+
+#[test]
+fn test_newtype_record_wrong_tuple_access() {
+    let err = eval("type R a = @{x:a,y:a}; (R@{x=1,y=2}).0").unwrap_err();
+    assert!(format!("{}", err).contains("expected a tuple"));
+}
