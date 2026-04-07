@@ -256,7 +256,6 @@ impl VM<'_> {
             }
             match self.code() {
                 Code::Lit(x) => {
-                    // self.env_clear();
                     let val = match x {
                         Lit::Unit => Value::Unit,
                         Lit::Bool(b) => Value::Bool(*b),
@@ -619,10 +618,10 @@ impl VM<'_> {
 impl VM<'_> {
     fn run_global_access(&mut self) -> Result<(), RuntimeError> {
         let Code::GlobalVar(v) = self.code() else { panic!() };
-        let term = self.globals.get(v)
+        let code = self.globals.get(v)
             .ok_or_else(|| RuntimeError::GlobalVariableNotFound(v.clone()))
             .cloned()?;
-        self.set_closure(term, Env::new());
+        self.set_closure(code, Env::new());
         Ok(())
     }
 
@@ -666,7 +665,7 @@ impl VM<'_> {
         for (pat, body) in arms {
             if let Some(bindings) = match_pat(&pat, &v_scrut) {
                 env.extend(bindings);
-                self.state.term = Term::Clo(Closure { code: body, env });
+                self.set_closure(body, env);
                 return Ok(())
             }
         }
