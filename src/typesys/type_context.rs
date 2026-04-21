@@ -30,6 +30,9 @@ impl TypeContext {
             Type::App(a, b) => {
                 self.occurs_in(tv, a.as_ref_type()) || self.occurs_in(tv, b.as_ref_type())
             }
+            Type::Array(ty) => {
+                self.occurs_in(tv, ty)
+            }
             Type::Tuple(ts) => {
                 ts.iter().any(|t| self.occurs_in(tv, t))
             }
@@ -58,6 +61,11 @@ impl TypeContext {
             (Type::App(f1, x1), Type::App(f2, x2)) => {
                 self.unify(f1.as_ref_type(), f2.as_ref_type())?;
                 self.unify(x1.as_ref_type(), x2.as_ref_type())
+            }
+
+            (Type::Array(t1), Type::Array(t2)) => {
+                self.unify(t1, t2)?;
+                Ok(())
             }
 
             (Type::Tuple(ts1), Type::Tuple(ts2)) => {

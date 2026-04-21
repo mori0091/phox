@@ -89,6 +89,10 @@ pub fn resolve_raw_type(
             let r2 = resolve_raw_type(phox, module, symbol_env, r, param_map)?;
             Type::Fun(Box::new(l2), Box::new(r2))
         }
+        RawType::Array(t) => {
+            let t = resolve_raw_type(phox, module, symbol_env, t, param_map)?;
+            Type::Array(Box::new(t))
+        }
         RawType::Tuple(elems) => {
             let mut elems2 = Vec::new();
             for t in elems.iter() {

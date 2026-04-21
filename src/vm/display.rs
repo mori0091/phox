@@ -9,6 +9,8 @@ impl fmt::Display for RuntimeError {
                 write!(f, "division by zero"),
             RuntimeError::NonExhaustiveMatch(clo) =>
                 write!(f, "non-exhaustive match: no pattern matched value `{}`", clo),
+            RuntimeError::IndexOutOfBounds =>
+                write!(f, "index out of bounds"),
 
             // ---- Runtime errors that shouldn't normally occur.
             RuntimeError::Fatal =>
@@ -112,6 +114,27 @@ impl fmt::Display for Value {
                     }
                 }
             }
+
+            Value::Array(Slice::Empty) => {
+                write!(f, "@[]")
+            }
+            Value::Array(Slice::Some { arr, beg, end }) => {
+                assert!(beg < end);
+                let args = &arr.borrow()[*beg..*end];
+                let mut xs = Vec::with_capacity(args.len());
+                for arg in args {
+                    xs.push(format!("{}", arg));
+                }
+                write!(f, "@[{}]", xs.join(", "))
+            }
+            Value::DynArray(arr) => {
+                let args = &arr.borrow()[..];
+                let mut xs = Vec::with_capacity(args.len());
+                for arg in args {
+                    xs.push(format!("{}", arg));
+                }
+                write!(f, "@[{}]", xs.join(", "))
+            }
         }
     }
 }
@@ -178,6 +201,9 @@ impl fmt::Display for Code {
             Code::For(i, p, n) => {
                 write!(f, "__for__ ({}; {}; {})", i, p, n)
             }
+            Code::IndexAccess(a, e) => {
+                write!(f, "{}[{}]", a.enclose(), e)
+            }
             Code::TupleAccess(t, i) => {
                 write!(f, "{}.{}", t.enclose(), i)
             }
@@ -195,6 +221,9 @@ impl fmt::Display for Code {
             }
             Code::Con(c, arity) => {
                 write!(f, "<Con({}, {})>", c.pretty(), arity)
+            }
+            Code::Array(arity) => {
+                write!(f, "<Array({})>", arity)
             }
             Code::Tuple(arity) => {
                 write!(f, "<Tuple({})>", arity)

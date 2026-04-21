@@ -36,6 +36,9 @@ pub enum RawType {
     /// 関数型 (例: "a -> b")
     Fun(Box<RawType>, Box<RawType>),
 
+    /// 配列型 (例: "@[]", "@[a]")
+    Array(Box<RawType>),
+
     /// タプル型 (例: "(a,)", "(a, b)")
     Tuple(Vec<RawType>),
 

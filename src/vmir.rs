@@ -134,6 +134,11 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Code, Error>
             Ok(vm::Code::for_(init, pred, next))
         }
 
+        CoreExpr::IndexAccess(a, i) => {
+            let a = lower_expr(&mut env.clone(), a)?;
+            let i = lower_expr(env, i)?;
+            Ok(vm::Code::index_access(a, i))
+        }
         CoreExpr::TupleAccess(t, index) => {
             let t = lower_expr(env, t)?;
             Ok(vm::Code::tuple_access(t, *index))
@@ -153,6 +158,15 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Code, Error>
                 args.push(e);
             }
             let t = vm::Code::Con(name.clone(), args.len());
+            Ok(vm::Code::clo(t, args))
+        }
+        CoreExpr::Array(xs) => {
+            let mut args = Vec::with_capacity(xs.len());
+            for x in xs {
+                let e = lower_expr(&mut env.clone(), x)?;
+                args.push(e);
+            }
+            let t = vm::Code::Array(args.len());
             Ok(vm::Code::clo(t, args))
         }
         CoreExpr::Tuple(xs) => {

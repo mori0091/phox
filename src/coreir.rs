@@ -26,6 +26,7 @@ pub enum CoreExpr {
     App(Box<CoreExpr>, Box<CoreExpr>),                // strict App `f x`
     Match(Box<CoreExpr>, Vec<(Pat, CoreExpr)>),       // `match (e) { p1 => e1, ... }`
     For(Box<CoreExpr>, Box<CoreExpr>, Box<CoreExpr>), // `__for__ (init; pred; next)`
+    IndexAccess(Box<CoreExpr>, Box<CoreExpr>),        // ex. `p[v]`
     TupleAccess(Box<CoreExpr>, usize),                // ex. `p.0`
     FieldAccess(Box<CoreExpr>, Label),                // ex. `p.x`
 
@@ -35,6 +36,7 @@ pub enum CoreExpr {
     // values (saturated expressions)
     Lit(Lit),
     Con(Symbol, Vec<CoreExpr>),     // `Con "Cons" [x, xs]`, `Con "Nil" []`
+    Array(Vec<CoreExpr>),           // `Array [e1, e2, ...]`
     Tuple(Vec<CoreExpr>),           // `Tuple [e1, e2, ...]`
     Record(Vec<(Label, CoreExpr)>), // `Record [("x", e1), ("y", e2), ...]`
 }
@@ -62,6 +64,9 @@ impl CoreExpr {
     }
     pub fn for_(init: CoreExpr, pred: CoreExpr, next: CoreExpr) -> CoreExpr {
         CoreExpr::For(Box::new(init), Box::new(pred), Box::new(next))
+    }
+    pub fn index_access(t: CoreExpr, i: CoreExpr) -> CoreExpr {
+        CoreExpr::IndexAccess(Box::new(t), Box::new(i))
     }
     pub fn tuple_access(t: CoreExpr, index: usize) -> CoreExpr {
         CoreExpr::TupleAccess(Box::new(t), index)
@@ -278,6 +283,11 @@ fn lower_expr(expr: &Expr) -> Result<CoreExpr, Error> {
             }
             Ok(CoreExpr::match_(scrut, xs))
         }
+        ExprBody::IndexAccess(e, i) => {
+            let e = lower_expr(e)?;
+            let i = lower_expr(i)?;
+            Ok(CoreExpr::index_access(e, i))
+        }
         ExprBody::TupleAccess(e, index) => {
             let e = lower_expr(e)?;
             Ok(CoreExpr::tuple_access(e, *index))
@@ -297,6 +307,14 @@ fn lower_expr(expr: &Expr) -> Result<CoreExpr, Error> {
                 xs.push(e);
             }
             Ok(CoreExpr::Con(sym.clone(), xs))
+        }
+        ExprBody::Array(es) => {
+            let mut xs = Vec::new();
+            for e in es.iter() {
+                let e = lower_expr(e)?;
+                xs.push(e);
+            }
+            Ok(CoreExpr::Array(xs))
         }
         ExprBody::Tuple(es) => {
             let mut xs = Vec::new();

@@ -230,6 +230,10 @@ pub fn eval_expr(
             Ok(Value::Con(name.clone(), xs))
         }
 
+        ExprBody::Array(_es) => {
+            todo!()
+        }
+
         ExprBody::Tuple(es) => {
             let mut xs = Vec::new();
             for e in es.iter() {
@@ -269,6 +273,9 @@ pub fn eval_expr(
                 }
                 other => unreachable!("field access on non-record value: {}", other),
             }
+        }
+        ExprBody::IndexAccess(_base, _index) => {
+            todo!()
         }
         ExprBody::TupleAccess(base, index) => {
             let v_base = eval_expr(phox, module, env, &base)?;

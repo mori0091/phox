@@ -69,6 +69,11 @@ pub fn apply_trait_impls_expr(
                 apply_trait_impls_expr(phox, module, e)?;
             }
         }
+        ExprBody::Array(es) => {
+            for e in es.iter_mut() {
+                apply_trait_impls_expr(phox, module, e)?;
+            }
+        }
         ExprBody::Tuple(es) => {
             for e in es.iter_mut() {
                 apply_trait_impls_expr(phox, module, e)?;
@@ -78,6 +83,10 @@ pub fn apply_trait_impls_expr(
             for (_, e) in fields.iter_mut() {
                 apply_trait_impls_expr(phox, module, e)?;
             }
+        }
+        ExprBody::IndexAccess(e, i) => {
+            apply_trait_impls_expr(phox, module, e)?;
+            apply_trait_impls_expr(phox, module, i)?;
         }
         ExprBody::TupleAccess(e, _) | ExprBody::FieldAccess(e, _) => {
             apply_trait_impls_expr(phox, module, e)?;

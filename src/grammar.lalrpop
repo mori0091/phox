@@ -167,6 +167,12 @@ DeclType: RawTypeDef = {
             params: params,
             variants: variants,
         },
+    "type" <name:ConIdent> <params:TypeParams> "=" <array:TypeArray>
+        => RawTypeDef {
+            name: name.clone(),
+            params: params,
+            variants: vec![RawVariant::Tuple(name.clone(), vec![array])],
+        },
     "type" <name:ConIdent> <params:TypeParams> "=" <tuple:TypeTuple>
         => RawTypeDef {
             name: name.clone(),
@@ -225,6 +231,7 @@ TypeAtom: RawType = {
     TypeVar,
     TypeCon,
     TypeParen,
+    TypeArray,
     TypeTuple,
     TypeRecord,
 };
@@ -240,6 +247,10 @@ TypeCon: RawType = {
 
 TypeParen: RawType = {
     "(" <t:Type> ")" => t,
+};
+
+TypeArray: RawType = {
+    "@" "[" <ty:Type> "]" => RawType::Array(Box::new(ty)),
 };
 
 TypeTuple: RawType = {
@@ -525,12 +536,14 @@ Atom0: Expr = {
     ExprParen,
     ExprVar,
     Lit => Expr::lit(<>),
+    ExprArray,
     ExprTuple,
     ExprRecord,
     ExprTraitRecord,
     ExprBlock,
     ExprFieldAccess,
     ExprTupleAccess,
+    ExprIndexAccess,
 };
 
 ExprSectionL: Expr = {
@@ -601,6 +614,11 @@ ExprVar: Expr = {
     Path => Expr::unresolved_qvar(<>),
 };
 
+ExprArray: Expr = {
+    // "@" "[" "]" => Expr::array(vec![]),
+    "@" "[" <es:SepByComma0<Expr>> "]" => Expr::array(es),
+};
+
 ExprTuple: Expr = {
     "(" <es:SepByComma<Expr>> ")" => Expr::tuple(es),
 };
@@ -632,6 +650,10 @@ ExprFieldAccess: Expr = {
 
 ExprTupleAccess: Expr = {
     <base:Atom> "." <index:Int> => Expr::tuple_access(base, index as usize),
+};
+
+ExprIndexAccess: Expr = {
+    <base:Atom> "[" <index:Expr> "]" => Expr::index_access(base, index),
 };
 
 ExprBlock: Expr = {

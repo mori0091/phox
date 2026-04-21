@@ -12,6 +12,7 @@ pub enum Type {
     Con(Symbol),                // 型構築子
     App(Box<TypeExpr>, Box<TypeExpr>), // 型適用
 
+    Array(Box<Type>),
     Tuple(Vec<Type>),
     Record(Vec<(String, Type)>),
 }
@@ -41,6 +42,9 @@ impl Type {
     pub fn fun(a: Type, b: Type) -> Self {
         Type::Fun(Box::new(a), Box::new(b))
     }
+    pub fn array(t: Type) -> Self {
+        Type::Array(Box::new(t))
+    }
 }
 
 impl Type {
@@ -67,6 +71,9 @@ impl Type {
             Type::Tuple(tys) => {
                 tys.iter().any(|t| t.contains_type_var())
             },
+            Type::Array(ty) => {
+                ty.contains_type_var()
+            },
         }
     }
 }
@@ -81,6 +88,9 @@ impl ApplySubst for Type {
             }
             Type::App(t1, t2) => {
                 Type::app(t1.apply_subst(subst), t2.apply_subst(subst))
+            }
+            Type::Array(ty) => {
+                Type::array(ty.apply_subst(subst))
             }
             Type::Tuple(ts) => {
                 let ts2 = ts.iter().map(|t| t.apply_subst(subst)).collect();
@@ -108,6 +118,9 @@ impl FreeVars for Type {
             Type::App(ref a, ref b) => {
                 a.free_vars(ctx, acc);
                 b.free_vars(ctx, acc);
+            }
+            Type::Array(ty) => {
+                ty.free_vars(ctx, acc);
             }
             Type::Tuple(ts) => {
                 for ty in ts {
@@ -138,6 +151,8 @@ impl Repr for Type {
             Type::Fun(a, b) => Type::fun(a.repr(ctx), b.repr(ctx)),
             Type::App(f, x) => Type::app(f.repr(ctx), x.repr(ctx)),
             Type::Con(c) => Type::Con(c.clone()),
+
+            Type::Array(ty) => Type::array(ty.repr(ctx)),
 
             Type::Tuple(ts) => {
                 Type::Tuple(
@@ -176,6 +191,9 @@ impl fmt::Display for Type {
                         _ => write!(f, "{} {}", fun, arg),
                     }
                 }
+            }
+            Type::Array(ty) => {
+                write!(f, "@[{}]", ty)
             }
             Type::Tuple(ts) => {
                 assert!(!ts.is_empty());
@@ -223,6 +241,9 @@ impl RenameForPretty for Type {
             }
             Type::App(t1, t2) => {
                 Type::app(t1.rename_var(map), t2.rename_var(map))
+            }
+            Type::Array(ty) => {
+                Type::array(ty.rename_var(map))
             }
             Type::Tuple(ts) => {
                 Type::Tuple(ts.iter().map(|t| t.rename_var(map)).collect())

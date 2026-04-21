@@ -62,6 +62,10 @@ fn globals() -> GlobalEnv {
     global
 }
 
+pub fn array(xs: Vec<Code>) -> Code {
+    Code::clo(Code::Array(xs.len()), xs)
+}
+
 pub fn tuple2(t1: Code, t2: Code) -> Code {
     Code::clo(Code::Tuple(2), vec![t1, t2])
 }
@@ -127,6 +131,35 @@ fn test_tuple_access() {
     let t = tuple2(Code::int(1), Code::int(2));
 
     let code = Code::tuple_access(t, 1);
+
+    let result = VM::run(&GlobalEnv::new(), code).unwrap();
+
+    assert_eq!(result.value(), &Value::I64(2));
+}
+
+#[test]
+fn test_empty_array() {
+    let t = array(vec![]);
+
+    let result = VM::run(&GlobalEnv::new(), t).unwrap();
+
+    assert_eq!(result.to_string(), "@[]".to_string());
+}
+
+#[test]
+fn test_array() {
+    let t = array(vec![Code::int(1), Code::int(2)]);
+
+    let result = VM::run(&GlobalEnv::new(), t).unwrap();
+
+    assert_eq!(result.to_string(), "@[1, 2]".to_string());
+}
+
+#[test]
+fn test_array_index_access() {
+    let t = array(vec![Code::int(1), Code::int(2)]);
+    let index = Code::int(1);
+    let code = Code::index_access(t, index);
 
     let result = VM::run(&GlobalEnv::new(), code).unwrap();
 
