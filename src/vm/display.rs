@@ -61,6 +61,19 @@ impl fmt::Display for Pat {
                 }
                 write!(f, "@{{{}}}", ys.join(", "))
             }
+            Pat::Array(ps, rest) => {
+                let mut xs: Vec<_>
+                    = ps.iter()
+                        .map(|p| format!("{}", p))
+                        .collect();
+                if let Some(rest) = rest {
+                    match rest {
+                        PatRest::Named => xs.push("?..".to_string()),
+                        PatRest::Any => xs.push("..".to_string()),
+                    }
+                }
+                write!(f, "@[{}]", xs.join(", "))
+            }
         }
     }
 }

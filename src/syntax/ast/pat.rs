@@ -10,6 +10,13 @@ pub enum Pat {
     Con(Symbol, Vec<Pat>),      // `Cons x xs`
     Tuple(Vec<Pat>),            // `(p,)`, `(p1, p2)`
     Record(Vec<(String, Pat)>),
+    Array(Vec<Pat>, Option<PatRest>), // `@[]`, `@[p, ps..]`
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PatRest {
+    Named(Symbol),              // `ps..`
+    Any,                        // `..`
 }
 
 impl Pat {
@@ -63,6 +70,19 @@ impl fmt::Display for Pat {
                                 .collect();
                     write!(f, "@{{ {} }}", s.join(", "))
                 }
+            }
+            Pat::Array(ps, rest) => {
+                let mut xs: Vec<_>
+                    = ps.iter()
+                        .map(|p| format!("{}", p))
+                        .collect();
+                if let Some(rest) = rest {
+                    match rest {
+                        PatRest::Named(s) => xs.push(format!("{}..", s)),
+                        PatRest::Any => xs.push("..".to_string()),
+                    }
+                }
+                write!(f, "@[{}]", xs.join(", "))
             }
         }
     }

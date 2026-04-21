@@ -67,6 +67,18 @@ fn lower_pat(env: &mut Vec<Symbol>, p: &ast::Pat) -> vm::Pat {
             let fs: Vec<_> = fs.iter().map(|(k, p)| (k.clone(), lower_pat(env, p))).collect();
             vm::Pat::Record(fs)
         }
+        ast::Pat::Array(xs, rest) => {
+            let xs: Vec<_> = xs.iter().map(|p| lower_pat(env, p)).collect();
+            let rest = match rest {
+                None => None,
+                Some(ast::PatRest::Any) => Some(vm::PatRest::Any),
+                Some(ast::PatRest::Named(v)) => {
+                    de_bruijn_index_push(env, v);
+                    Some(vm::PatRest::Named)
+                }
+            };
+            vm::Pat::Array(xs, rest)
+        }
     }
 }
 

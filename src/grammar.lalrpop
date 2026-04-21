@@ -28,6 +28,7 @@ extern {
         "()"    => Token::Unit,
 
         // --- 演算子・記号 ---
+        ".." =>  Token::DotDot,
         "::" =>  Token::ColonColon,
         "|(" =>  Token::SectionStart,
 
@@ -692,6 +693,7 @@ PatAtom: Pat = {
     PatParen,
     PatTuple,
     PatRecord,
+    PatArray,
 };
 
 PatVar: Pat = {
@@ -714,6 +716,18 @@ PatRecord: Pat = {
 PatRecordField: (String, Pat) = {
     <name:Ident> "=" <pat:Pat> => (name, pat),
     <name:Ident> => (name.clone(), Pat::unresolved_var(name)) // 省略形
+};
+
+PatArray: Pat = {
+    "@" "[" <mut ps:(<Pat> ",")*> <last:Pat> "]" => {
+        ps.push(last);
+        Pat::Array(ps, None)
+    },
+    "@" "[" <ps:(<Pat> ",")*> <rest:(<Ident?> "..")?> "]" => match rest {
+        None => Pat::Array(ps, None),
+        Some(None) => Pat::Array(ps, Some(PatRest::Any)),
+        Some(Some(name)) => Pat::Array(ps, Some(PatRest::Named(Symbol::unresolved(name)))),
+    }
 };
 
 // === literal ===

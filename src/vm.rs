@@ -1,6 +1,6 @@
 mod display;
 pub mod heap;
-use heap::{Addr, Buffer, Slice};
+use heap::{Addr, Buffer, Slice, ArrayLike};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -161,6 +161,13 @@ pub enum Pat {
     Tuple(Vec<Pat>),            // `(p,)`, `(p1, p2)`
     Con(ConId, Vec<Pat>),       // `Cons x xs`
     Record(Vec<(Label, Pat)>),
+    Array(Vec<Pat>, Option<PatRest>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PatRest {
+    Any,
+    Named,
 }
 
 // -------------------------------------------------------------
@@ -543,6 +550,41 @@ fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
                 env.extend(sub);
             }
             Some(env)
+        }
+
+        (Pat::Array(ps, None), Term::Val(Value::Array(s))) => {
+            let p_len = ps.len();
+            let v_len = s.len();
+            if p_len == v_len {
+                if let Slice::Some { arr, beg, end: _ } = s {
+                    for i in 0..p_len {
+                        let sub = match_pat(&ps[i], &arr.borrow()[beg + i])?;
+                        env.extend(sub);
+                    }
+                }
+                Some(env)
+            } else {
+                None
+            }
+        }
+        (Pat::Array(ps, Some(rest)), Term::Val(Value::Array(s))) => {
+            let p_len = ps.len();
+            let v_len = s.len();
+            if p_len <= v_len {
+                if let Slice::Some { arr, beg, end: _ } = s {
+                    for i in 0..p_len {
+                        let sub = match_pat(&ps[i], &arr.borrow()[beg + i])?;
+                        env.extend(sub);
+                    }
+                }
+                if let PatRest::Named = rest {
+                    let tail = s.slice(p_len, v_len);
+                    env.push(heap::alloc(Term::Val(Value::Array(tail))));
+                }
+                Some(env)
+            } else {
+                None
+            }
         }
 
         _ => None,
