@@ -26,6 +26,7 @@ extern {
         "true"  => Token::True,
         "false" => Token::False,
         "()"    => Token::Unit,
+        "@[]"   => Token::EmptyArray,
 
         // --- 演算子・記号 ---
         ".." =>  Token::DotDot,
@@ -244,6 +245,7 @@ TypeVar: RawType = {
 TypeCon: RawType = {
     PathCon => RawType::ConName(Symbol::Unresolved(<>)),
     <"()"> => RawType::ConName(Symbol::unit()), // Hmm..
+    <"@[]"> => RawType::ConName(Symbol::array()), // Hmm..
 };
 
 TypeParen: RawType = {
@@ -616,7 +618,7 @@ ExprVar: Expr = {
 };
 
 ExprArray: Expr = {
-    // "@" "[" "]" => Expr::array(vec![]),
+    "@[]" => Expr::array(vec![]),
     "@" "[" <es:SepByComma0<Expr>> "]" => Expr::array(es),
 };
 
@@ -719,6 +721,9 @@ PatRecordField: (String, Pat) = {
 };
 
 PatArray: Pat = {
+    "@[]" => {
+        Pat::Array(vec![], None)
+    },
     "@" "[" <mut ps:(<Pat> ",")*> <last:Pat> "]" => {
         ps.push(last);
         Pat::Array(ps, None)

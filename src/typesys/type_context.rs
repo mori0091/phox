@@ -67,6 +67,16 @@ impl TypeContext {
                 self.unify(t1, t2)?;
                 Ok(())
             }
+            (Type::Array(ty), Type::App(f, x)) => {
+                self.unify(f.as_ref_type(), &Type::Con(Symbol::array()))?;
+                self.unify(ty, x.as_ref_type())?;
+                Ok(())
+            }
+            (Type::App(f, x), Type::Array(ty)) => {
+                self.unify(f.as_ref_type(), &Type::Con(Symbol::array()))?;
+                self.unify(ty, x.as_ref_type())?;
+                Ok(())
+            }
 
             (Type::Tuple(ts1), Type::Tuple(ts2)) => {
                 if ts1.len() != ts2.len() {

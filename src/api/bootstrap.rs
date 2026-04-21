@@ -13,6 +13,7 @@ pub fn bootstrap(phox: &mut PhoxEngine, module: &RefModule) -> Result<(), Error>
     add_primitive_type(phox, module, "()")?;
     add_primitive_type(phox, module, "Bool")?;
     add_primitive_type(phox, module, "Int")?;
+    add_primitive_tycon1(phox, module, "@[]")?;
 
     add_primitive_func(
         phox,
@@ -110,6 +111,12 @@ pub fn bootstrap(phox: &mut PhoxEngine, module: &RefModule) -> Result<(), Error>
         builtin_type(Builtin::I64Neg),
     )?;
 
+    Ok(())
+}
+
+fn add_primitive_tycon1(phox: &mut PhoxEngine, module: &RefModule, name: &str) -> Result<(), Error> {
+    let symbol = make_top_level_symbol(phox, module, name)?;
+    phox.get_infer_ctx(module).put_kind(symbol, Kind::Fun(Box::new(Kind::Type), Box::new(Kind::Type)));
     Ok(())
 }
 
