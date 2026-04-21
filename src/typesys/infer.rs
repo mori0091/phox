@@ -507,6 +507,17 @@ pub fn infer_expr(
             (ty, cs)
         }
 
+        ExprBody::Array(es) => {
+            let t = Type::Var(phox.ctx.ty.fresh_var_id());
+            let mut css = Vec::new();
+            for e in es.iter_mut() {
+                let (ty, cs) = infer_expr(phox, module, icx, e)?;
+                css.extend(cs);
+                css.push(Constraint::type_eq(&t, &ty));
+            }
+            (Type::array(t), css)
+        }
+
         ExprBody::Tuple(es) => {
             let mut tys = Vec::with_capacity(es.len());
             let mut css = Vec::new();
@@ -559,6 +570,40 @@ pub fn infer_expr(
                     }
                     else {
                         return Err(Error::ExpectedRecord(other));
+                    }
+                }
+            }
+        }
+
+        ExprBody::IndexAccess(base, index) => {
+            let mut css = Vec::new();
+
+            let (t_base, c_base) = infer_expr(phox, module, icx, base)?;
+            css.extend(c_base);
+            let (t_index, c_index) = infer_expr(phox, module, icx, index)?;
+            css.extend(c_index);
+            css.push(Constraint::type_eq(&t_index, &Type::int()));
+
+            let mut css = solve_with_residual(phox, css)?;
+            match t_base.repr(&mut phox.ctx.ty) {
+                Type::Array(t) => {
+                    (*t, css)
+                }
+                other => {
+                    if let Some(con) = is_tycon(&other) {
+                        let pat = Pat::Con(con, vec![Pat::unresolved_var("t")]);
+                        let p = base.clone();
+                        let mut expr = Expr::block(vec![
+                            Item::stmt(Stmt::Let(pat, p)),
+                            Item::expr(Expr::index_access(Expr::unresolved_var("t"), *index.clone()))
+                        ]);
+                        let (ty, cs) = infer_expr(phox, module, icx, &mut expr)
+                            .map_err(|_| Error::ExpectedArray(other))?;
+                        css.extend(cs);
+                        (ty, css)
+                    }
+                    else {
+                        return Err(Error::ExpectedArray(other));
                     }
                 }
             }

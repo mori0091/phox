@@ -283,6 +283,20 @@ fn test_newtype_record_field_local_let() {
 }
 
 #[test]
+fn test_newtype_array_index_access() {
+    let (val, sch) = eval("type A a = @[a]; (A@[1,2])[0]").unwrap();
+    assert_eq!(format!("{}", val), "1");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
+fn test_newtype_array_index_access_local_let() {
+    let (val, sch) = eval("type A a = @[a]; { let a = A@[10,20]; a[1] }").unwrap();
+    assert_eq!(format!("{}", val), "20");
+    assert_eq!(format!("{}", sch.pretty()), "Int");
+}
+
+#[test]
 fn test_newtype_tuple_wrong_field() {
     let err = eval("type P a = (a,a); (P(1,2)).x").unwrap_err();
     assert!(format!("{}", err).contains("expected a record"));

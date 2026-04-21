@@ -14,7 +14,7 @@ mod expr;
 pub use expr::*;
 
 mod pat;
-pub use pat::Pat;
+pub use pat::*;
 
 mod lit;
 pub use lit::Lit;

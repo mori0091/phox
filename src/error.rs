@@ -42,6 +42,9 @@ pub enum Error {
     // --- let rec ---
     UnsupportedLetRecPattern(Pat),
 
+    // --- arrays ---
+    ExpectedArray(Type),
+
     // --- tuples ---
     ExpectedTuple(Type),
     TupleLengthMismatch(usize, usize),
@@ -164,6 +167,11 @@ impl fmt::Display for Error {
             }
             Error::UnsupportedLetRecPattern(pat) => {
                 write!(f, "pattern `{}` not supported for `let rec` statements", pat)
+            }
+
+            // --- arrays
+            Error::ExpectedArray(ty) => {
+                write!(f, "expected an array but was `{}`", ty.pretty())
             }
 
             // --- tuples

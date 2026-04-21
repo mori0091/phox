@@ -30,6 +30,9 @@ impl TypeContext {
             Type::App(a, b) => {
                 self.occurs_in(tv, a.as_ref_type()) || self.occurs_in(tv, b.as_ref_type())
             }
+            Type::Array(ty) => {
+                self.occurs_in(tv, ty)
+            }
             Type::Tuple(ts) => {
                 ts.iter().any(|t| self.occurs_in(tv, t))
             }
@@ -58,6 +61,21 @@ impl TypeContext {
             (Type::App(f1, x1), Type::App(f2, x2)) => {
                 self.unify(f1.as_ref_type(), f2.as_ref_type())?;
                 self.unify(x1.as_ref_type(), x2.as_ref_type())
+            }
+
+            (Type::Array(t1), Type::Array(t2)) => {
+                self.unify(t1, t2)?;
+                Ok(())
+            }
+            (Type::Array(ty), Type::App(f, x)) => {
+                self.unify(f.as_ref_type(), &Type::Con(Symbol::array()))?;
+                self.unify(ty, x.as_ref_type())?;
+                Ok(())
+            }
+            (Type::App(f, x), Type::Array(ty)) => {
+                self.unify(f.as_ref_type(), &Type::Con(Symbol::array()))?;
+                self.unify(ty, x.as_ref_type())?;
+                Ok(())
             }
 
             (Type::Tuple(ts1), Type::Tuple(ts2)) => {
@@ -187,6 +205,10 @@ impl TypeContext {
                                 .collect();
                 Type::Record(tys)
             }
+            Pat::Array(_ps, _rest) => {
+                let ty = Type::Var(self.fresh_var_id());
+                Type::array(ty)
+            }
         }
     }
 }
@@ -310,6 +332,39 @@ impl TypeContext {
                                         .ok_or_else(|| Error::UnknownField(fname.clone(), ty.clone()))?
                                         .1.repr(self);
                             let cs = self.match_pattern(icx, p, &ft, monotype_bindings, bindings)?;
+                            css.extend(cs);
+                        }
+
+                        constraints.extend(css.drain(..));
+                    }
+                }
+            }
+
+            Pat::Array(ps, rest) => {
+                let ty = ty.repr(self);
+                match ty {
+                    Type::Array(ref elem_ty) => {
+                        for p in ps.iter() {
+                            let cs = self.match_pattern(icx, p, &*elem_ty, monotype_bindings, bindings)?;
+                            constraints.extend(cs);
+                        }
+                        if let Some(PatRest::Named(sym)) = rest {
+                            let cs = self.match_pattern(icx, &Pat::Var(sym.clone()), &ty, monotype_bindings, bindings)?;
+                            constraints.extend(cs);
+                        }
+                    }
+                    _ => {
+                        let elem_ty = Type::Var(self.fresh_var_id());
+                        let array_ty = Type::array(elem_ty.clone());
+
+                        let mut css = Vec::new();
+                        css.push(Constraint::type_eq(&array_ty, &ty));
+                        for p in ps.iter() {
+                            let cs = self.match_pattern(icx, p, &elem_ty, monotype_bindings, bindings)?;
+                            css.extend(cs);
+                        }
+                        if let Some(PatRest::Named(sym)) = rest {
+                            let cs = self.match_pattern(icx, &Pat::Var(sym.clone()), &array_ty, monotype_bindings, bindings)?;
                             css.extend(cs);
                         }
 

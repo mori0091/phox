@@ -19,10 +19,11 @@ pub enum ExprBody {
     Abs(Pat, Box<Expr>),
     Builtin(Builtin),
     Con(Symbol, Vec<Expr>),
-    Tuple(Vec<Expr>),               // ex. `(1,)`, `(1, true, ())`
-    RawTraitRecord(RawTraitHead),   // ex. `@{ Eq Int }`
-    TraitRecord(TraitHead),
-    Record(Vec<(String, Expr)>),    // ex. `@{ x:a, y:b }`
+    Array(Vec<Expr>),             // ex. `@[1,2,3]`
+    Tuple(Vec<Expr>),             // ex. `(1,)`, `(1, true, ())`
+    RawTraitRecord(RawTraitHead), // ex. `@{ Eq Int }`
+    TraitRecord(TraitHead),       //
+    Record(Vec<(String, Expr)>),  // ex. `@{ x:a, y:b }`
 
     Var(Symbol),
     App(Box<Expr>, Box<Expr>),
@@ -30,6 +31,7 @@ pub enum ExprBody {
     Match(Box<Expr>, Vec<(Pat, Expr)>),
     For(Box<Expr>, Box<Expr>, Box<Expr>),
     Block(Vec<Item>),               // ex. `{stmt; stmt; expr; expr}`
+    IndexAccess(Box<Expr>, Box<Expr>), // ex. `p.0`
     TupleAccess(Box<Expr>, usize),  // ex. `p.0`
     FieldAccess(Box<Expr>, String), // ex. `p.x`
 }
@@ -42,6 +44,7 @@ impl Expr {
             ExprBody::Abs(_, _)         => true,
             ExprBody::Builtin(_)        => true,
             ExprBody::Con(_, _)         => true,
+            ExprBody::Array(_)          => true,
             ExprBody::Tuple(_)          => true,
             ExprBody::RawTraitRecord(_) => true,
             ExprBody::TraitRecord(_)    => true,
@@ -54,6 +57,7 @@ impl Expr {
             ExprBody::Match(_, _)       => false,
             ExprBody::For(_, _, _)      => false,
             ExprBody::Block(_)          => false,
+            ExprBody::IndexAccess(_, _) => false,
             ExprBody::TupleAccess(_, _) => false,
             ExprBody::FieldAccess(_, _) => false,
         }
@@ -116,6 +120,10 @@ impl Expr {
         Expr::expr(ExprBody::Tuple(elems))
     }
 
+    pub fn array(elems: Vec<Expr>) -> Self {
+        Expr::expr(ExprBody::Array(elems))
+    }
+
     pub fn raw_trait_record(raw: RawTraitHead) -> Self {
         Expr::expr(ExprBody::RawTraitRecord(raw))
     }
@@ -126,6 +134,10 @@ impl Expr {
 
     pub fn tuple_access(e: Expr, index: usize) -> Self {
         Expr::expr(ExprBody::TupleAccess(Box::new(e), index))
+    }
+
+    pub fn index_access(e: Expr, i: Expr) -> Self {
+        Expr::expr(ExprBody::IndexAccess(Box::new(e), Box::new(i)))
     }
 
     pub fn block(items: Vec<Item>) -> Self {
@@ -182,6 +194,16 @@ impl FreeVars for Expr {
                 for e in es {
                     e.free_vars(ctx, acc);
                 }
+            }
+
+            ExprBody::Array(es) => {
+                for e in es {
+                    e.free_vars(ctx, acc);
+                }
+            }
+            ExprBody::IndexAccess(base, index) => {
+                base.free_vars(ctx, acc);
+                index.free_vars(ctx, acc);
             }
 
             ExprBody::Tuple(es) => {
@@ -258,6 +280,15 @@ impl Repr for Expr {
             ExprBody::Con(name, es) => {
                 let es = es.iter().map(|e| e.repr(ctx)).collect();
                 Expr::con(name.clone(), es)
+            }
+            ExprBody::Array(es) => {
+                let es = es.iter().map(|e| e.repr(ctx)).collect();
+                Expr::array(es)
+            }
+            ExprBody::IndexAccess(base, index) => {
+                let base = base.repr(ctx);
+                let index = index.repr(ctx);
+                Expr::index_access(base, index)
             }
             ExprBody::Tuple(es) => {
                 let es = es.iter().map(|e| e.repr(ctx)).collect();
@@ -336,6 +367,15 @@ impl ApplySubst for Expr {
             ExprBody::Con(name, es) => {
                 let es = es.iter().map(|e| e.apply_subst(subst)).collect();
                 Expr::con(name.clone(), es)
+            }
+            ExprBody::Array(es) => {
+                let es = es.iter().map(|e| e.apply_subst(subst)).collect();
+                Expr::array(es)
+            }
+            ExprBody::IndexAccess(base, index) => {
+                let base = base.apply_subst(subst);
+                let index = index.apply_subst(subst);
+                Expr::index_access(base, index)
             }
             ExprBody::Tuple(es) => {
                 let es = es.iter().map(|e| e.apply_subst(subst)).collect();
@@ -428,6 +468,10 @@ impl fmt::Display for Expr {
                     write!(f, "({})", s.join(", "))
                 }
             }
+            ExprBody::Array(es) => {
+                let s: Vec<String> = es.iter().map(|t| t.to_string()).collect();
+                write!(f, "@[{}]", s.join(", "))
+            }
             ExprBody::Record(fields) => {
                 if fields.is_empty() {
                     write!(f, "@{{}}")
@@ -460,6 +504,14 @@ impl fmt::Display for Expr {
                         write!(f, "({}).{}", base, index)
                     }
                     _ => write!(f, "{}.{}", base, index)
+                }
+            }
+            ExprBody::IndexAccess(base, index) => {
+                match base.body {
+                    ExprBody::Abs(_,_) | ExprBody::App(_,_) | ExprBody::If(_,_,_) => {
+                        write!(f, "({})[{}]", base, index)
+                    }
+                    _ => write!(f, "{}[{}]", base, index)
                 }
             }
             ExprBody::Block(items) => {
@@ -519,6 +571,15 @@ impl RenameForPretty for Expr {
             ExprBody::Con(name, es) => {
                 let es = es.iter().map(|e| e.rename_var(map)).collect();
                 Expr::con(name.clone(), es)
+            }
+            ExprBody::Array(es) => {
+                let es = es.iter().map(|e| e.rename_var(map)).collect();
+                Expr::array(es)
+            }
+            ExprBody::IndexAccess(base, index) => {
+                let base = base.rename_var(map);
+                let index = index.rename_var(map);
+                Expr::index_access(base, index)
             }
             ExprBody::Tuple(es) => {
                 let es = es.iter().map(|e| e.rename_var(map)).collect();

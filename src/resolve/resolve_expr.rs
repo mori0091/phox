@@ -48,6 +48,12 @@ pub fn resolve_expr(
             }
             Ok(())
         }
+        ExprBody::Array(es) => {
+            for e in es {
+                resolve_expr(phox, module, symbol_env, param_map, e)?;
+            }
+            Ok(())
+        }
         ExprBody::Tuple(es) => {
             for e in es {
                 resolve_expr(phox, module, symbol_env, param_map, e)?;
@@ -62,6 +68,10 @@ pub fn resolve_expr(
         }
         ExprBody::FieldAccess(e, _field) => {
             resolve_expr(phox, module, symbol_env, param_map, e)
+        }
+        ExprBody::IndexAccess(e, i) => {
+            resolve_expr(phox, module, symbol_env, param_map, e)?;
+            resolve_expr(phox, module, symbol_env, param_map, i)
         }
         ExprBody::TupleAccess(e, _index) => {
             resolve_expr(phox, module, symbol_env, param_map, e)

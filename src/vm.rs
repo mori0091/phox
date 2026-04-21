@@ -1,4 +1,6 @@
 mod display;
+pub mod heap;
+use heap::{Addr, Buffer, Slice, ArrayLike};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -15,6 +17,7 @@ pub enum RuntimeError {
     // ---- Runtime errors that may be caused by a programming error.
     DivisionByZero,
     NonExhaustiveMatch(Term),
+    IndexOutOfBounds,
 
     // ---- Runtime errors that shouldn't normally occur.
     Fatal,
@@ -41,17 +44,20 @@ pub enum Code {
     App(Box<Code>, Box<Code>),  // strict App f x
     Match(Box<Code>, Vec<(Pat, Code)>),
     For(Box<Code>, Box<Code>, Box<Code>), // `__for__ init pred next`
+    IndexAccess(Box<Code>, Box<Code>),    // ex. `p[0]`
     TupleAccess(Box<Code>, usize),  // ex. `p.0`
     FieldAccess(Box<Code>, Label),  // ex. `p.x`
 
     Let(Box<Code>, Box<Code>),
     LetRec(Box<Code>, Box<Code>),
 
-    // values (as closure = (term, env))
+    // value constructors (`Closure {code, env} -> Value`)
     Lit(Lit),
-    Tuple(usize),                   // `Tuple 2`, `Tuple 1`
-    Con(ConId, usize),              // `Con "Cons" 2`, `Con "Nil" 0`
-    Record(Vec<Label>),
+    Tuple(usize),        // `Tuple 2`, `Tuple 1`
+    Con(ConId, usize),   // `Con "Cons" 2`, `Con "Nil" 0`
+    Record(Vec<Label>),  // `Record ["x", "y"]`
+    Array(usize),        // `Array 2`, `Array 1` ; Constructs slice (`@[a]`) of new array
+    // DynArray(Box<Code>), // Constructs mutable reference of new dynamic array (e.g. `buf @[a]`)
 }
 
 impl Code {
@@ -66,6 +72,9 @@ impl Code {
     }
     pub fn for_(init: Code, pred: Code, next: Code) -> Code {
         Code::For(Box::new(init), Box::new(pred), Box::new(next))
+    }
+    pub fn index_access(t: Code, i: Code) -> Code {
+        Code::IndexAccess(Box::new(t), Box::new(i))
     }
     pub fn tuple_access(t: Code, index: usize) -> Code {
         Code::TupleAccess(Box::new(t), index)
@@ -152,6 +161,13 @@ pub enum Pat {
     Tuple(Vec<Pat>),            // `(p,)`, `(p1, p2)`
     Con(ConId, Vec<Pat>),       // `Cons x xs`
     Record(Vec<(Label, Pat)>),
+    Array(Vec<Pat>, Option<PatRest>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PatRest {
+    Any,
+    Named,
 }
 
 // -------------------------------------------------------------
@@ -163,7 +179,6 @@ pub struct Closure {
 
 pub type GlobalEnv = IndexMap<Symbol, Code>; // Vec<Code> in future
 type Env = Vec<Addr>;
-type Addr = Rc<RefCell<Term>>;
 type AStack = RefStack<Addr>;
 type UStack = Vec<(Addr, AStack)>;
 
@@ -176,6 +191,9 @@ pub enum Value {
     Tuple(Vec<Term>),
     Con(ConId, Vec<Term>),
     Record(Vec<Label>, Vec<Term>),
+
+    Array(Slice),               // immutable slice `@[a]`
+    DynArray(Buffer),           // mutable reference of dynamic array
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -272,6 +290,16 @@ impl VM<'_> {
                 Code::Record(labels) => {
                     return self.run_state_value(Value::Record(labels.clone(), self.env_values(labels.len())));
                 }
+                Code::Array(arity) => {
+                    let s = if *arity == 0 {
+                        Slice::Empty
+                    }
+                    else {
+                        let arr = self.heap_array(self.env_values(*arity));
+                        Slice::Some { arr, beg: 0, end: *arity }
+                    };
+                    return self.run_state_value(Value::Array(s));
+                }
                 Code::Lam(_) | Code::Builtin(_) if self.args_is_empty() => {
                     if self.upds_is_empty() {
                         return Ok(());
@@ -314,6 +342,9 @@ impl VM<'_> {
             }
             Code::For(_, _, _) => {
                 self.run_for()
+            }
+            Code::IndexAccess(_, _) => {
+                self.run_index_access()
             }
             Code::TupleAccess(_, _) => {
                 self.run_tuple_access()
@@ -456,28 +487,27 @@ impl VM<'_> {
 
     /// Allocate fresh address
     fn heap_alloc_reserved(&self) -> Addr {
-        let dummy = Term::Val(Value::Unit);
-        alloc(dummy)
+        heap::alloc_reserved()
     }
 
     /// Allocate fresh address and store closure / value
-    fn heap_alloc(&self, c: Term) -> Addr {
-        alloc(c)
+    fn heap_alloc(&self, t: Term) -> Addr {
+        heap::alloc(t)
+    }
+
+    fn heap_array(&self, v: Vec<Term>) -> Buffer {
+        heap::array(v)
     }
 
     /// Load closure / value from heap.
     fn heap_load(&mut self, a: Addr) {
-        self.state.term = a.borrow().clone();
+        self.state.term = heap::load(a);
     }
 
     /// Store closure / value to heap.
     fn heap_store(&self, a: Addr) {
-        *a.borrow_mut() = self.state.term.clone();
+        heap::store(a, &self.state.term);
     }
-}
-
-fn alloc(c: Term) -> Addr {
-    Rc::new(RefCell::new(c))
 }
 
 fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
@@ -490,7 +520,7 @@ fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
         (Pat::Lit(Lit::Int(p)), Term::Val(Value::I64(x))) if p == x => Some(env),
 
         (Pat::Var, v) => {
-            env.push(alloc(v.clone()));
+            env.push(heap::alloc(v.clone()));
             Some(env)
         }
 
@@ -520,6 +550,41 @@ fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
                 env.extend(sub);
             }
             Some(env)
+        }
+
+        (Pat::Array(ps, None), Term::Val(Value::Array(s))) => {
+            let p_len = ps.len();
+            let v_len = s.len();
+            if p_len == v_len {
+                if let Slice::Some { arr, beg, end: _ } = s {
+                    for i in 0..p_len {
+                        let sub = match_pat(&ps[i], &arr.borrow()[beg + i])?;
+                        env.extend(sub);
+                    }
+                }
+                Some(env)
+            } else {
+                None
+            }
+        }
+        (Pat::Array(ps, Some(rest)), Term::Val(Value::Array(s))) => {
+            let p_len = ps.len();
+            let v_len = s.len();
+            if p_len <= v_len {
+                if let Slice::Some { arr, beg, end: _ } = s {
+                    for i in 0..p_len {
+                        let sub = match_pat(&ps[i], &arr.borrow()[beg + i])?;
+                        env.extend(sub);
+                    }
+                }
+                if let PatRest::Named = rest {
+                    let tail = s.slice(p_len, v_len);
+                    env.push(heap::alloc(Term::Val(Value::Array(tail))));
+                }
+                Some(env)
+            } else {
+                None
+            }
         }
 
         _ => None,
@@ -630,6 +695,31 @@ impl VM<'_> {
         if let Value::Con(_, args) = self.value() {
             if args.len() != 1 { panic!() }
             self.state.term = args[0].clone();
+        }
+    }
+
+    fn run_index_access(&mut self) -> Result<(), RuntimeError> {
+        let Code::IndexAccess(code, arg) = self.code().clone() else { panic!() };
+        let env = self.env_dup();
+        let Term::Val(Value::I64(index)) = self.eval_code(*arg)? else { panic!() };
+        self.set_closure(*code, env);
+        self.run_state_whnf()?;
+
+        self.run_unwrap();
+
+        match self.value().clone() {
+            Value::Array(Slice::Empty) => {
+                Err(RuntimeError::IndexOutOfBounds)
+            }
+            Value::Array(Slice::Some { arr, beg, end }) => {
+                let args = &arr.borrow()[beg..end];
+                if index < 0 || args.len() <= index as usize {
+                    return Err(RuntimeError::IndexOutOfBounds);
+                }
+                self.state.term = args[index as usize].clone();
+                Ok(())
+            }
+            _ => panic!(),
         }
     }
 

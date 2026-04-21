@@ -41,5 +41,14 @@ pub fn resolve_pat(
             }
             Ok(())
         }
+        Pat::Array(ps, rest) => {
+            for p in ps.iter_mut() {
+                resolve_pat(phox, module, symbol_env, p)?;
+            }
+            if let Some(PatRest::Named(s)) = rest {
+                resolve_symbol(phox, module, symbol_env, s)?;
+            }
+            Ok(())
+        }
     }
 }

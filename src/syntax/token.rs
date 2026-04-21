@@ -38,8 +38,10 @@ pub enum Token {
     #[token("true" , priority = 10)] True,
     #[token("false", priority = 10)] False,
     #[token("()"   , priority = 10)] Unit,
+    #[token("@[]"  , priority = 10)] EmptyArray,
 
     // --- 演算子・記号 ---
+    #[token(".."   , priority = 7)]  DotDot,
     #[token("::"   , priority = 7)]  ColonColon, // path separator
     #[token("|("   , priority = 7)]  SectionStart,
 
