@@ -13,8 +13,6 @@ use crate::resolve::*;
 use crate::typesys::*;
 pub use crate::typesys::Pretty;
 
-use crate::interpreter::*;
-
 use crate::coreir::CoreIR;
 use crate::vmir::VMIR;
 use crate::vm;
@@ -33,7 +31,6 @@ pub struct PhoxEngine {
     pub extern_symbol_envs: IndexMap<Path, SymbolEnv>, // extern symbol table for each modules
     pub module_symbol_envs: IndexMap<Path, SymbolEnv>, // local symbol table for each modules
     pub module_infer_ctxs: IndexMap<Path, InferCtx>,   // kind_env, type_env, and trait_member_env for each modules
-    pub module_value_envs: IndexMap<Path, ValueEnv>,   // value_env for each modules
     pub starlet_env: StarletEnv,                      // starlet_env ; the set of `SchemeTeamplate<TypedStarlet>`s for each defined `*let`.
     pub impl_env: ImplEnv,                            // impl_env ; the set of `SchemeTeamplate<TypedImpl>`s for each defined `impl`.
     pub globals: vm::GlobalEnv,
@@ -47,7 +44,6 @@ impl PhoxEngine {
             extern_symbol_envs: IndexMap::new(),
             module_symbol_envs: IndexMap::new(),
             module_infer_ctxs: IndexMap::new(),
-            module_value_envs: IndexMap::new(),
             starlet_env: StarletEnv::new(),
             impl_env: ImplEnv::new(),
             globals: vm::GlobalEnv::new(),
@@ -136,14 +132,6 @@ impl PhoxEngine {
         self.module_infer_ctxs
             .entry(path)
             .or_insert_with(InferCtx::new)
-            .clone()
-    }
-    /// Get top-level ValueEnv of the module.
-    pub fn get_value_env(&mut self, module: &RefModule) -> ValueEnv {
-        let path = module.borrow().path();
-        self.module_value_envs
-            .entry(path)
-            .or_insert_with(ValueEnv::new)
             .clone()
     }
 }
@@ -256,27 +244,6 @@ impl PhoxEngine {
     pub fn run(&mut self, src: &str) -> Result<(vm::Term, TypeScheme), Error> {
         let module = self.roots.get(DEFAULT_USER_ROOT_MODULE_NAME).unwrap();
         self.run_mod(&module, src)
-    }
-}
-
-// -------------------------------------------------------------
-impl PhoxEngine {
-    /// Evaluate a (compiled) item with AST evaluator (for test).
-    pub fn eval_item(&mut self, module: &RefModule, item: &mut Item) -> Result<Value, Error> {
-        let env = &mut self.get_value_env(module);
-        let val = eval_item(self, module, env, &item)
-            .map_err(|e| Error::Message(format!("eval error: {e}")))?;
-        Ok(val)
-    }
-
-    /// Evaluate for each (compiled) items with AST evaluator (for test)
-    pub fn eval_items(&mut self, module: &RefModule, items: &mut Vec<Item>) -> Result<Value, Error> {
-        let mut last = None;
-        for item in items {
-            let ret = self.eval_item(module, item)?;
-            last = Some(ret);
-        }
-        last.ok_or_else(|| Error::Message(format!("program contained no expression")))
     }
 }
 
