@@ -109,10 +109,6 @@ fn resolve_symbol_absolute(
                 // is Data constructor or Variable ?
                 if let Some(ty_sch) = phox.get_infer_ctx(&m).get_type_scheme(&target_sym) {
                     phox.get_infer_ctx(module).put_type_scheme(extern_sym.clone(), ty_sch);
-                    if let Some(val) = phox.get_value_env(&m).get(&target_sym) {
-                        phox.get_value_env(module).insert(extern_sym.clone(), val);
-                    }
-
                     phox.get_extern_symbol_env(module).insert(path, extern_sym.clone());
                     return Ok(extern_sym)
                 }

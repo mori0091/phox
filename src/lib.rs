@@ -1,7 +1,6 @@
 pub mod api;
 pub mod syntax;
 pub mod typesys;
-pub mod interpreter;
 pub mod repl;
 pub mod resolve;
 
