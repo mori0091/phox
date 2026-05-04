@@ -1,4 +1,5 @@
 use super::*;
+use crate::module::*;
 use std::fmt;
 
 impl fmt::Display for RuntimeError {
@@ -57,6 +58,7 @@ impl fmt::Display for Pat {
             Pat::Record(fs) => {
                 let mut ys = Vec::with_capacity(fs.len());
                 for (label, pat) in fs {
+                    let label = PathComponent::Name(label.clone()).pretty();
                     ys.push(format!("{} = {}", label, pat));
                 }
                 write!(f, "@{{{}}}", ys.join(", "))
@@ -121,6 +123,7 @@ impl fmt::Display for Value {
                     n => {
                         let mut xs = Vec::with_capacity(n);
                         for (label, val) in ix.iter().zip(args.iter()) {
+                            let label = PathComponent::Name(label.clone()).pretty();
                             xs.push(format!("{} = {}", label, val));
                         }
                         write!(f, "@{{ {} }}", xs.join(", "))
@@ -220,8 +223,9 @@ impl fmt::Display for Code {
             Code::TupleAccess(t, i) => {
                 write!(f, "{}.{}", t.enclose(), i)
             }
-            Code::FieldAccess(r, i) => {
-                write!(f, "{}.{}", r.enclose(), i)
+            Code::FieldAccess(r, label) => {
+                let label = PathComponent::Name(label.clone()).pretty();
+                write!(f, "{}.{}", r.enclose(), label)
             }
             Code::Let(x, e) => {
                 write!(f, "let ? = {} in\n{}", x, e)
@@ -242,6 +246,7 @@ impl fmt::Display for Code {
                 write!(f, "<Tuple({})>", arity)
             }
             Code::Record(ix) => {
+                let ix: Vec<_> = ix.iter().map(|label| PathComponent::Name(label.clone()).pretty()).collect();
                 write!(f, "<Record({})>", ix.join(", "))
             }
         }
