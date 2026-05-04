@@ -23,25 +23,25 @@ use ::core::{
 use ::core::control::for;
 use ::core::option::*;
 
-impl Add Int { (+) = \x.\y. __i64_add__ (x, y); };
-impl Sub Int { (-) = \x.\y. __i64_sub__ (x, y); };
-impl Mul Int { (*) = \x.\y. __i64_mul__ (x, y); };
-impl Div Int { (/) = \x.\y. __i64_div__ (x, y); };
-impl Mod Int { (%) = \x.\y. __i64_mod__ (x, y); };
-impl Neg Int { negate = \x. __i64_neg__ x; };
+impl Add Int { (+) = __i64_add__; };
+impl Sub Int { (-) = __i64_sub__; };
+impl Mul Int { (*) = __i64_mul__; };
+impl Div Int { (/) = __i64_div__; };
+impl Mod Int { (%) = __i64_mod__; };
+impl Neg Int { negate = __i64_neg__; };
 
 // -------------------------------------------------------------
 impl Eq Int {
-    (==) = \x.\y. __i64_eq__ (x, y);
-    (!=) = \x.\y. __i64_ne__ (x, y);
+    (==) = __i64_eq__;
+    (!=) = __i64_ne__;
 };
 
 // -------------------------------------------------------------
 impl Ord Int {
-    (<=) = \x.\y. __i64_le__ (x, y);
-    (<)  = \x.\y. __i64_lt__ (x, y);
-    (>=) = \x.\y. __i64_ge__ (x, y);
-    (>)  = \x.\y. __i64_gt__ (x, y);
+    (<=) = __i64_le__;
+    (<)  = __i64_lt__;
+    (>=) = __i64_ge__;
+    (>)  = __i64_gt__;
 };
 
 // -------------------------------------------------------------
