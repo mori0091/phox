@@ -300,7 +300,7 @@ impl VM<'_> {
                     };
                     return self.run_state_value(Value::Array(s));
                 }
-                Code::Lam(_) | Code::Builtin(_) if self.args_is_empty() => {
+                Code::Lam(_) if self.args_is_empty() => {
                     if self.upds_is_empty() {
                         return Ok(());
                     }
@@ -357,7 +357,7 @@ impl VM<'_> {
                 self.run_lam();
                 Ok(())
             }
-            Code::Builtin(_) if !self.args_is_empty() => {
+            Code::Builtin(_) => {
                 self.run_builtin()
             }
 
@@ -657,7 +657,6 @@ impl VM<'_> {
             }
             Term::Clo(c) => match c.code {
                 Code::Lam(_)     |
-                Code::Builtin(_) |
                 Code::Tuple(_)   |
                 Code::Con(_, _)  |
                 Code::Record(_) => {
@@ -796,86 +795,86 @@ impl VM<'_> {
 
     fn run_builtin(&mut self) -> Result<(), RuntimeError> {
         let Code::Builtin(f) = self.code().clone() else { panic!() };
-        let a = self.args_pop();
-        self.heap_load(a);
-        let x = self.eval()?;
-        let v = builtin(f, x)?;
+        let v = self.builtin(f)?;
         self.state.term = v;
         Ok(())
     }
 }
 
-// -------------------------------------------------------------
-impl Term {
-    fn as_i64_pair(&self) -> (&i64, &i64) {
-        if let Value::Tuple(es) = self.value() {
-            if let [Term::Val(Value::I64(a)), Term::Val(Value::I64(b))] = es.as_slice() {
-                return (a, b)
-            }
-        }
-        panic!()
+impl VM<'_> {
+    fn env_get_as_int(&self, i: usize) -> Result<i64, RuntimeError> {
+        let a = self.env_get(i)?;
+        let x = heap::load(a);
+        let Value::I64(v) = x.value() else { panic!() };
+        Ok(*v)
     }
-}
 
-fn builtin(f: Builtin, x: Term) -> Result<Term, RuntimeError> {
-    let val = match f {
-        Builtin::I64Neg => {
-            let Value::I64(a) = x.value() else { panic!() };
-            Value::I64(-a)
-        }
+    fn env_get_as_i64_pair(&self) -> Result<(i64, i64), RuntimeError> {
+        let a = self.env_get_as_int(1)?;
+        let b = self.env_get_as_int(0)?;
+        Ok((a, b))
+    }
 
-        Builtin::I64Eq => {
-            let (a, b) = x.as_i64_pair();
-            Value::Bool(a == b)
-        }
-        Builtin::I64Neq => {
-            let (a, b) = x.as_i64_pair();
-            Value::Bool(a != b)
-        }
-
-        Builtin::I64Lt => {
-            let (a, b) = x.as_i64_pair();
-            Value::Bool(a < b)
-        }
-        Builtin::I64Le => {
-            let (a, b) = x.as_i64_pair();
-            Value::Bool(a <= b)
-        }
-        Builtin::I64Gt => {
-            let (a, b) = x.as_i64_pair();
-            Value::Bool(a > b)
-        }
-        Builtin::I64Ge => {
-            let (a, b) = x.as_i64_pair();
-            Value::Bool(a >= b)
-        }
-
-        Builtin::I64Add => {
-            let (a, b) = x.as_i64_pair();
-            Value::I64(a + b)
-        }
-        Builtin::I64Sub => {
-            let (a, b) = x.as_i64_pair();
-            Value::I64(a - b)
-        }
-        Builtin::I64Mul => {
-            let (a, b) = x.as_i64_pair();
-            Value::I64(a * b)
-        }
-        Builtin::I64Div => {
-            let (a, b) = x.as_i64_pair();
-            if *b == 0 {
-                return Err(RuntimeError::DivisionByZero);
+    fn builtin(&self, f: Builtin) -> Result<Term, RuntimeError> {
+        let val = match f {
+            Builtin::I64Neg => {
+                let a = self.env_get_as_int(0)?;
+                Value::I64(-a)
             }
-            Value::I64(a / b)
-        }
-        Builtin::I64Mod => {
-            let (a, b) = x.as_i64_pair();
-            if *b == 0 {
-                return Err(RuntimeError::DivisionByZero);
+
+            Builtin::I64Eq => {
+                let (a, b) = self.env_get_as_i64_pair()?;
+                Value::Bool(a == b)
             }
-            Value::I64(a % b)
-        }
-    };
-    Ok(Term::Val(val))
+            Builtin::I64Neq => {
+                let (a, b) = self.env_get_as_i64_pair()?;
+                Value::Bool(a != b)
+            }
+
+            Builtin::I64Lt => {
+                let (a, b) = self.env_get_as_i64_pair()?;
+                Value::Bool(a < b)
+            }
+            Builtin::I64Le => {
+                let (a, b) = self.env_get_as_i64_pair()?;
+                Value::Bool(a <= b)
+            }
+            Builtin::I64Gt => {
+                let (a, b) = self.env_get_as_i64_pair()?;
+                Value::Bool(a > b)
+            }
+            Builtin::I64Ge => {
+                let (a, b) = self.env_get_as_i64_pair()?;
+                Value::Bool(a >= b)
+            }
+
+            Builtin::I64Add => {
+                let (a, b) = self.env_get_as_i64_pair()?;
+                Value::I64(a + b)
+            }
+            Builtin::I64Sub => {
+                let (a, b) = self.env_get_as_i64_pair()?;
+                Value::I64(a - b)
+            }
+            Builtin::I64Mul => {
+                let (a, b) = self.env_get_as_i64_pair()?;
+                Value::I64(a * b)
+            }
+            Builtin::I64Div => {
+                let (a, b) = self.env_get_as_i64_pair()?;
+                if b == 0 {
+                    return Err(RuntimeError::DivisionByZero);
+                }
+                Value::I64(a / b)
+            }
+            Builtin::I64Mod => {
+                let (a, b) = self.env_get_as_i64_pair()?;
+                if b == 0 {
+                    return Err(RuntimeError::DivisionByZero);
+                }
+                Value::I64(a % b)
+            }
+        };
+        Ok(Term::Val(val))
+    }
 }

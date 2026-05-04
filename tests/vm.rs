@@ -16,7 +16,7 @@ fn globals() -> GlobalEnv {
     fn add_unary_op(global: &mut GlobalEnv, prim_sym: &str, prim: Builtin, sym: &str) {
         global.insert(
             symbol(prim_sym),
-            Code::Builtin(prim)
+            Code::lam(Code::Builtin(prim))
         );
         global.insert(
             symbol(sym),
@@ -27,16 +27,11 @@ fn globals() -> GlobalEnv {
     fn add_binary_op(global: &mut GlobalEnv, prim_sym: &str, prim: Builtin, sym: &str) {
         global.insert(
             symbol(prim_sym),
-            Code::Builtin(prim)
+            Code::lam(Code::lam(Code::Builtin(prim)))
         );
         global.insert(
             symbol(sym),
-            Code::lam(Code::lam(
-                Code::app(
-                    Code::GlobalVar(symbol(prim_sym)),
-                    Code::Tuple(2)
-                )
-            ))
+            Code::GlobalVar(symbol(prim_sym))
         );
     }
 
@@ -251,9 +246,9 @@ fn test_global_var() {
 #[test]
 fn test_builtin_add() {
     // (add 41 1)
-    let code = Code::app(
-        Code::Builtin(Builtin::I64Add),
-        tuple2(Code::int(41), Code::int(1))
+    let code = Code::app(Code::app(
+        Code::lam(Code::lam(Code::Builtin(Builtin::I64Add))),
+        Code::int(41)), Code::int(1)
     );
 
     let result = VM::run(&GlobalEnv::new(), code).unwrap();
@@ -394,9 +389,9 @@ fn test_block_with_expr_tail() {
         Code::int(1),
         Code::let_(
             Code::int(2),
-            Code::app(
-                Code::Builtin(Builtin::I64Add),
-                tuple2(Code::Var(1), Code::Var(0)),
+            Code::app(Code::app(
+                Code::lam(Code::lam(Code::Builtin(Builtin::I64Add))),
+                Code::Var(1)), Code::Var(0),
             )
         )
     );
