@@ -124,7 +124,7 @@ type Result e a = Ok a | Err e;
 - **Newtype shorthand** is available when:
   - There is only one variant, and
   - The type name and constructor name are the same, and
-  - The variant has exactly one tuple or one record argument.
+  - The variant has exactly one tuple, one record, or one array argument.
 
 ``` rust
 // Normal form
@@ -143,12 +143,13 @@ match (opt) {
 }
 ```
 
-### Tuples and records
+### Tuples, records, and arrays
 ``` rust
 let t = (1, true, ());
 let r = @{ x = 10, y = 20 };
-(t.1, r.x)   // tuple index is 0-based
-// => (true, 10): (Bool, Int)
+let a = @[1, 2, 3];
+(t.1, r.x, a[0])   // tuple index and array index is 0-based
+// => (true, 10, 1): (Bool, Int, Int)
 ```
 
 👉 Field access is also available for **newtype shorthand** types.
@@ -166,6 +167,14 @@ type Point a = (a, a);
 
 let p = Point (3, 4);
 p.0 + p.1
+// => 7: Int
+```
+
+``` rust
+type Point a = @[a];
+
+let p = Point @[3, 4];
+p[0] + p[1]
 // => 7: Int
 ```
 
@@ -266,6 +275,39 @@ f >> g >> h <| 1 |> f;  // => 36: Int  ; h (g (f (f 1)))
 
 👉 In short: **use pipelines to pass data, and composition to connect functions**. You can freely combine both styles to write in the way that feels most natural.
 
+### Infix-operator partial applications (a.k.a. section syntax)
+Assuming that `op` is a arbitrary infix-operator:
+- `|(e op)` or `|(e op _)` are same as `\rhs. e op rhs` (bind the 1st argument of `op` with `e`)
+- `|(op e)` or `|(_ op e)` are same as `\lhs. lhs op e` (bind the 2nd argument of `op` with `e`)
+
+``` rust
+let f = |(1 +);
+f 2    // 1 + 2
+// => 3
+```
+
+``` rust
+let f = |(/ 2);
+f 6    // 6 / 2
+// => 3
+```
+
+### Pure type-safe `for`/`while` loop functions
+
+``` rust
+let fact = \n. {
+  let init      = (1, n);
+  let predicate = \(_, n'). 0 < n';
+  let update    = \(a, n'). (a * n', n' - 1);
+  let (res, _) = for init predicate update;
+  res
+};
+
+fact 5
+// => (120, 0): (Int, Int)
+```
+
+`while pred upd` is same as `\init. for init pred upd`.
 
 ### Traits and Implementations
 Phox supports **traits** (`trait`; similar to type classes) to define shared behavior across types.
@@ -323,6 +365,32 @@ If multiple candidates exist, ambiguity is reported as an error, and you can dis
 
 👉 For more examples (with Japanese explanations), see [トレイト利用例 (チートシート)](docs/cheatsheet_traits_ja.md).
 
+### Iterators, generators, and sink
+
+Arrays itself is also an iterator.  
+`fold` consumes all inputs and performs folding function.
+``` rust
+@[1,2,3,4,5] |> fold (*) 1
+// => 120: Int
+```
+
+`counter` generates infinite sequence of integers.
+``` rust
+counter 1 |> take 5 |> fold (*) 1
+// => 120: Int
+```
+
+`filter` filters elements by predicate function.  
+`collect` consumes all inputs and built result.
+``` rust
+counter 1 |> filter (|(% 2) >> |(== 0)) |> take 5 |> collect Nil
+// => Cons 2 (Cons 4 (Cons 6 (Cons 8 (Cons 10 Nil)))): List Int
+```
+
+The `::core::iter` module provides much more iterators / iterator-adapters, such as `zip`, `zip_with`, `enumerate`, etc.
+
+👉 For more details, see also [`::core::iter` module](assets/core/iter.phx).
+
 ---
 
 ## 💡 Sample Programs
@@ -336,8 +404,18 @@ id 42
 
 ### Factorial
 ``` rust
+// recursive function version.
 let rec fact = λn.
   if (0 == n) 1 else n * fact (n - 1);
+
+fact 5
+// => 120: Int
+```
+
+``` rust
+// iterator pipeline version.
+let fact = λn.
+  counter 1 |> take n |> fold (*) 1;
 
 fact 5
 // => 120: Int
@@ -464,8 +542,12 @@ Example programs are available in the `examples/` directory.
 - [X] Trait system (multi-parameter type classes)
 - [X] Module system
 - [X] Function template `*let`
-- [ ] Row polymorphism
-- [ ] Nat kind (type-level natural numbers)
+- [ ] ~~Row polymorphism~~
+- [ ] ~~Nat kind (type-level natural numbers)~~
+
+### Proc system
+- [ ] Procedures with side-effects
+- [ ] Dynamic arrays (mutable / growable arrays)
 
 ### Trait system
 - [X] Constraint-based multi-parameter type classes (`trait`/`impl`)
@@ -474,8 +556,8 @@ Example programs are available in the `examples/` directory.
 
 ### Record system
 - [X] Trait record
-- [ ] Split/Merge operators
-- [ ] Row polymorphism
+- [ ] ~~Split/Merge operators~~
+- [ ] ~~Row polymorphism~~
 
 ---
 
