@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use indexmap::IndexSet;
 
 use crate::api::PhoxEngine;
-use crate::runtime::builtin::*;
+use crate::resolve::make_symbol;
 use crate::syntax::ast::*;
 use crate::module::*;
 use super::*;
@@ -488,7 +488,11 @@ pub fn infer_expr(
         ExprBody::Lit(Lit::Int(_)) => (Type::int(), vec![]),
 
         ExprBody::Builtin(f) => {
-            (builtin_type(f.clone()), vec![])
+            let symbol_env = &mut phox.get_symbol_env(module);
+            let sym = make_symbol(phox, module, symbol_env, f.name())?;
+            let scheme = icx.get_type_scheme(&sym).unwrap();
+            let (cs, ty) = scheme.instantiate(&mut phox.ctx.ty);
+            (ty, cs.into_vec())
         }
 
         ExprBody::Con(name, es) => {

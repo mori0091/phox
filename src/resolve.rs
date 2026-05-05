@@ -35,7 +35,7 @@ use crate::syntax::ast::*;
 use crate::typesys::*;
 
 mod decl_type_def;
-use decl_type_def::*;
+pub use decl_type_def::*;
 
 mod decl_trait;
 use decl_trait::*;
