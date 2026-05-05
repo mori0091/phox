@@ -179,31 +179,11 @@ fn symbol<S: Into<String>>(s: S) -> Symbol {
 // -------------------------------------------------------------
 /// Construct initial GlobalEnv.
 fn globals() -> GlobalEnv {
-    fn add_op(global: &mut GlobalEnv, prim_sym: &str, prim: Builtin) {
-        global.insert(
-            symbol(prim_sym),
-            CoreExpr::Builtin(prim),
-        );
-    }
-
     let mut global = GlobalEnv::new();
-
-    add_op(&mut global, "::core::__i64_neg__", Builtin::I64Neg);
-
-    add_op(&mut global, "::core::__i64_add__", Builtin::I64Add);
-    add_op(&mut global, "::core::__i64_sub__", Builtin::I64Sub);
-    add_op(&mut global, "::core::__i64_mul__", Builtin::I64Mul);
-    add_op(&mut global, "::core::__i64_div__", Builtin::I64Div);
-    add_op(&mut global, "::core::__i64_mod__", Builtin::I64Mod);
-
-    add_op(&mut global, "::core::__i64_eq__", Builtin::I64Eq);
-    add_op(&mut global, "::core::__i64_ne__", Builtin::I64Neq);
-
-    add_op(&mut global, "::core::__i64_le__", Builtin::I64Le);
-    add_op(&mut global, "::core::__i64_lt__", Builtin::I64Lt);
-    add_op(&mut global, "::core::__i64_ge__", Builtin::I64Ge);
-    add_op(&mut global, "::core::__i64_gt__", Builtin::I64Gt);
-
+    for b in ALL_BUILTINS {
+        let sym = symbol(format!("::core::{}", b.name()));
+        global.insert(sym, CoreExpr::Builtin(b.clone()));
+    }
     global
 }
 
