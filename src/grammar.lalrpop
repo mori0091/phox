@@ -215,7 +215,7 @@ Variant: RawVariant = {
 
 // ----------------------------------------------
 // === types ===
-Type: RawType = {
+pub Type: RawType = {
     TypeFun,
 };
 

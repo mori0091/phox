@@ -256,6 +256,14 @@ pub fn parse_expr(src: &str) -> Result<Expr, Error> {
         .map_err(|e| Error::Message(format!("parse error: {e:?}")))
 }
 
+/// Parse a type signature.
+pub fn parse_type(src: &str) -> Result<RawType, Error> {
+    let mut lexer = Lexer::new(src);
+    TypeParser::new()
+        .parse(&mut lexer)
+        .map_err(|e| Error::Message(format!("parse error: {e:?}")))
+}
+
 // -------------------------------------------------------------
 /// Infer type scheme of Expr AST. (for test)
 pub fn infer_expr_scheme(ast: &mut Expr) -> Result<TypeScheme, Error> {

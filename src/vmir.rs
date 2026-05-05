@@ -1,6 +1,5 @@
 use crate::error::*;
 use crate::module::*;
-use crate::runtime::builtin_type;
 use crate::syntax::ast;
 use crate::coreir::*;
 use crate::vm;
@@ -127,12 +126,9 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Code, Error>
             Ok(vm::Code::app(f, x))
         }
         CoreExpr::Builtin(b) => {
-            use crate::typesys::Type;
-            let mut ty = &builtin_type(b.clone());
             let mut e = vm::Code::Builtin(b.clone());
-            while let Type::Fun(_, t) = ty {
+            for _ in 0..b.arity() {
                 e = vm::Code::lam(e);
-                ty = t;
             }
             Ok(e)
         }
