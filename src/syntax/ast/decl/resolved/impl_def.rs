@@ -37,7 +37,7 @@ impl FreeVars for TypedImpl {
 // ----------------------------------------------
 // Repr
 impl Repr for TypedImpl {
-    fn repr(&self, ctx: &mut TypeContext) -> Self {
+    fn repr(&self, ctx: &mut UnifiedContext) -> Self {
         let head = self.head.repr(ctx);
         let members = self.members.iter().map(|(sym, e, ty)| {
             (sym.clone(), e.repr(ctx), ty.repr(ctx))

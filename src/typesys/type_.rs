@@ -106,7 +106,7 @@ impl ApplySubst for Type {
 
 impl FreeVars for Type {
     fn free_vars(&self, ctx: &mut UnifiedContext, acc: &mut IndexSet<Var>) {
-        match self.repr(&mut ctx.ty) {
+        match self.repr(ctx) {
             Type::Var(v) => {
                 acc.insert(Var::Ty(v));
             }
@@ -139,13 +139,13 @@ impl FreeVars for Type {
 use super::Repr;
 
 impl Repr for Type {
-    fn repr(&self, ctx: &mut TypeContext) -> Self {
+    fn repr(&self, ctx: &mut UnifiedContext) -> Self {
         match self {
             Type::Var(v) => {
-                if let Some(bound) = ctx.get_bound(v) {
+                if let Some(bound) = ctx.ty.get_bound(v) {
                     bound.repr(ctx)
                 } else {
-                    Type::Var(ctx.find(*v))
+                    Type::Var(ctx.ty.find(*v))
                 }
             }
             Type::Fun(a, b) => Type::fun(a.repr(ctx), b.repr(ctx)),

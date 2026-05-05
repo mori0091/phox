@@ -12,18 +12,6 @@ pub enum TypeConstraint {
     Overloaded(Symbol, Type, Vec<SchemeTemplate<Type>>),
 }
 
-impl TypeConstraint {
-    pub fn type_eq(t1: &Type, t2: &Type) -> Self {
-        TypeConstraint::TypeEq(t1.clone(), t2.clone())
-    }
-    pub fn trait_bound(head: &TraitHead) -> Self {
-        TypeConstraint::TraitBound(head.clone())
-    }
-    pub fn overloaded(name: &Symbol, ty: &Type, tmpls: &Vec<SchemeTemplate<Type>>) -> Self {
-        TypeConstraint::Overloaded(name.clone(), ty.clone(), tmpls.clone())
-    }
-}
-
 // ----------------------------------------------
 // FreeTypeVars
 impl FreeVars for TypeConstraint {
@@ -47,7 +35,7 @@ impl FreeVars for TypeConstraint {
 // ----------------------------------------------
 // Repr
 impl Repr for TypeConstraint {
-    fn repr(&self, ctx: &mut TypeContext) -> Self {
+    fn repr(&self, ctx: &mut UnifiedContext) -> Self {
         match self {
             Self::TraitBound(head) => {
                 Self::TraitBound(head.repr(ctx))

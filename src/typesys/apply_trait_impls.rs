@@ -104,8 +104,8 @@ pub fn apply_trait_impls_expr(
                         continue;
                     }
                     let mut try_ctx = phox.ctx.clone();
-                    let sch = tmpl.fresh_copy(&mut try_ctx.ty);
-                    let (_constraints, typed_impl) = sch.instantiate(&mut try_ctx.ty);
+                    let sch = tmpl.fresh_copy(&mut try_ctx);
+                    let (_constraints, typed_impl) = sch.instantiate(&mut try_ctx);
                     let (_sym, _e, ty_inst) = typed_impl.members.iter().find(|(sym, _e, _ty)| sym == name).unwrap();
                     if try_ctx.ty.unify(ty_inst, ty).is_ok() {
                         matches.push(tmpl.clone());
@@ -118,8 +118,8 @@ pub fn apply_trait_impls_expr(
                     }
                     1 => {
                         let tmpl = matches.iter().next().unwrap();
-                        let sch = tmpl.fresh_copy(&mut phox.ctx.ty);
-                        let (constraints, typed_impl) = sch.instantiate(&mut phox.ctx.ty);
+                        let sch = tmpl.fresh_copy(&mut phox.ctx);
+                        let (constraints, typed_impl) = sch.instantiate(&mut phox.ctx);
                         let (_sym, expr_inst, ty_inst) = typed_impl.members.iter().find(|(sym, _e, _ty)| sym == name).unwrap();
                         let mut cs = constraints.into_vec();
                         cs.push(Constraint::type_eq(ty_inst, ty));
@@ -160,8 +160,8 @@ pub fn apply_trait_impls_expr(
                 let tmpls = phox.starlet_env.get_by_name(&name);
                 for tmpl in tmpls.iter() {
                     let mut try_ctx = phox.ctx.clone();
-                    let sch = tmpl.fresh_copy(&mut try_ctx.ty);
-                    let (_constraints, typed_starlet) = sch.instantiate(&mut try_ctx.ty);
+                    let sch = tmpl.fresh_copy(&mut try_ctx);
+                    let (_constraints, typed_starlet) = sch.instantiate(&mut try_ctx);
                     let ty_inst = &typed_starlet.ty;
                     if try_ctx.ty.unify(ty_inst, ty).is_ok() {
                         matches.push(tmpl.clone());
@@ -173,8 +173,8 @@ pub fn apply_trait_impls_expr(
                     }
                     1 => {
                         let tmpl = matches.first().unwrap();
-                        let sch = tmpl.fresh_copy(&mut phox.ctx.ty);
-                        let (constraints, typed_starlet) = sch.instantiate(&mut phox.ctx.ty);
+                        let sch = tmpl.fresh_copy(&mut phox.ctx);
+                        let (constraints, typed_starlet) = sch.instantiate(&mut phox.ctx);
                         let expr_inst = &typed_starlet.expr;
                         let ty_inst = &typed_starlet.ty;
                         let mut cs = constraints.into_vec();
@@ -248,8 +248,8 @@ pub fn make_record_from_trait(
     let mut matches = Vec::new();
     for tmpl in &phox.impl_env.get_by_name(&head.name) {
         let mut dummy_ctx = phox.ctx.clone();
-        let sch = tmpl.fresh_copy(&mut dummy_ctx.ty);
-        let (_constraints, imp) = sch.instantiate(&mut dummy_ctx.ty);
+        let sch = tmpl.fresh_copy(&mut dummy_ctx);
+        let (_constraints, imp) = sch.instantiate(&mut dummy_ctx);
         let fields: Vec<(String, Type)> = imp
             .members
             .iter()
@@ -266,8 +266,8 @@ pub fn make_record_from_trait(
             Err(Error::MissingImpl(head.clone()))
         }
         1 => {
-            let sch = matches[0].fresh_copy(&mut phox.ctx.ty);
-            let (constraints, imp) = sch.instantiate(&mut phox.ctx.ty);
+            let sch = matches[0].fresh_copy(&mut phox.ctx);
+            let (constraints, imp) = sch.instantiate(&mut phox.ctx);
 
             let fields_ty: Vec<(String, Type)> = imp
                 .members
@@ -293,7 +293,7 @@ pub fn make_record_from_trait(
             let mut dummy_ctx = phox.ctx.clone();
             let cands: Vec<_> = matches.into_iter().map(
                 |tmpl| {
-                    let sch = tmpl.fresh_copy(&mut dummy_ctx.ty);
+                    let sch = tmpl.fresh_copy(&mut dummy_ctx);
                     Scheme {
                         vars: vec![],
                         constraints: sch.constraints,

@@ -45,7 +45,7 @@ pub fn generalize<T: FreeVars + Repr>(ctx: &mut UnifiedContext, icx: &InferCtx, 
     let fenv = icx.free_env_vars(ctx);
     let mut vars: Vec<Var> = fty.difference(&fenv).cloned().collect();
     vars.sort();
-    Scheme::poly(vars, target.repr(&mut ctx.ty))
+    Scheme::poly(vars, target.repr(ctx))
 }
 
 impl <T: ApplySubst> ApplySubst for Scheme<T> {
@@ -62,16 +62,20 @@ impl <T: ApplySubst> ApplySubst for Scheme<T> {
     }
 }
 
-use super::TypeContext;
+use super::UnifiedContext;
 
 impl <T: ApplySubst> Scheme<T> {
-    pub fn fresh_copy(&self, ctx: &mut TypeContext) -> Self {
+    pub fn fresh_copy(&self, ctx: &mut UnifiedContext) -> Self {
         let mut vars = Vec::new();
         let mut subst: Subst = Subst::new();
         for v in self.vars.iter() {
-            let new_var = ctx.fresh_var_id();
-            vars.push(Var::Ty(new_var.clone()));
-            subst.insert(v.clone(), Type::var(new_var));
+            match v {
+                Var::Ty(_) => {
+                    let new_var = ctx.ty.fresh_var_id();
+                    vars.push(Var::Ty(new_var.clone()));
+                    subst.insert(v.clone(), Type::var(new_var));
+                }
+            }
         }
         let constraints = self.constraints.apply_subst(&subst);
         let target = self.target.apply_subst(&subst);
@@ -80,10 +84,14 @@ impl <T: ApplySubst> Scheme<T> {
 }
 
 impl <T: ApplySubst> Scheme<T> {
-    pub fn instantiate(&self, ctx: &mut TypeContext) -> (ConstraintSet, T) {
+    pub fn instantiate(&self, ctx: &mut UnifiedContext) -> (ConstraintSet, T) {
         let mut subst: Subst = Subst::new();
         for v in self.vars.iter() {
-            subst.insert(v.clone(), Type::var(ctx.fresh_var_id()));
+            match v {
+                Var::Ty(_) => {
+                    subst.insert(v.clone(), Type::var(ctx.ty.fresh_var_id()));
+                }
+            }
         }
         let constraints = self.constraints.apply_subst(&subst);
         let target = self.target.apply_subst(&subst);

@@ -19,7 +19,7 @@ impl FreeVars for TraitHead {
 }
 
 impl Repr for TraitHead {
-    fn repr(&self, ctx: &mut TypeContext) -> Self {
+    fn repr(&self, ctx: &mut UnifiedContext) -> Self {
         let name = self.name.clone();
         let params = self.params.iter().map(|t| t.repr(ctx)).collect();
         TraitHead { name, params }

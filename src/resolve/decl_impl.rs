@@ -29,7 +29,7 @@ fn check_impl_conflict(
 ) -> Result<(), Error> {
     for tmpl in phox.impl_env.iter() {
         let mut ctx2 = phox.ctx.clone();
-        let sch = tmpl.fresh_copy(&mut ctx2.ty);
+        let sch = tmpl.fresh_copy(&mut ctx2);
         let head = &sch.target.head;
         if head.name != impl_head.name { continue }
         let mut same = true;

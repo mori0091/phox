@@ -106,7 +106,7 @@ impl Solver for TypeConstraint {
                 }
             }
             TypeConstraint::Overloaded(sym, ty, sch_tmpls) => {
-                let repr_ty = ty.repr(&mut phox.ctx.ty);
+                let repr_ty = ty.repr(&mut phox.ctx);
                 let cs = solve_overloaded(phox, &sym, &repr_ty, &sch_tmpls)?;
                 if repr_ty != *ty {
                     Ok(Response::Progressed(cs))
@@ -132,7 +132,7 @@ impl Solver for TypeConstraint {
                     let mut dummy_ctx = phox.ctx.clone();
                     let cands = candidates.iter().map(
                         |tmpl| {
-                            let sch = tmpl.fresh_copy(&mut dummy_ctx.ty);
+                            let sch = tmpl.fresh_copy(&mut dummy_ctx);
                             Scheme {
                                 vars: vec![],
                                 constraints: sch.constraints.clone(),
@@ -152,7 +152,7 @@ impl Solver for TypeConstraint {
                         name: sym,
                         candidates: sch_tmpls
                             .iter()
-                            .map(|tmpl| tmpl.fresh_copy(&mut phox.ctx.ty))
+                            .map(|tmpl| tmpl.fresh_copy(&mut phox.ctx))
                             .collect(),
                     }
                 }
@@ -178,8 +178,8 @@ fn solve_trait_bound(
         0 => Err(Error::MissingImpl(head.clone())),
         1 => {
             let tmpl = &candidates[0];
-            let sch = tmpl.fresh_copy(&mut phox.ctx.ty);
-            let (constraints, typed_impl) = sch.instantiate(&mut phox.ctx.ty);
+            let sch = tmpl.fresh_copy(&mut phox.ctx);
+            let (constraints, typed_impl) = sch.instantiate(&mut phox.ctx);
             let mut cs = head.params
                              .iter()
                              .zip(typed_impl.head.params.iter())
@@ -193,7 +193,7 @@ fn solve_trait_bound(
             let mut dummy_ctx = phox.ctx.clone();
             let cands = candidates.iter().map(
                 |tmpl| {
-                    let sch = tmpl.fresh_copy(&mut dummy_ctx.ty);
+                    let sch = tmpl.fresh_copy(&mut dummy_ctx);
                     Scheme {
                         vars: vec![],
                         constraints: sch.constraints.clone(),
@@ -220,8 +220,8 @@ fn lookup_impls_by_trait_head(
             && head.params.len() == sch.target.head.params.len()
         {
             let mut try_ctx = phox.ctx.clone();
-            let sch = tmpl.fresh_copy(&mut try_ctx.ty);
-            let (_, typed_impl) = sch.instantiate(&mut try_ctx.ty);
+            let sch = tmpl.fresh_copy(&mut try_ctx);
+            let (_, typed_impl) = sch.instantiate(&mut try_ctx);
             let ok = head.params
                 .iter()
                 .zip(typed_impl.head.params.iter())
@@ -243,8 +243,8 @@ fn solve_overloaded(
     let mut candidates = Vec::new();
     for cand_tmpl in sch_tmpls {
         let mut try_ctx = phox.ctx.clone();
-        let cand = cand_tmpl.fresh_copy(&mut try_ctx.ty);
-        let (_, ty_inst) = &cand.instantiate(&mut try_ctx.ty);
+        let cand = cand_tmpl.fresh_copy(&mut try_ctx);
+        let (_, ty_inst) = &cand.instantiate(&mut try_ctx);
         if try_ctx.ty.unify(ty, ty_inst).is_ok() {
             candidates.push(cand_tmpl);
         }
@@ -266,8 +266,8 @@ fn solve_overloaded(
         return Ok(vec![Constraint::overloaded(sym, ty, &tmpls)]);
     }
 
-    let winner = candidates[0].fresh_copy(&mut phox.ctx.ty);
-    let (constraints, ty_inst) = winner.instantiate(&mut phox.ctx.ty);
+    let winner = candidates[0].fresh_copy(&mut phox.ctx);
+    let (constraints, ty_inst) = winner.instantiate(&mut phox.ctx);
     phox.ctx.ty.unify(ty, &ty_inst)?;
     // Ok(constraints.into_vec())
     Ok(constraints.into_vec_for_trait_record()) // Vec<Constraint> w/o ConstraintSet::primary

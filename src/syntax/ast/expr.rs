@@ -234,7 +234,7 @@ impl FreeVars for Expr {
 // ----------------------------------------------
 // Repr
 impl Repr for Expr {
-    fn repr(&self, ctx: &mut TypeContext) -> Self {
+    fn repr(&self, ctx: &mut UnifiedContext) -> Self {
         let span = self.span.clone();
         let ty = match &self.ty {
             Some(ty) => Some(ty.repr(ctx)),

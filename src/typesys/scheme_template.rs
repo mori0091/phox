@@ -15,7 +15,7 @@ impl <T> SchemeTemplate<T> {
 }
 
 impl <T: ApplySubst> SchemeTemplate<T> {
-    pub fn fresh_copy(&self, ctx: &mut TypeContext) -> Scheme<T> {
+    pub fn fresh_copy(&self, ctx: &mut UnifiedContext) -> Scheme<T> {
         self.scheme.fresh_copy(ctx)
     }
 }

@@ -61,7 +61,7 @@ impl FreeVars for TypeExpr {
 }
 
 impl Repr for TypeExpr {
-    fn repr(&self, ctx: &mut TypeContext) -> Self {
+    fn repr(&self, ctx: &mut UnifiedContext) -> Self {
         match self {
             Self::Ty(ty) => Self::Ty(ty.repr(ctx))
         }

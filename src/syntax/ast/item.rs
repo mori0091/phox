@@ -52,7 +52,7 @@ impl FreeVars for Item {
 // ----------------------------------------------
 // Repr
 impl Repr for Item {
-    fn repr(&self, ctx: &mut TypeContext) -> Self {
+    fn repr(&self, ctx: &mut UnifiedContext) -> Self {
         let constraints = self.constraints.iter().map(|c| c.repr(ctx)).collect();
         let body = match &self.body {
             ItemBody::Decl(decl) => {

@@ -28,7 +28,7 @@ impl FreeVars for Stmt {
 // ----------------------------------------------
 // Repr
 impl Repr for Stmt {
-    fn repr(&self, ctx: &mut TypeContext) -> Self {
+    fn repr(&self, ctx: &mut UnifiedContext) -> Self {
         match self {
             Stmt::Let(pat, expr) => {
                 let pat = pat.clone();

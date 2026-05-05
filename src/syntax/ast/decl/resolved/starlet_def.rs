@@ -30,7 +30,7 @@ impl FreeVars for TypedStarlet {
 // ----------------------------------------------
 // Repr
 impl Repr for TypedStarlet {
-    fn repr(&self, ctx: &mut TypeContext) -> Self {
+    fn repr(&self, ctx: &mut UnifiedContext) -> Self {
         let symbol = self.name.clone();
         let expr = self.expr.repr(ctx);
         let ty = self.ty.repr(ctx);

@@ -56,4 +56,9 @@ impl <Id: VarId, T: Clone> Context<Id, T> {
         let r = self.find(*v);
         self.binding[r.to_usize()].clone()
     }
+
+    pub fn bind(&mut self, r: &Id, t: &T) {
+        self.binding[r.to_usize()] = Some(t.clone());
+    }
+
 }

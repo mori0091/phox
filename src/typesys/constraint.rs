@@ -48,7 +48,7 @@ impl RenameForPretty for Constraint {
 }
 
 impl Repr for Constraint {
-    fn repr(&self, ctx: &mut TypeContext) -> Self {
+    fn repr(&self, ctx: &mut UnifiedContext) -> Self {
         match self {
             Self::Ty(c) => Self::Ty(c.repr(ctx))
         }
