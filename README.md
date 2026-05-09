@@ -386,10 +386,63 @@ counter 1 |> take 5 |> fold (*) 1
 counter 1 |> filter (|(% 2) >> |(== 0)) |> take 5 |> collect Nil
 // => Cons 2 (Cons 4 (Cons 6 (Cons 8 (Cons 10 Nil)))): List Int
 ```
+``` rust
+counter 1 |> filter (|(% 2) >> |(== 0)) |> take 5 |> collect @[]
+// => @[2, 4, 6, 8, 10]: @[Int]
+```
 
 The `::core::iter` module provides much more iterators / iterator-adapters, such as `zip`, `zip_with`, `enumerate`, etc.
 
 👉 For more details, see also [`::core::iter` module](assets/core/iter.phx).
+
+
+### Arrays API
+
+Phox arrays (`@[a]`) are **pure functional**, **reference-transparent**, and support **O(1) slicing** with **copy‑on‑write append**.  
+They behave like immutable vectors with a clean, orthogonal API.
+
+``` rust
+push @[1,2,3] 4
+// => @[1, 2, 3, 4]: @[Int]
+
+pop @[1,2,3]
+// => Some (@[1, 2], 3): Option (@[Int], Int)
+
+uncons @[1,2,3]
+// => Some (1, @[2, 3]): Option (Int, @[Int])
+
+collect @[1,2,3] @[4,5,6]
+// => @[1, 2, 3, 4, 5, 6]: @[Int]
+
+collect @[1,2,3] <| Cons 10 <| Cons 20 <| Cons 30 Nil
+// => @[1, 2, 3, 10, 20, 30]: @[Int]
+
+@[10, 20, 30] |> collect @[1,2,3]
+// => @[1, 2, 3, 10, 20, 30]: @[Int]
+
+(Cons 10 <| Cons 20 <| Cons 30 Nil) |> collect @[1,2,3]
+// => @[1, 2, 3, 10, 20, 30]: @[Int]
+
+insert1 @[1,2,3] 1 10
+// => @[1, 10, 2, 3]: @[Int]
+
+insertN @[1,2,3] 1 @[10,20]
+// => @[1, 10, 20, 2, 3]: @[Int]
+
+remove1 @[1,2,3,4] 1
+// => @[1, 3, 4]: @[Int]
+
+removeN @[1,2,3,4] 1 3
+// => @[1, 4]: @[Int]
+
+replace1 @[1,2,3,4] 1 10
+// => @[1, 10, 3, 4]: @[Int]
+
+replaceN @[1,2,3,4] 1 3 @[10,20,30]
+// => @[1, 10, 20, 30, 4]: @[Int]
+```
+
+👉 For more details, see also [`::core::array` module](assets/core/array.phx).
 
 ---
 
@@ -548,6 +601,10 @@ Example programs are available in the `examples/` directory.
 ### Proc system
 - [ ] Procedures with side-effects
 - [ ] Dynamic arrays (mutable / growable arrays)
+
+### Optimization
+- [ ] Unboxed arrays
+- [ ] Alias analysis and reuse analysis of heap memory.
 
 ### Trait system
 - [X] Constraint-based multi-parameter type classes (`trait`/`impl`)

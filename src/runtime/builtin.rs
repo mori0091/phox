@@ -15,6 +15,10 @@ pub enum Builtin {
     I64Mul,
     I64Div,
     I64Mod,
+
+    Len,
+    Slice,
+    Push,
 }
 
 pub const ALL_BUILTINS: &[Builtin] = &[
@@ -33,6 +37,10 @@ pub const ALL_BUILTINS: &[Builtin] = &[
     Builtin::I64Mul,
     Builtin::I64Div,
     Builtin::I64Mod,
+
+    Builtin::Len,
+    Builtin::Slice,
+    Builtin::Push,
 ];
 
 impl Builtin {
@@ -59,6 +67,10 @@ impl Builtin {
             Builtin::I64Mul => ("__i64_mul__", 2, "Int -> Int -> Int"),
             Builtin::I64Div => ("__i64_div__", 2, "Int -> Int -> Int"),
             Builtin::I64Mod => ("__i64_mod__", 2, "Int -> Int -> Int"),
+
+            Builtin::Len   => ("len"   , 1, "@[a] -> Int"),
+            Builtin::Slice => ("slice" , 3, "@[a] -> Int -> Int -> @[a]"),
+            Builtin::Push  => ("push"  , 2, "@[a] -> a -> @[a]"),
         }
     }
 }

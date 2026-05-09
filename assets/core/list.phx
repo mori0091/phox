@@ -3,6 +3,7 @@ use ::core::cmp::*;
 use ::core::combinator::*;
 use ::core::control::for;
 use ::core::Int;
+use ::core::option::{None, Some};
 
 type List a = Nil | Cons a (List a);
 
@@ -20,6 +21,12 @@ let length = \xs. {
         (\(Cons y ys, len). (ys, len + 1))
     ;
     len
+};
+
+/// uncons: ∀ a. List a -> Option (a, List a)
+let uncons = \xs. match (xs) {
+    Nil       => None,
+    Cons y ys => Some (y, ys),
 };
 
 /// Left-associative fold function. (tail-recursive)

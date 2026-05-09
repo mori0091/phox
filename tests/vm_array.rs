@@ -58,71 +58,71 @@ fn test_vm_extract() {
 }
 
 #[test]
-fn test_vm_remove_middle() {
+fn test_vm_remove_n_middle() {
     let a = heap::array(i64_vec(&[1, 2, 3, 4, 5]));
     let s = a.slice(1, 4); // remove @[2,3,4]
 
-    heap::remove(&s);
+    heap::remove_n(&s);
 
     assert_eq!(as_val(&a).to_string(), "@[1, 5]");
 }
 
 #[test]
-fn test_vm_insert() {
+fn test_vm_insert_1() {
     let a = heap::array(i64_vec(&[1, 3, 4]));
     let p = a.ptr(1);
 
-    heap::insert(&p, Term::Val(Value::I64(2)));
+    heap::insert_1(&p, Term::Val(Value::I64(2)));
 
     assert_eq!(as_val(&a).to_string(), "@[1, 2, 3, 4]");
 }
 
 #[test]
-fn test_vm_extend() {
+fn test_vm_insert_n() {
     let a = heap::array(i64_vec(&[1, 4]));
     let b = heap::array(i64_vec(&[2, 3]));
 
     let p = a.ptr(1);
     let s = b.slice(0, 2);
 
-    heap::extend(&p, &s);
+    heap::insert_n(&p, &s);
 
     assert_eq!(as_val(&a).to_string(), "@[1, 2, 3, 4]");
 }
 
 #[test]
-fn test_vm_copy_nonoverlapping() {
+fn test_vm_wtite_n_nonoverlapping() {
     let a = heap::array(i64_vec(&[1, 2, 3, 4]));
     let b = heap::array(i64_vec(&[9, 9]));
 
     let p = a.ptr(1);
     let s = b.slice(0, 2);
 
-    heap::copy(&p, &s);
+    heap::replace_n(&p, &s);
 
     assert_eq!(as_val(&a).to_string(), "@[1, 9, 9, 4]");
 }
 
 #[test]
-fn test_vm_copy_overlapping_forward() {
+fn test_vm_replace_n_overlapping_forward() {
     // src = @[2,3], dst = position 0
     let a = heap::array(i64_vec(&[1, 2, 3, 4]));
     let s = a.slice(1, 3); // @[2,3]
     let p = a.ptr(0);
 
-    heap::copy(&p, &s);
+    heap::replace_n(&p, &s);
 
     assert_eq!(as_val(&a).to_string(), "@[2, 3, 3, 4]");
 }
 
 #[test]
-fn test_vm_copy_overlapping_backward() {
+fn test_vm_replace_n_overlapping_backward() {
     // src = @[1,2], dst = position 2
     let a = heap::array(i64_vec(&[1, 2, 3, 4]));
     let s = a.slice(0, 2); // @[1,2]
     let p = a.ptr(2);
 
-    heap::copy(&p, &s);
+    heap::replace_n(&p, &s);
 
     assert_eq!(as_val(&a).to_string(), "@[1, 2, 1, 2]");
 }
