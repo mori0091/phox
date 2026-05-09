@@ -1,0 +1,106 @@
+use ::core::*;
+
+/// uncons : ∀ a. @[a] -> Option (a, @[a])
+let uncons = \xs. match (xs) {
+    @[]        => None,
+    @[x, xs..] => Some (x, xs),
+};
+
+/// head : ∀ a. @[a] -> Option a
+let head = \xs. match (xs) {
+    @[]      => None,
+    @[x, ..] => Some x,
+};
+
+/// tail : ∀ a. @[a] -> @[a]
+let tail = \xs. match (xs) {
+    @[]        => @[],
+    @[_, xs..] => xs,
+};
+
+use head as first;
+use tail as following;
+
+// -------------------------------------------------------------
+/// ∀ a. impl Iter @[] a
+// Note that the array type `@[a]` is equivalent to `@[] a`.
+// Here, the `@[]` in `Iter @[] a` is not an empty array value, but a type constructor.
+// `@[]` has different meanings depending on the context:
+// - Type constructor for the array type (within a type expression)
+// - Empty array value (within an expression)
+// - Empty array pattern (within a pattern)
+impl Iter @[] a {
+    next = uncons;
+};
+
+// -------------------------------------------------------------
+/// last : ∀ a. @[a] -> Option a
+let last = \xs. match (xs) {
+    @[] => None,
+    _   => Some xs[(len xs) - 1],
+};
+
+/// preceding : ∀ a. @[a] -> @[a]
+let preceding = \xs. match (xs) {
+    @[] => @[],
+    _   => slice xs 0 ((len xs) - 1),
+};
+
+/// pop : ∀ a. @[a] -> Option (@[a], a)
+let pop = \xs. match (xs) {
+    @[]  => None,
+    _    => {
+        let n = (len xs) - 1;
+        Some (slice xs 0 n, xs[n])
+    },
+};
+
+/// push : ∀ a. @[a] -> a -> @[a]
+use ::core::push;
+
+// -------------------------------------------------------------
+/// ∀ a. impl Sink @[a] a @[a]
+impl Sink @[a] a @[a] {
+    update = push;
+    finish = id;
+};
+
+// -------------------------------------------------------------
+/// extractN : ∀ a. @[a] -> Int -> Int -> @[a]
+let extractN = slice;
+
+/// extract1 : ∀ a. @[a] -> Int -> a
+// let extract1 = \xs.\i. xs[i];
+let extract1 = \xs.\i. match (xs) {
+    @[xs..] => xs[i],
+};
+
+/// replaceN : ∀ a b. @[a] -> Int -> Int -> b a -> @[a] requires Iter b a.
+*let replaceN = \xs.\i.\j.\ys.
+    collect (collect (slice xs 0 i) ys) (slice xs j (len xs))
+;
+
+/// replace1 : ∀ a. @[a] -> Int -> a -> @[a]
+let replace1 = \xs.\i.\x.
+    replaceN xs i (i + 1) @[x]
+;
+
+/// insertN : ∀ a b. @[a] -> Int -> b a -> @[a] requires Iter b a.
+*let insertN = \xs.\i.\ys.
+    replaceN xs i i ys
+;
+
+/// insert1 : ∀ a. @[a] -> Int -> a -> @[a]
+let insert1 = \xs.\i.\x.
+    insertN xs i @[x]
+;
+
+/// removeN : ∀ a. @[a] -> @[a]
+let removeN = \xs.\i.\j.
+    collect (slice xs 0 i) (slice xs j (len xs))
+;
+
+/// remove1 : ∀ a. @[a] -> @[a]
+let remove1 = \xs.\i.
+    removeN xs i (i + 1)
+;

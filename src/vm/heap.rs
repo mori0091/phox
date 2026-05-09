@@ -2,6 +2,30 @@ use super::*;
 
 pub type Addr = Rc<RefCell<Term>>;
 
+pub fn alloc_reserved() -> Addr {
+    let dummy = Term::Val(Value::Unit);
+    alloc(dummy)
+}
+
+pub fn alloc(t: Term) -> Addr {
+    Rc::new(RefCell::new(t))
+}
+
+pub fn load(a: Addr) -> Term {
+    a.borrow().clone()
+}
+
+pub fn store(a: Addr, t: &Term) {
+    *a.borrow_mut() = t.clone()
+}
+
+/// Construct dynamic array.
+pub fn array(v: Vec<Term>) -> Buffer {
+    Rc::new(RefCell::new(v))
+}
+
+// === for arrays ===
+
 // Heap-allocated array (as backing store), that is dynamic array itself or is
 // refered / shared by non-empty Slice or Ptr.
 pub type Buffer = Rc<RefCell<Vec<Term>>>;
@@ -14,6 +38,7 @@ pub enum Slice {
 }
 
 // Pointer to an element in a Buffer.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ptr { arr: Buffer, idx: usize }
 
 pub trait ArrayLike {
@@ -84,42 +109,35 @@ impl ArrayLike for Slice {
     }
 }
 
-pub fn alloc_reserved() -> Addr {
-    let dummy = Term::Val(Value::Unit);
-    alloc(dummy)
+/// Builtin::Push
+pub fn push(s: Slice, t: Term) -> Slice {
+    let buf = thaw(s);          // thaw!
+    buf_push(&buf, t);          // push!
+    freeze(buf)                 // freeze!
 }
 
-pub fn alloc(t: Term) -> Addr {
-    Rc::new(RefCell::new(t))
-}
-
-pub fn load(a: Addr) -> Term {
-    a.borrow().clone()
-}
-
-pub fn store(a: Addr, t: &Term) {
-    *a.borrow_mut() = t.clone()
-}
-
-pub fn array(v: Vec<Term>) -> Buffer {
-    Rc::new(RefCell::new(v))
-}
-
-/// Get the element at read pointer `p`.
-pub fn get(p: &Ptr) -> Term {
-    p.arr.borrow()[p.idx].clone()
-}
-
-/// Replace the element at write pointer `p` with `t`.
-pub fn set(p: &Ptr, t: Term) {
-    p.arr.borrow_mut()[p.idx] = t
-}
-
-/// Insert `t` at write pointer `p`.
-pub fn insert(p: &Ptr, t: Term) {
-    let v = &mut p.arr.borrow_mut();
-    v.insert(p.idx, t);
-}
+// *** `uniquify!` has been removed. ***
+// This is because its behavior was unclear (lacked transparency) to users, and
+// its implementation was too complex.
+//
+// /// Ensure uniqueness of an immutable array.
+// /// Return the array itself if it was unique, otherwise duplicate it.
+// pub fn uniquify(s: Slice) -> Slice {
+//     match &s {
+//         Slice::Empty => s,
+//         Slice::Some { arr, .. } => {
+//             let refcnt = Rc::strong_count(arr);
+//             if refcnt == 1 {
+//                 s
+//             }
+//             else {
+//                 eprintln!("dup (refcnt was {})", refcnt);
+//                 let buf = extract(&s);
+//                 buf.slice(0, buf.len())
+//             }
+//         }
+//     }
+// }
 
 /// Construct immutable array from slice `s`.
 pub fn extract(s: &Slice) -> Buffer {
@@ -132,32 +150,75 @@ pub fn extract(s: &Slice) -> Buffer {
     }
 }
 
-/// Remove elements of mutable slice `s`.
-pub fn remove(s: &Slice) {
-    if let Slice::Some { arr, beg, end } = s {
-        let v = &mut arr.borrow_mut();
-        v.drain(*beg..*end);
+/// Consumes the immutable array and converts it to a dynamic array.
+pub fn thaw(s: Slice) -> Buffer {
+    match s {
+        Slice::Some { arr, beg, end }
+        if beg == 0 && end == arr.len()
+            // => Rc::clone(&arr),
+            => arr,
+        _
+            => {
+                extract(&s)
+            },
     }
 }
 
-// In-place memmove for `[T]` where `T: Clone`
-fn memmove_clone<T: Clone>(v: &mut [T], src: usize, dst: usize, count: usize) {
-    assert!(src != dst && 0 < count);
+/// Consumes the dynamic array and converts it to an immutable array.
+pub fn freeze(b: Buffer) -> Slice {
+    if b.len() == 0 {
+        Slice::Empty
+    }
+    else {
+        let len = b.len();
+        Slice::Some { arr: b, beg: 0, end: len }
+    }
+}
 
-    if dst < src {
-        for i in 0..count {
-            v[dst + i] = v[src + i].clone();
+/// Insert `t` at the end of buffer `b`.
+pub fn buf_push(b: &Buffer, t: Term) {
+    // insert(&b.ptr(b.len()), t);
+    b.borrow_mut().push(t)
+}
+
+/// Replace the element at write pointer `p` with `t`.
+pub fn replace_1(p: &Ptr, t: Term) {
+    p.arr.borrow_mut()[p.idx] = t
+}
+
+/// Insert `t` at write pointer `p`.
+pub fn insert_1(p: &Ptr, t: Term) {
+    let v = &mut p.arr.borrow_mut();
+    v.insert(p.idx, t);
+}
+
+/// Remove the element at write pointer `p`.
+pub fn remove_1(p: &Ptr) {
+    let v = &mut p.arr.borrow_mut();
+    v.remove(p.idx);
+}
+
+/// Copy `s[..]` to `p.arr[p.idx..(p.idx + s.end - s.beg)]`.
+/// The backing arrays of `p` and `s` may be the same or different.
+/// If they are the same, the semantics of an in-place `memmove` apply.
+pub fn replace_n(p: &Ptr, s: &Slice) {
+    if let Slice::Some { arr, beg, end } = s {
+        if Rc::ptr_eq(&p.arr, arr) {
+            let mut dst = p.arr.borrow_mut();
+            memmove_clone(&mut dst, *beg, p.idx, *end - *beg);
         }
-    } else {
-        for i in (0..count).rev() {
-            v[dst + i] = v[src + i].clone();
+        else {
+            let src = &arr.borrow()[*beg..*end];
+            let mut dst = p.arr.borrow_mut();
+            let dst_range = p.idx .. p.idx + src.len();
+            dst[dst_range].clone_from_slice(src);
         }
     }
 }
 
 /// Insert elements in `s` at write pointer `p`.
 /// The backing arrays for `p` and `s` must not be the same.
-pub fn extend(p: &Ptr, s: &Slice) {
+pub fn insert_n(p: &Ptr, s: &Slice) {
     if let Slice::Some { arr, beg, end } = s {
         assert!(!Rc::ptr_eq(&p.arr, arr));
 
@@ -175,20 +236,25 @@ pub fn extend(p: &Ptr, s: &Slice) {
     }
 }
 
-/// Copy `s[..]` to `p.arr[p.idx..(p.idx + s.end - s.beg)]`.
-/// The backing arrays of `p` and `s` may be the same or different.
-/// If they are the same, the semantics of an in-place `memmove` apply.
-pub fn copy(p: &Ptr, s: &Slice) {
+/// Remove elements of mutable slice `s`.
+pub fn remove_n(s: &Slice) {
     if let Slice::Some { arr, beg, end } = s {
-        if Rc::ptr_eq(&p.arr, arr) {
-            let mut dst = p.arr.borrow_mut();
-            memmove_clone(&mut dst, *beg, p.idx, *end - *beg);
+        let v = &mut arr.borrow_mut();
+        v.drain(*beg..*end);
+    }
+}
+
+// In-place memmove for `[T]` where `T: Clone`
+fn memmove_clone<T: Clone>(v: &mut [T], src: usize, dst: usize, count: usize) {
+    assert!(src != dst && 0 < count);
+
+    if dst < src {
+        for i in 0..count {
+            v[dst + i] = v[src + i].clone();
         }
-        else {
-            let src = &arr.borrow()[*beg..*end];
-            let mut dst = p.arr.borrow_mut();
-            let dst_range = p.idx .. p.idx + src.len();
-            dst[dst_range].clone_from_slice(src);
+    } else {
+        for i in (0..count).rev() {
+            v[dst + i] = v[src + i].clone();
         }
     }
 }

@@ -874,6 +874,37 @@ impl VM<'_> {
                 }
                 Value::I64(a % b)
             }
+
+            // === builtin functions for arrays ===
+            Builtin::Len => {
+                let a = self.env_get(0)?;
+                let x = heap::load(a);
+                let Term::Val(Value::Array(s)) = x else { panic!() };
+                Value::I64(s.len() as i64)
+            }
+            Builtin::Slice => {
+                let a = self.env_get(2)?;
+                let b = self.env_get(1)?;
+                let c = self.env_get(0)?;
+                let xs = heap::load(a);
+                let beg = heap::load(b);
+                let end = heap::load(c);
+                let Term::Val(Value::Array(s)) = xs else { panic!() };
+                let Term::Val(Value::I64(i)) = beg else { panic!() };
+                let Term::Val(Value::I64(j)) = end else { panic!() };
+                if !(0 <= i && i <= j && j <= s.len() as i64) {
+                    return Err(RuntimeError::IndexOutOfBounds);
+                }
+                Value::Array(s.slice(i as usize, j as usize))
+            }
+            Builtin::Push => {
+                let a = self.env_get(1)?;
+                let b = self.env_get(0)?;
+                let xs = heap::load(a);
+                let x = heap::load(b);
+                let Term::Val(Value::Array(s)) = xs else { panic!() };
+                Value::Array(heap::push(s, x))
+            }
         };
         Ok(Term::Val(val))
     }
