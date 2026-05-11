@@ -139,6 +139,22 @@ pub fn push(s: Slice, t: Term) -> Slice {
 //     }
 // }
 
+pub fn extract_1(s: &Slice, index: i64) -> Result<Term, RuntimeError> {
+    match s {
+        Slice::Empty => {
+            Err(RuntimeError::IndexOutOfBounds)
+        }
+        Slice::Some { arr, beg, end } => {
+            if index < 0 || end - beg <= index as usize {
+                Err(RuntimeError::IndexOutOfBounds)
+            }
+            else {
+                Ok(arr.borrow()[beg + index as usize].clone())
+            }
+        }
+    }
+}
+
 /// Construct immutable array from slice `s`.
 pub fn extract(s: &Slice) -> Buffer {
     match s {

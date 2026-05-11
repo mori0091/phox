@@ -706,19 +706,12 @@ impl VM<'_> {
 
         self.run_unwrap();
 
-        match self.value().clone() {
-            Value::Array(Slice::Empty) => {
-                Err(RuntimeError::IndexOutOfBounds)
-            }
-            Value::Array(Slice::Some { arr, beg, end }) => {
-                let args = &arr.borrow()[beg..end];
-                if index < 0 || args.len() <= index as usize {
-                    return Err(RuntimeError::IndexOutOfBounds);
-                }
-                self.state.term = args[index as usize].clone();
-                Ok(())
-            }
-            _ => panic!(),
+        if let Value::Array(s) = self.value() {
+            self.state.term = heap::extract_1(s, index)?;
+            Ok(())
+        }
+        else {
+            panic!()
         }
     }
 
