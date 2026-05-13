@@ -5,7 +5,7 @@ fn i64_vec(xs: &[i64]) -> Vec<Term> {
     xs.iter().map(|i| Term::Val(Value::I64(*i))).collect()
 }
 
-fn as_val<T: ArrayLike>(a: &T) -> Value {
+fn as_val<T: ArrayLike<Elem = Term>>(a: &T) -> Value {
     Value::Array(a.slice(0, a.len()))
 }
 

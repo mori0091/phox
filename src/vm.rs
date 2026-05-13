@@ -1,6 +1,6 @@
 mod display;
 pub mod heap;
-use heap::{Addr, Buffer, Slice, ArrayLike};
+use heap::{Addr, Buf, Slice, ArrayLike};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -192,16 +192,19 @@ pub enum Value {
     Con(ConId, Vec<Term>),
     Record(Vec<Label>, Vec<Term>),
 
-    Array(Slice),               // immutable slice `@[a]`
-    DynArray(Buffer),           // mutable reference of dynamic array
+    Array(Slice<Term>),         // immutable slice `@[a]`
+
+    DynArray(Buf<Term>),        // mutable reference of dynamic array
 }
 
+// -------------------------------------------------------------
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Term {
     Clo(Closure),
     Val(Value),
 }
 
+// -------------------------------------------------------------
 impl Term {
     pub fn value(&self) -> &Value {
         match self {
@@ -495,7 +498,7 @@ impl VM<'_> {
         heap::alloc(t)
     }
 
-    fn heap_array(&self, v: Vec<Term>) -> Buffer {
+    fn heap_array<T: Clone>(&self, v: Vec<T>) -> Buf<T> {
         heap::array(v)
     }
 
