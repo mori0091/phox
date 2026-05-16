@@ -71,11 +71,14 @@ impl Expr {
     pub fn unit() -> Self {
         Expr::lit(Lit::Unit)
     }
+    pub fn bool_(b: bool) -> Self {
+        Expr::lit(Lit::Bool(b))
+    }
     pub fn int(x: i64) -> Self {
         Expr::lit(Lit::Int(x))
     }
-    pub fn bool_(b: bool) -> Self {
-        Expr::lit(Lit::Bool(b))
+    pub fn u8_(x: u8) -> Self {
+        Expr::lit(Lit::U8(x))
     }
 
     pub fn expr(e: ExprBody) -> Self {

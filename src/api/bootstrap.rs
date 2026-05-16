@@ -5,6 +5,7 @@ pub fn bootstrap(phox: &mut PhoxEngine, module: &RefModule) -> Result<(), Error>
     add_primitive_type(phox, module, "()")?;
     add_primitive_type(phox, module, "Bool")?;
     add_primitive_type(phox, module, "Int")?;
+    add_primitive_type(phox, module, "u8")?;
     add_primitive_tycon1(phox, module, "@[]")?;
 
     for b in ALL_BUILTINS {

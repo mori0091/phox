@@ -39,6 +39,7 @@ pub enum Token {
     #[token("false", priority = 10)] False,
     #[token("()"   , priority = 10)] Unit,
     #[token("@[]"  , priority = 10)] EmptyArray,
+    #[token("u8"   , priority = 10)] U8Type,
 
     // --- 演算子・記号 ---
     #[token(".."   , priority = 7)]  DotDot,
@@ -103,6 +104,9 @@ pub enum Token {
     #[regex(r"[+-]?[0-9]+", |lex| lex.slice().parse())]
     Int(i64),
 
+    #[regex(r"(0x[0-9a-fA-F]+|[0-9]+)u8", |lex| parse_u8_literal(lex.slice()))]
+    LitU8(u8),
+
     // --- その他の演算子記号列 ---
     #[regex(r"[*+\-/!$%&=^?<>]+", |lex| lex.slice().to_string())]
     InfixOp(String),
@@ -112,4 +116,14 @@ impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
+}
+
+fn parse_u8_literal(s: &str) -> Result<u8, LexicalError> {
+    let body = &s[..s.len()-2];
+    let parsed = if let Some(hex) = body.strip_prefix("0x") {
+        u8::from_str_radix(hex, 16)
+    } else {
+        body.parse::<u8>()
+    };
+    parsed.map_err(|_| LexicalError::InvalidToken)
 }

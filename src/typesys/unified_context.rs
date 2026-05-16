@@ -43,6 +43,7 @@ impl UnifiedContext {
                 Lit::Unit => Type::unit(),
                 Lit::Bool(_) => Type::bool_(),
                 Lit::Int(_) => Type::int(),
+                Lit::U8(_) => Type::u8_(),
             },
             Pat::Tuple(ps) => {
                 let ts = ps.iter().map(|p| self.fresh_type_for_pattern(p)).collect();
@@ -83,6 +84,7 @@ impl UnifiedContext {
                     Lit::Unit => Type::unit(),
                     Lit::Bool(_) => Type::bool_(),
                     Lit::Int(_) => Type::int(),
+                    Lit::U8(_) => Type::u8_(),
                 };
                 constraints.push(Constraint::type_eq(&expected, ty));
             }

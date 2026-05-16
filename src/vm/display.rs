@@ -86,6 +86,8 @@ impl fmt::Display for Value {
             Value::Unit => write!(f, "()"),
             Value::Bool(b) => write!(f, "{b}"),
             Value::I64(i) => write!(f, "{i}"),
+            Value::U8(u) => write!(f, "{u}"),
+
             Value::Con(c, args) => {
                 let mut xs = Vec::with_capacity(1 + args.len());
                 xs.push(c.pretty());

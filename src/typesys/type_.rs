@@ -36,6 +36,9 @@ impl Type {
     pub fn int() -> Self {
         Type::Con(Symbol::int())
     }
+    pub fn u8_() -> Self {
+        Type::Con(Symbol::u8_())
+    }
     pub fn var(id: TypeVarId) -> Self {
         Type::Var(id)
     }

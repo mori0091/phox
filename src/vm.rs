@@ -190,6 +190,7 @@ pub enum Value {
     Unit,
     Bool(bool),
     I64(i64),
+    U8(u8),
     Tuple(Vec<Term>),
     Con(ConId, Vec<Term>),
     Record(Vec<Label>, Vec<Term>),
@@ -316,6 +317,7 @@ impl VM<'_> {
                         Lit::Unit => Value::Unit,
                         Lit::Bool(b) => Value::Bool(*b),
                         Lit::Int(i) => Value::I64(*i),
+                        Lit::U8(i) => Value::U8(*i),
                     };
                     return self.run_state_value(val);
                 }
@@ -571,6 +573,7 @@ fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
         (Pat::Lit(Lit::Unit), Term::Val(Value::Unit)) => Some(env),
         (Pat::Lit(Lit::Bool(p)), Term::Val(Value::Bool(x))) if p == x => Some(env),
         (Pat::Lit(Lit::Int(p)), Term::Val(Value::I64(x))) if p == x => Some(env),
+        (Pat::Lit(Lit::U8(p)), Term::Val(Value::U8(x))) if p == x => Some(env),
 
         (Pat::Var, v) => {
             env.push(heap::alloc(v.clone()));
