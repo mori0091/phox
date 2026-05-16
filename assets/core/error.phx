@@ -1,0 +1,8 @@
+use ::core::*;
+
+// -------------------------------------------------------------
+type RuntimeError =
+    DivisionByZero
+    | OutOfBounds
+    | IndexOutOfBounds
+;

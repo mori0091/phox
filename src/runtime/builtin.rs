@@ -1,5 +1,8 @@
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Builtin {
+    CastU8toI64,
+    CastI64toU8,
+
     I64Neg,
 
     I64Eq,
@@ -22,6 +25,9 @@ pub enum Builtin {
 }
 
 pub const ALL_BUILTINS: &[Builtin] = &[
+    Builtin::CastU8toI64,
+    Builtin::CastI64toU8,
+
     Builtin::I64Neg,
 
     Builtin::I64Eq,
@@ -52,6 +58,9 @@ impl Builtin {
     }
     pub fn signature(&self) -> (&'static str, usize, &'static str) {
         match self {
+            Builtin::CastU8toI64 => ("__cast_u8_i64__", 1, "u8 -> Int"),
+            Builtin::CastI64toU8 => ("__cast_i64_u8__", 1, "Int -> u8"),
+
             Builtin::I64Neg => ("__i64_neg__", 1, "Int -> Int"),
 
             Builtin::I64Eq  => ("__i64_eq__", 2, "Int -> Int -> Bool"),

@@ -889,6 +889,14 @@ impl VM<'_> {
         Ok(x.value().clone())
     }
 
+    fn env_get_u8(&self, i: usize) -> Result<u8, RuntimeError> {
+        if let Value::U8(v) = self.env_get_value(i)? {
+            Ok(v)
+        } else {
+            panic!()
+        }
+    }
+
     fn env_get_i64(&self, i: usize) -> Result<i64, RuntimeError> {
         if let Value::I64(v) = self.env_get_value(i)? {
             Ok(v)
@@ -905,6 +913,15 @@ impl VM<'_> {
 
     fn builtin(&self, f: Builtin) -> Result<Term, RuntimeError> {
         let val = match f {
+            Builtin::CastU8toI64 => {
+                let a = self.env_get_u8(0)?;
+                Value::I64(a as i64)
+            }
+            Builtin::CastI64toU8 => {
+                let a = self.env_get_i64(0)?;
+                Value::U8(a as u8)
+            }
+
             Builtin::I64Neg => {
                 let a = self.env_get_i64(0)?;
                 Value::I64(-a)

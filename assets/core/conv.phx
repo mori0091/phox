@@ -1,0 +1,30 @@
+use ::core::*;
+
+// -------------------------------------------------------------
+trait Cast a b {
+    cast : a -> b;
+};
+
+trait TryCast a b {
+    cast : a -> Result RuntimeError b;
+};
+
+// -------------------------------------------------------------
+impl Cast u8 Int {
+    cast = __cast_u8_i64__;
+};
+impl Cast Int u8 {
+    cast = __cast_i64_u8__;
+};
+
+impl TryCast u8 Int {
+    cast = \x. Ok (@{Cast u8 Int}.cast x);
+};
+impl TryCast Int u8 {
+    cast = \x.
+        if (x < 0 || 255 < x)
+            Err OutOfBounds
+        else
+            Ok (@{Cast Int u8}.cast x)
+    ;
+};
