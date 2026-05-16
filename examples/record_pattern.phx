@@ -1,3 +1,4 @@
-let f = λ@{ x, y }. x + y;
+// let f = λ@{ x, y }. x + y;
+let f = λ@{ x, y }. 0 + x + y;
 f @{ x = 10, y = 32 }
 // => 42: Int

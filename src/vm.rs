@@ -905,6 +905,12 @@ impl VM<'_> {
         }
     }
 
+    fn env_get_u8x2(&self) -> Result<(u8, u8), RuntimeError> {
+        let a = self.env_get_u8(1)?;
+        let b = self.env_get_u8(0)?;
+        Ok((a, b))
+    }
+
     fn env_get_i64x2(&self) -> Result<(i64, i64), RuntimeError> {
         let a = self.env_get_i64(1)?;
         let b = self.env_get_i64(0)?;
@@ -913,20 +919,81 @@ impl VM<'_> {
 
     fn builtin(&self, f: Builtin) -> Result<Term, RuntimeError> {
         let val = match f {
+            // === cast operators ===
+            // --- u8 -> a ---
             Builtin::CastU8toI64 => {
                 let a = self.env_get_u8(0)?;
                 Value::I64(a as i64)
             }
+            // --- i64 -> a ---
             Builtin::CastI64toU8 => {
                 let a = self.env_get_i64(0)?;
                 Value::U8(a as u8)
             }
 
+            // === unary operators ===
+            // --- i64 ---
             Builtin::I64Neg => {
                 let a = self.env_get_i64(0)?;
                 Value::I64(-a)
             }
 
+            // === binary operators ===
+            // --- u8 ---
+            Builtin::U8Eq => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a == b)
+            }
+            Builtin::U8Neq => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a != b)
+            }
+
+            Builtin::U8Lt => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a < b)
+            }
+            Builtin::U8Le => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a <= b)
+            }
+            Builtin::U8Gt => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a > b)
+            }
+            Builtin::U8Ge => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a >= b)
+            }
+
+            Builtin::U8Add => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::U8(a + b)
+            }
+            Builtin::U8Sub => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::U8(a - b)
+            }
+            Builtin::U8Mul => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::U8(a * b)
+            }
+            Builtin::U8Div => {
+                let (a, b) = self.env_get_u8x2()?;
+                if b == 0 {
+                    return Err(RuntimeError::DivisionByZero);
+                }
+                Value::U8(a / b)
+            }
+            Builtin::U8Mod => {
+                let (a, b) = self.env_get_u8x2()?;
+                if b == 0 {
+                    return Err(RuntimeError::DivisionByZero);
+                }
+                Value::U8(a % b)
+            }
+
+            // --- i64 ---
             Builtin::I64Eq => {
                 let (a, b) = self.env_get_i64x2()?;
                 Value::Bool(a == b)
@@ -980,7 +1047,7 @@ impl VM<'_> {
                 Value::I64(a % b)
             }
 
-            // === builtin functions for arrays ===
+            // === arrays ===
             Builtin::Len => {
                 let x = &self.env_get_value(0)?;
                 let len = match x {
