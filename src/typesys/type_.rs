@@ -18,6 +18,12 @@ pub enum Type {
 }
 
 impl Type {
+    pub fn is_int(&self) -> bool {
+        *self == Type::int()
+    }
+}
+
+impl Type {
     fn local_con<S: Into<String>>(s: S) -> Self {
         Type::Con(Symbol::Local(s.into()))
     }

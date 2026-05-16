@@ -32,7 +32,11 @@ pub fn apply_trait_impls_expr(
     module: &RefModule,
     expr: &mut Expr,
 ) -> Result<(), Error> {
-    let ty = expr.ty.as_ref().ok_or_else(|| Error::MissingType(Symbol::Local(expr.to_string())))?;
+    let ty = {
+        let t = expr.ty.as_ref().ok_or_else(|| Error::MissingType(Symbol::Local(expr.to_string())))?;
+        &t.repr(&mut phox.ctx)
+    };
+    expr.ty = Some(ty.clone());
     // {
     //     eprintln!("[apply] {}: {}", expr, ty.repr(&mut phox.ctx));
     // }

@@ -131,20 +131,30 @@ impl fmt::Display for Value {
                 }
             }
 
-            Value::Array(Slice::Empty) => {
-                write!(f, "@[]")
-            }
-            Value::Array(Slice::Some { arr, beg, end }) => {
-                assert!(beg < end);
-                let args = &arr.borrow()[*beg..*end];
+            Value::Array(s) => write!(f, "{}", s),
+            Value::ArrayI64(s) => write!(f, "{}", s),
+
+            Value::DynArray(arr) => {
+                let args = &arr.borrow()[..];
                 let mut xs = Vec::with_capacity(args.len());
                 for arg in args {
                     xs.push(format!("{}", arg));
                 }
                 write!(f, "@[{}]", xs.join(", "))
             }
-            Value::DynArray(arr) => {
-                let args = &arr.borrow()[..];
+        }
+    }
+}
+
+impl <T: Clone + fmt::Display> fmt::Display for Slice<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Slice::Empty => {
+                write!(f, "@[]")
+            }
+            Slice::Some { arr, beg, end } => {
+                assert!(beg < end);
+                let args = &arr.borrow()[*beg..*end];
                 let mut xs = Vec::with_capacity(args.len());
                 for arg in args {
                     xs.push(format!("{}", arg));
@@ -241,6 +251,9 @@ impl fmt::Display for Code {
             }
             Code::Array(arity) => {
                 write!(f, "<Array({})>", arity)
+            }
+            Code::ArrayI64(arity) => {
+                write!(f, "<ArrayI64({})>", arity)
             }
             Code::Tuple(arity) => {
                 write!(f, "<Tuple({})>", arity)

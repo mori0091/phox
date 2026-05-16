@@ -185,6 +185,15 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Code, Error>
             let t = vm::Code::Array(args.len());
             Ok(vm::Code::clo(t, args))
         }
+        CoreExpr::ArrayI64(xs) => {
+            let mut args = Vec::with_capacity(xs.len());
+            for x in xs {
+                let e = lower_expr(&mut env.clone(), x)?;
+                args.push(e);
+            }
+            let t = vm::Code::ArrayI64(args.len());
+            Ok(vm::Code::clo(t, args))
+        }
         CoreExpr::Tuple(xs) => {
             let mut args = Vec::with_capacity(xs.len());
             for x in xs {
