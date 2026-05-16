@@ -57,6 +57,8 @@ pub enum Code {
     Con(ConId, usize),   // `Con "Cons" 2`, `Con "Nil" 0`
     Record(Vec<Label>),  // `Record ["x", "y"]`
     Array(usize),        // `Array 2`, `Array 1` ; Constructs slice (`@[a]`) of new array
+    ArrayI64(usize),
+
     // DynArray(Box<Code>), // Constructs mutable reference of new dynamic array (e.g. `buf @[a]`)
 }
 
@@ -193,6 +195,7 @@ pub enum Value {
     Record(Vec<Label>, Vec<Term>),
 
     Array(Slice<Term>),         // immutable slice `@[a]`
+    ArrayI64(Slice<i64>),
 
     DynArray(Buf<Term>),        // mutable reference of dynamic array
 }
@@ -202,6 +205,38 @@ pub enum Value {
 pub enum Term {
     Clo(Closure),
     Val(Value),
+}
+
+// -------------------------------------------------------------
+// === boxing / unboxing ===
+impl Into<Value> for Slice<Term> {
+    fn into(self) -> Value {
+        Value::Array(self)
+    }
+}
+
+impl Into<Value> for Slice<i64> {
+    fn into(self) -> Value {
+        Value::ArrayI64(self)
+    }
+}
+
+impl Into<Term> for i64 {
+    fn into(self) -> Term {
+        Term::Val(Value::I64(self))
+    }
+}
+
+impl TryFrom<Term> for i64 {
+    type Error = RuntimeError;
+    fn try_from(value: Term) -> Result<Self, Self::Error> {
+        if let Term::Val(Value::I64(i)) = value {
+            Ok(i)
+        }
+        else {
+            Err(RuntimeError::Fatal)
+        }
+    }
 }
 
 // -------------------------------------------------------------
@@ -302,6 +337,20 @@ impl VM<'_> {
                         Slice::Some { arr, beg: 0, end: *arity }
                     };
                     return self.run_state_value(Value::Array(s));
+                }
+                Code::ArrayI64(arity) => {
+                    let s = if *arity == 0 {
+                        Slice::Empty
+                    }
+                    else {
+                        let xs: Vec<_> = self.env_values(*arity).into_iter().map(|t| {
+                            let Term::Val(Value::I64(i)) = t else { panic!() };
+                            i
+                        }).collect();
+                        let arr = self.heap_array(xs);
+                        Slice::Some { arr, beg: 0, end: *arity }
+                    };
+                    return self.run_state_value(Value::ArrayI64(s));
                 }
                 Code::Lam(_) if self.args_is_empty() => {
                     if self.upds_is_empty() {
@@ -445,11 +494,12 @@ impl VM<'_> {
 
     /// Lookup pointer of the variable.
     fn env_get(&self, v: usize) -> Result<Addr, RuntimeError> {
+        if self.env().len() <= v {
+            return Err(RuntimeError::VariableNotFound(v));
+        }
         let index = self.env().len() - v - 1;
-        self.env().get(index)
-            .ok_or_else(|| {
-                RuntimeError::VariableNotFound(v)
-            }).cloned()
+        let a = Rc::clone(&self.env()[index]);
+        Ok(a)
     }
 
     /// Duplicate Env
@@ -555,13 +605,32 @@ fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
             Some(env)
         }
 
-        (Pat::Array(ps, None), Term::Val(Value::Array(s))) => {
+        (p, Term::Val(Value::Array(s))) => {
+            match_pat_array(p, s)
+        }
+        (p, Term::Val(Value::ArrayI64(s))) => {
+            match_pat_array(p, s)
+        }
+
+        _ => None,
+    }
+}
+
+fn match_pat_array<T>(p: &Pat, s: &Slice<T>) -> Option<Env>
+where
+    T: Clone + Into<Term>,
+    Slice<T>: Into<Value>,
+{
+    let mut env = Env::new();
+    match p {
+        Pat::Array(ps, None) => {
             let p_len = ps.len();
             let v_len = s.len();
             if p_len == v_len {
                 if let Slice::Some { arr, beg, end: _ } = s {
                     for i in 0..p_len {
-                        let sub = match_pat(&ps[i], &arr.borrow()[beg + i])?;
+                        let x = arr.borrow()[beg + i].clone();
+                        let sub = match_pat(&ps[i], &x.into())?;
                         env.extend(sub);
                     }
                 }
@@ -570,26 +639,27 @@ fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
                 None
             }
         }
-        (Pat::Array(ps, Some(rest)), Term::Val(Value::Array(s))) => {
+        Pat::Array(ps, Some(rest)) => {
             let p_len = ps.len();
             let v_len = s.len();
             if p_len <= v_len {
                 if let Slice::Some { arr, beg, end: _ } = s {
                     for i in 0..p_len {
-                        let sub = match_pat(&ps[i], &arr.borrow()[beg + i])?;
+                        let x = arr.borrow()[beg + i].clone();
+                        let sub = match_pat(&ps[i], &x.into())?;
                         env.extend(sub);
                     }
                 }
                 if let PatRest::Named = rest {
                     let tail = s.slice(p_len, v_len);
-                    env.push(heap::alloc(Term::Val(Value::Array(tail))));
+                    let value = tail.into();
+                    env.push(heap::alloc(Term::Val(value)));
                 }
                 Some(env)
             } else {
                 None
             }
         }
-
         _ => None,
     }
 }
@@ -709,12 +779,19 @@ impl VM<'_> {
 
         self.run_unwrap();
 
-        if let Value::Array(s) = self.value() {
-            self.state.term = heap::extract_1(s, index)?;
-            Ok(())
-        }
-        else {
-            panic!()
+        match self.value() {
+            Value::Array(s) => {
+                self.state.term = heap::extract_1(s, index)?;
+                Ok(())
+            }
+            Value::ArrayI64(s) => {
+                let x = heap::extract_1(s, index)?;
+                self.state.term = x.into();
+                Ok(())
+            }
+            _ => {
+                panic!()
+            }
         }
     }
 
@@ -798,73 +875,85 @@ impl VM<'_> {
 }
 
 impl VM<'_> {
-    fn env_get_as_int(&self, i: usize) -> Result<i64, RuntimeError> {
+    fn env_get_term(&self, i: usize) -> Result<Term, RuntimeError> {
         let a = self.env_get(i)?;
         let x = heap::load(a);
-        let Value::I64(v) = x.value() else { panic!() };
-        Ok(*v)
+        Ok(x)
     }
 
-    fn env_get_as_i64_pair(&self) -> Result<(i64, i64), RuntimeError> {
-        let a = self.env_get_as_int(1)?;
-        let b = self.env_get_as_int(0)?;
+    fn env_get_value(&self, i: usize) -> Result<Value, RuntimeError> {
+        let x = self.env_get_term(i)?;
+        Ok(x.value().clone())
+    }
+
+    fn env_get_i64(&self, i: usize) -> Result<i64, RuntimeError> {
+        if let Value::I64(v) = self.env_get_value(i)? {
+            Ok(v)
+        } else {
+            panic!()
+        }
+    }
+
+    fn env_get_i64x2(&self) -> Result<(i64, i64), RuntimeError> {
+        let a = self.env_get_i64(1)?;
+        let b = self.env_get_i64(0)?;
         Ok((a, b))
     }
 
     fn builtin(&self, f: Builtin) -> Result<Term, RuntimeError> {
         let val = match f {
             Builtin::I64Neg => {
-                let a = self.env_get_as_int(0)?;
+                let a = self.env_get_i64(0)?;
                 Value::I64(-a)
             }
 
             Builtin::I64Eq => {
-                let (a, b) = self.env_get_as_i64_pair()?;
+                let (a, b) = self.env_get_i64x2()?;
                 Value::Bool(a == b)
             }
             Builtin::I64Neq => {
-                let (a, b) = self.env_get_as_i64_pair()?;
+                let (a, b) = self.env_get_i64x2()?;
                 Value::Bool(a != b)
             }
 
             Builtin::I64Lt => {
-                let (a, b) = self.env_get_as_i64_pair()?;
+                let (a, b) = self.env_get_i64x2()?;
                 Value::Bool(a < b)
             }
             Builtin::I64Le => {
-                let (a, b) = self.env_get_as_i64_pair()?;
+                let (a, b) = self.env_get_i64x2()?;
                 Value::Bool(a <= b)
             }
             Builtin::I64Gt => {
-                let (a, b) = self.env_get_as_i64_pair()?;
+                let (a, b) = self.env_get_i64x2()?;
                 Value::Bool(a > b)
             }
             Builtin::I64Ge => {
-                let (a, b) = self.env_get_as_i64_pair()?;
+                let (a, b) = self.env_get_i64x2()?;
                 Value::Bool(a >= b)
             }
 
             Builtin::I64Add => {
-                let (a, b) = self.env_get_as_i64_pair()?;
+                let (a, b) = self.env_get_i64x2()?;
                 Value::I64(a + b)
             }
             Builtin::I64Sub => {
-                let (a, b) = self.env_get_as_i64_pair()?;
+                let (a, b) = self.env_get_i64x2()?;
                 Value::I64(a - b)
             }
             Builtin::I64Mul => {
-                let (a, b) = self.env_get_as_i64_pair()?;
+                let (a, b) = self.env_get_i64x2()?;
                 Value::I64(a * b)
             }
             Builtin::I64Div => {
-                let (a, b) = self.env_get_as_i64_pair()?;
+                let (a, b) = self.env_get_i64x2()?;
                 if b == 0 {
                     return Err(RuntimeError::DivisionByZero);
                 }
                 Value::I64(a / b)
             }
             Builtin::I64Mod => {
-                let (a, b) = self.env_get_as_i64_pair()?;
+                let (a, b) = self.env_get_i64x2()?;
                 if b == 0 {
                     return Err(RuntimeError::DivisionByZero);
                 }
@@ -873,33 +962,47 @@ impl VM<'_> {
 
             // === builtin functions for arrays ===
             Builtin::Len => {
-                let a = self.env_get(0)?;
-                let x = heap::load(a);
-                let Term::Val(Value::Array(s)) = x else { panic!() };
-                Value::I64(s.len() as i64)
+                let x = &self.env_get_value(0)?;
+                let len = match x {
+                    Value::Array(s) => s.len(),
+                    Value::ArrayI64(s) => s.len(),
+                    _ => panic!(),
+                };
+                Value::I64(len as i64)
             }
             Builtin::Slice => {
-                let a = self.env_get(2)?;
-                let b = self.env_get(1)?;
-                let c = self.env_get(0)?;
-                let xs = heap::load(a);
-                let beg = heap::load(b);
-                let end = heap::load(c);
-                let Term::Val(Value::Array(s)) = xs else { panic!() };
-                let Term::Val(Value::I64(i)) = beg else { panic!() };
-                let Term::Val(Value::I64(j)) = end else { panic!() };
-                if !(0 <= i && i <= j && j <= s.len() as i64) {
-                    return Err(RuntimeError::IndexOutOfBounds);
+                let xs = self.env_get_value(2)?;
+                let i = self.env_get_i64(1)?;
+                let j = self.env_get_i64(0)?;
+                match xs {
+                    Value::Array(s) => {
+                        if !(0 <= i && i <= j && j <= s.len() as i64) {
+                            return Err(RuntimeError::IndexOutOfBounds);
+                        }
+                        s.slice(i as usize, j as usize).into()
+                    }
+                    Value::ArrayI64(s) => {
+                        if !(0 <= i && i <= j && j <= s.len() as i64) {
+                            return Err(RuntimeError::IndexOutOfBounds);
+                        }
+                        s.slice(i as usize, j as usize).into()
+                    }
+                    _ => panic!(),
                 }
-                Value::Array(s.slice(i as usize, j as usize))
             }
             Builtin::Push => {
-                let a = self.env_get(1)?;
-                let b = self.env_get(0)?;
-                let xs = heap::load(a);
-                let x = heap::load(b);
-                let Term::Val(Value::Array(s)) = xs else { panic!() };
-                Value::Array(heap::push(s, x))
+                let xs = self.env_get_value(1)?;
+                let x = self.env_get_term(0)?;
+                match xs {
+                    Value::Array(s) => {
+                        Value::Array(heap::push(s, x))
+                    }
+                    Value::ArrayI64(s) => {
+                        let x = x.try_into()?;
+                        Value::ArrayI64(heap::push(s, x))
+                    }
+                    _ => panic!(),
+                }
             }
         };
         Ok(Term::Val(val))

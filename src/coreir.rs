@@ -37,6 +37,7 @@ pub enum CoreExpr {
     Lit(Lit),
     Con(Symbol, Vec<CoreExpr>),     // `Con "Cons" [x, xs]`, `Con "Nil" []`
     Array(Vec<CoreExpr>),           // `Array [e1, e2, ...]`
+    ArrayI64(Vec<CoreExpr>),        // `Array<i64> [e1, e2, ...]`
     Tuple(Vec<CoreExpr>),           // `Tuple [e1, e2, ...]`
     Record(Vec<(Label, CoreExpr)>), // `Record [("x", e1), ("y", e2), ...]`
 }
@@ -294,7 +295,18 @@ fn lower_expr(expr: &Expr) -> Result<CoreExpr, Error> {
                 let e = lower_expr(e)?;
                 xs.push(e);
             }
-            Ok(CoreExpr::Array(xs))
+
+            use crate::typesys::*;
+            let Some(Type::Array(elem_ty)) = &expr.ty else { unreachable!() };
+            let a = {
+                if elem_ty.is_int() {
+                    CoreExpr::ArrayI64(xs)
+                }
+                else {
+                    CoreExpr::Array(xs)
+                }
+            };
+            Ok(a)
         }
         ExprBody::Tuple(es) => {
             let mut xs = Vec::new();
