@@ -168,38 +168,27 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Code, Error>
             Ok(vm::Code::Lit(x.clone()))
         }
         CoreExpr::Con(name, xs) => {
-            let mut args = Vec::with_capacity(xs.len());
-            for x in xs {
-                let e = lower_expr(&mut env.clone(), x)?;
-                args.push(e);
-            }
+            let args = lower_expr_vec(env, xs)?;
             let t = vm::Code::Con(name.clone(), args.len());
             Ok(vm::Code::clo(t, args))
         }
         CoreExpr::Array(xs) => {
-            let mut args = Vec::with_capacity(xs.len());
-            for x in xs {
-                let e = lower_expr(&mut env.clone(), x)?;
-                args.push(e);
-            }
+            let args = lower_expr_vec(env, xs)?;
             let t = vm::Code::Array(args.len());
             Ok(vm::Code::clo(t, args))
         }
+        CoreExpr::ArrayU8(xs) => {
+            let args = lower_expr_vec(env, xs)?;
+            let t = vm::Code::ArrayU8(args.len());
+            Ok(vm::Code::clo(t, args))
+        }
         CoreExpr::ArrayI64(xs) => {
-            let mut args = Vec::with_capacity(xs.len());
-            for x in xs {
-                let e = lower_expr(&mut env.clone(), x)?;
-                args.push(e);
-            }
+            let args = lower_expr_vec(env, xs)?;
             let t = vm::Code::ArrayI64(args.len());
             Ok(vm::Code::clo(t, args))
         }
         CoreExpr::Tuple(xs) => {
-            let mut args = Vec::with_capacity(xs.len());
-            for x in xs {
-                let e = lower_expr(&mut env.clone(), x)?;
-                args.push(e);
-            }
+            let args = lower_expr_vec(env, xs)?;
             let t = vm::Code::Tuple(args.len());
             Ok(vm::Code::clo(t, args))
         }
@@ -215,4 +204,13 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Code, Error>
             Ok(vm::Code::clo(t, args))
         }
     }
+}
+
+fn lower_expr_vec(env: &mut Vec<Symbol>, xs: &Vec<CoreExpr>) -> Result<Vec<vm::Code>, Error> {
+    let mut args = Vec::with_capacity(xs.len());
+    for x in xs {
+        let e = lower_expr(&mut env.clone(), x)?;
+        args.push(e);
+    }
+    Ok(args)
 }

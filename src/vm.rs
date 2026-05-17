@@ -57,6 +57,7 @@ pub enum Code {
     Con(ConId, usize),   // `Con "Cons" 2`, `Con "Nil" 0`
     Record(Vec<Label>),  // `Record ["x", "y"]`
     Array(usize),        // `Array 2`, `Array 1` ; Constructs slice (`@[a]`) of new array
+    ArrayU8(usize),
     ArrayI64(usize),
 
     // DynArray(Box<Code>), // Constructs mutable reference of new dynamic array (e.g. `buf @[a]`)
@@ -190,11 +191,13 @@ pub enum Value {
     Unit,
     Bool(bool),
     I64(i64),
+    U8(u8),
     Tuple(Vec<Term>),
     Con(ConId, Vec<Term>),
     Record(Vec<Label>, Vec<Term>),
 
     Array(Slice<Term>),         // immutable slice `@[a]`
+    ArrayU8(Slice<u8>),
     ArrayI64(Slice<i64>),
 
     DynArray(Buf<Term>),        // mutable reference of dynamic array
@@ -209,9 +212,16 @@ pub enum Term {
 
 // -------------------------------------------------------------
 // === boxing / unboxing ===
+// --- arrays ---
 impl Into<Value> for Slice<Term> {
     fn into(self) -> Value {
         Value::Array(self)
+    }
+}
+
+impl Into<Value> for Slice<u8> {
+    fn into(self) -> Value {
+        Value::ArrayU8(self)
     }
 }
 
@@ -221,6 +231,26 @@ impl Into<Value> for Slice<i64> {
     }
 }
 
+// --- u8 ---
+impl Into<Term> for u8 {
+    fn into(self) -> Term {
+        Term::Val(Value::U8(self))
+    }
+}
+
+impl TryFrom<Term> for u8 {
+    type Error = RuntimeError;
+    fn try_from(value: Term) -> Result<Self, Self::Error> {
+        if let Term::Val(Value::U8(i)) = value {
+            Ok(i)
+        }
+        else {
+            unreachable!()
+        }
+    }
+}
+
+// --- i64 ---
 impl Into<Term> for i64 {
     fn into(self) -> Term {
         Term::Val(Value::I64(self))
@@ -234,7 +264,7 @@ impl TryFrom<Term> for i64 {
             Ok(i)
         }
         else {
-            Err(RuntimeError::Fatal)
+            unreachable!()
         }
     }
 }
@@ -244,19 +274,19 @@ impl Term {
     pub fn value(&self) -> &Value {
         match self {
             Term::Val(v) => v,
-            _ => panic!(),
+            _ => unreachable!(),
         }
     }
     pub fn code(&self) -> &Code {
         match self {
             Term::Clo(c) => &c.code,
-            _ => panic!(),
+            _ => unreachable!(),
         }
     }
     pub fn env(&self) -> &Env {
         match self {
             Term::Clo(c) => &c.env,
-            _ => panic!(),
+            _ => unreachable!(),
         }
     }
     pub fn env_at(&self, index: usize) -> Term {
@@ -316,6 +346,7 @@ impl VM<'_> {
                         Lit::Unit => Value::Unit,
                         Lit::Bool(b) => Value::Bool(*b),
                         Lit::Int(i) => Value::I64(*i),
+                        Lit::U8(i) => Value::U8(*i),
                     };
                     return self.run_state_value(val);
                 }
@@ -338,13 +369,27 @@ impl VM<'_> {
                     };
                     return self.run_state_value(Value::Array(s));
                 }
+                Code::ArrayU8(arity) => {
+                    let s = if *arity == 0 {
+                        Slice::Empty
+                    }
+                    else {
+                        let xs: Vec<_> = self.env_values(*arity).into_iter().map(|t| {
+                            let Term::Val(Value::U8(i)) = t else { unreachable!() };
+                            i
+                        }).collect();
+                        let arr = self.heap_array(xs);
+                        Slice::Some { arr, beg: 0, end: *arity }
+                    };
+                    return self.run_state_value(Value::ArrayU8(s));
+                }
                 Code::ArrayI64(arity) => {
                     let s = if *arity == 0 {
                         Slice::Empty
                     }
                     else {
                         let xs: Vec<_> = self.env_values(*arity).into_iter().map(|t| {
-                            let Term::Val(Value::I64(i)) = t else { panic!() };
+                            let Term::Val(Value::I64(i)) = t else { unreachable!() };
                             i
                         }).collect();
                         let arr = self.heap_array(xs);
@@ -462,7 +507,7 @@ impl VM<'_> {
     fn code_replace(&mut self, code: Code) {
         match &mut self.state.term {
             Term::Clo(c) => c.code = code,
-            _ => panic!(),
+            _ => unreachable!(),
         }
     }
 
@@ -473,7 +518,7 @@ impl VM<'_> {
     fn env_mut(&mut self) -> &mut Env {
         match &mut self.state.term {
             Term::Clo(c) => &mut c.env,
-            _ => panic!(),
+            _ => unreachable!(),
         }
     }
 
@@ -571,6 +616,7 @@ fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
         (Pat::Lit(Lit::Unit), Term::Val(Value::Unit)) => Some(env),
         (Pat::Lit(Lit::Bool(p)), Term::Val(Value::Bool(x))) if p == x => Some(env),
         (Pat::Lit(Lit::Int(p)), Term::Val(Value::I64(x))) if p == x => Some(env),
+        (Pat::Lit(Lit::U8(p)), Term::Val(Value::U8(x))) if p == x => Some(env),
 
         (Pat::Var, v) => {
             env.push(heap::alloc(v.clone()));
@@ -606,6 +652,9 @@ fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
         }
 
         (p, Term::Val(Value::Array(s))) => {
+            match_pat_array(p, s)
+        }
+        (p, Term::Val(Value::ArrayU8(s))) => {
             match_pat_array(p, s)
         }
         (p, Term::Val(Value::ArrayI64(s))) => {
@@ -668,7 +717,7 @@ where
 // === VM basic state transitions ("lazy Krivine machine", Lang(2007)) ===
 impl VM<'_> {
     // fn run_app(&mut self) {
-    //     let Code::App(t1, t2) = self.code().clone() else { panic!() };
+    //     let Code::App(t1, t2) = self.code().clone() else { unreachable!() };
     //     let c = Term::Clo(Closure { code: *t2, env: self.env_dup() });
     //     let a = self.heap_alloc(c);
     //     self.args_push(a);
@@ -676,7 +725,7 @@ impl VM<'_> {
     // }
     fn run_app(&mut self) -> Result<(), RuntimeError> {
         // strict App f x
-        let Code::App(t1, t2) = self.code().clone() else { panic!() };
+        let Code::App(t1, t2) = self.code().clone() else { unreachable!() };
         let env = self.env_dup();
         let f = self.eval_code(*t1)?;
         self.env_replace(env);
@@ -688,14 +737,14 @@ impl VM<'_> {
     }
 
     fn run_lam(&mut self) {
-        let Code::Lam(e) = self.code().clone() else { panic!() };
+        let Code::Lam(e) = self.code().clone() else { unreachable!() };
         self.code_replace(*e);
         let a = self.args_pop();
         self.env_push(a);
     }
 
     fn run_let(&mut self) -> Result<(), RuntimeError> {
-        let Code::Let(x, e) = self.code().clone() else { panic!() };
+        let Code::Let(x, e) = self.code().clone() else { unreachable!() };
         let mut env = self.env_dup();
         let x = self.eval_code(*x)?;
         let a = self.heap_alloc(x);
@@ -705,7 +754,7 @@ impl VM<'_> {
     }
 
     fn run_letrec(&mut self) -> Result<(), RuntimeError> {
-        let Code::LetRec(x, e) = self.code().clone() else { panic!() };
+        let Code::LetRec(x, e) = self.code().clone() else { unreachable!() };
         let mut env = self.env_dup();
         let a = self.heap_alloc_reserved();
         self.env_push(a.clone());
@@ -718,7 +767,7 @@ impl VM<'_> {
     }
 
     fn run_access(&mut self) -> Result<(), RuntimeError> {
-        let Code::Var(v) = self.code() else { panic!() };
+        let Code::Var(v) = self.code() else { unreachable!() };
         // ACCESS
         let a = self.env_get(*v)?;
         self.heap_load(a.clone()); // term <- heap[a]
@@ -754,7 +803,7 @@ impl VM<'_> {
 // === VM extended state transitions ===
 impl VM<'_> {
     fn run_global_access(&mut self) -> Result<(), RuntimeError> {
-        let Code::GlobalVar(v) = self.code() else { panic!() };
+        let Code::GlobalVar(v) = self.code() else { unreachable!() };
         let code = self.globals.get(v)
             .ok_or_else(|| RuntimeError::GlobalVariableNotFound(v.clone()))
             .cloned()?;
@@ -765,15 +814,15 @@ impl VM<'_> {
     // Unwrap if the current term was a "newtype pattern".
     fn run_unwrap(&mut self) {
         if let Value::Con(_, args) = self.value() {
-            if args.len() != 1 { panic!() }
+            if args.len() != 1 { unreachable!() }
             self.state.term = args[0].clone();
         }
     }
 
     fn run_index_access(&mut self) -> Result<(), RuntimeError> {
-        let Code::IndexAccess(code, arg) = self.code().clone() else { panic!() };
+        let Code::IndexAccess(code, arg) = self.code().clone() else { unreachable!() };
         let env = self.env_dup();
-        let Term::Val(Value::I64(index)) = self.eval_code(*arg)? else { panic!() };
+        let Term::Val(Value::I64(index)) = self.eval_code(*arg)? else { unreachable!() };
         self.set_closure(*code, env);
         self.run_state_whnf()?;
 
@@ -784,44 +833,49 @@ impl VM<'_> {
                 self.state.term = heap::extract_1(s, index)?;
                 Ok(())
             }
+            Value::ArrayU8(s) => {
+                let x = heap::extract_1(s, index)?;
+                self.state.term = x.into();
+                Ok(())
+            }
             Value::ArrayI64(s) => {
                 let x = heap::extract_1(s, index)?;
                 self.state.term = x.into();
                 Ok(())
             }
             _ => {
-                panic!()
+                unreachable!()
             }
         }
     }
 
     fn run_tuple_access(&mut self) -> Result<(), RuntimeError> {
-        let Code::TupleAccess(code, index) = self.code().clone() else { panic!() };
+        let Code::TupleAccess(code, index) = self.code().clone() else { unreachable!() };
         self.code_replace(*code);
         self.run_state_whnf()?;
 
         self.run_unwrap();
 
-        let Value::Tuple(args) = self.value() else { panic!() };
+        let Value::Tuple(args) = self.value() else { unreachable!() };
         self.state.term = args[index].clone();
         Ok(())
     }
 
     fn run_field_access(&mut self) -> Result<(), RuntimeError> {
-        let Code::FieldAccess(code, label) = self.code().clone() else { panic!() };
+        let Code::FieldAccess(code, label) = self.code().clone() else { unreachable!() };
         self.code_replace(*code);
         self.run_state_whnf()?;
 
         self.run_unwrap();
 
-        let Value::Record(fs, args) = self.value() else { panic!() };
+        let Value::Record(fs, args) = self.value() else { unreachable!() };
         let index = fs.iter().position(|s| *s == label).unwrap();
         self.state.term = args[index].clone();
         Ok(())
     }
 
     fn run_match(&mut self) -> Result<(), RuntimeError> {
-        let Code::Match(code, arms) = self.code().clone() else { panic!() };
+        let Code::Match(code, arms) = self.code().clone() else { unreachable!() };
         let mut env = self.env_dup();
         let v_scrut = self.eval_code(*code)?;
         for (pat, body) in arms {
@@ -835,7 +889,7 @@ impl VM<'_> {
     }
 
     fn run_for(&mut self) -> Result<(), RuntimeError> {
-        let Code::For(init, pred, next) = self.code().clone() else { panic!() };
+        let Code::For(init, pred, next) = self.code().clone() else { unreachable!() };
 
         let p_env = self.env_dup();
         let n_env = self.env_dup();
@@ -855,7 +909,7 @@ impl VM<'_> {
             self.state.term = pred.clone();
             self.args_push(a.clone());
             self.run_state_whnf()?;
-            let Value::Bool(b) = self.value() else { panic!() };
+            let Value::Bool(b) = self.value() else { unreachable!() };
             if !b { break; }
             self.state.term = next.clone();
             self.args_push(a.clone());
@@ -867,7 +921,7 @@ impl VM<'_> {
     }
 
     fn run_builtin(&mut self) -> Result<(), RuntimeError> {
-        let Code::Builtin(f) = self.code().clone() else { panic!() };
+        let Code::Builtin(f) = self.code().clone() else { unreachable!() };
         let v = self.builtin(f)?;
         self.state.term = v;
         Ok(())
@@ -886,12 +940,26 @@ impl VM<'_> {
         Ok(x.value().clone())
     }
 
+    fn env_get_u8(&self, i: usize) -> Result<u8, RuntimeError> {
+        if let Value::U8(v) = self.env_get_value(i)? {
+            Ok(v)
+        } else {
+            unreachable!()
+        }
+    }
+
     fn env_get_i64(&self, i: usize) -> Result<i64, RuntimeError> {
         if let Value::I64(v) = self.env_get_value(i)? {
             Ok(v)
         } else {
-            panic!()
+            unreachable!()
         }
+    }
+
+    fn env_get_u8x2(&self) -> Result<(u8, u8), RuntimeError> {
+        let a = self.env_get_u8(1)?;
+        let b = self.env_get_u8(0)?;
+        Ok((a, b))
     }
 
     fn env_get_i64x2(&self) -> Result<(i64, i64), RuntimeError> {
@@ -902,11 +970,81 @@ impl VM<'_> {
 
     fn builtin(&self, f: Builtin) -> Result<Term, RuntimeError> {
         let val = match f {
+            // === cast operators ===
+            // --- u8 -> a ---
+            Builtin::CastU8toI64 => {
+                let a = self.env_get_u8(0)?;
+                Value::I64(a as i64)
+            }
+            // --- i64 -> a ---
+            Builtin::CastI64toU8 => {
+                let a = self.env_get_i64(0)?;
+                Value::U8(a as u8)
+            }
+
+            // === unary operators ===
+            // --- i64 ---
             Builtin::I64Neg => {
                 let a = self.env_get_i64(0)?;
                 Value::I64(-a)
             }
 
+            // === binary operators ===
+            // --- u8 ---
+            Builtin::U8Eq => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a == b)
+            }
+            Builtin::U8Neq => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a != b)
+            }
+
+            Builtin::U8Lt => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a < b)
+            }
+            Builtin::U8Le => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a <= b)
+            }
+            Builtin::U8Gt => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a > b)
+            }
+            Builtin::U8Ge => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::Bool(a >= b)
+            }
+
+            Builtin::U8Add => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::U8(a + b)
+            }
+            Builtin::U8Sub => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::U8(a - b)
+            }
+            Builtin::U8Mul => {
+                let (a, b) = self.env_get_u8x2()?;
+                Value::U8(a * b)
+            }
+            Builtin::U8Div => {
+                let (a, b) = self.env_get_u8x2()?;
+                if b == 0 {
+                    return Err(RuntimeError::DivisionByZero);
+                }
+                Value::U8(a / b)
+            }
+            Builtin::U8Mod => {
+                let (a, b) = self.env_get_u8x2()?;
+                if b == 0 {
+                    return Err(RuntimeError::DivisionByZero);
+                }
+                Value::U8(a % b)
+            }
+
+            // --- i64 ---
             Builtin::I64Eq => {
                 let (a, b) = self.env_get_i64x2()?;
                 Value::Bool(a == b)
@@ -960,13 +1098,14 @@ impl VM<'_> {
                 Value::I64(a % b)
             }
 
-            // === builtin functions for arrays ===
+            // === arrays ===
             Builtin::Len => {
                 let x = &self.env_get_value(0)?;
                 let len = match x {
                     Value::Array(s) => s.len(),
+                    Value::ArrayU8(s) => s.len(),
                     Value::ArrayI64(s) => s.len(),
-                    _ => panic!(),
+                    _ => unreachable!(),
                 };
                 Value::I64(len as i64)
             }
@@ -981,13 +1120,19 @@ impl VM<'_> {
                         }
                         s.slice(i as usize, j as usize).into()
                     }
+                    Value::ArrayU8(s) => {
+                        if !(0 <= i && i <= j && j <= s.len() as i64) {
+                            return Err(RuntimeError::IndexOutOfBounds);
+                        }
+                        s.slice(i as usize, j as usize).into()
+                    }
                     Value::ArrayI64(s) => {
                         if !(0 <= i && i <= j && j <= s.len() as i64) {
                             return Err(RuntimeError::IndexOutOfBounds);
                         }
                         s.slice(i as usize, j as usize).into()
                     }
-                    _ => panic!(),
+                    _ => unreachable!(),
                 }
             }
             Builtin::Push => {
@@ -997,11 +1142,15 @@ impl VM<'_> {
                     Value::Array(s) => {
                         Value::Array(heap::push(s, x))
                     }
+                    Value::ArrayU8(s) => {
+                        let x = x.try_into()?;
+                        Value::ArrayU8(heap::push(s, x))
+                    }
                     Value::ArrayI64(s) => {
                         let x = x.try_into()?;
                         Value::ArrayI64(heap::push(s, x))
                     }
-                    _ => panic!(),
+                    _ => unreachable!(),
                 }
             }
         };

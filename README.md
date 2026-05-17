@@ -182,19 +182,26 @@ p[0] + p[1]
 Function `f(x) = x + x` can be defined like this:
 
 ``` rust
-let f = λx. x + x;
-// let f = \x. x + x;    // same as the above.
+let f = λx. 0 + x + x;
+// let f = \x. 0 + x + x;    // same as the above.
 f 3
 // => 6: Int
 ```
 
 ``` rust
-let normSq = λx.λy. x * x + y * y;
+let normSq = λx.λy. 0 + x * x + y * y;
 (normSq 2 3, 3 `normSq` 4)
 // => (13, 25): (Int, Int)
 ```
 
 - Infix notation with backticks allows any function to be used as an operator.
+
+> [NOTE!]
+> Why we use `0 + ...` ?  
+> Because primitive operators such as `+` are overloaded monomorphic functions.  
+> 👉 For more details (with Japanese explanations), see :
+> - [Trait Resolution and the Difference Between `let` and `*let`](docs/trait_resolution_en.md).
+> - [トレイト解決と `let` / `*let` の違い](docs/trait_resolution_ja.md).
 
 ### Operators as functions / User-defined operators
 ``` rust

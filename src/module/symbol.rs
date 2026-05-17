@@ -27,6 +27,9 @@ impl Symbol {
     pub fn int() -> Symbol {
         Symbol::Unique(Path::absolute(vec!["core", "Int"]))
     }
+    pub fn u8_() -> Symbol {
+        Symbol::Unique(Path::absolute(vec!["core", "u8"]))
+    }
     pub fn array() -> Symbol {
         Symbol::Unique(Path::absolute(vec!["core", "@[]"]))
     }

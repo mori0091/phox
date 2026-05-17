@@ -1,4 +1,5 @@
-let add = λx. λy. x + y;
+// let add = λx. λy. x + y;
+let add = λx. λy. 0 + x + y;
 let applyTwice = λf. λx. f (f x);
 applyTwice (add 1) 40
 // => 42: Int

@@ -18,7 +18,10 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn is_int(&self) -> bool {
+    pub fn is_u8(&self) -> bool {
+        *self == Type::u8_()
+    }
+    pub fn is_i64(&self) -> bool {
         *self == Type::int()
     }
 }
@@ -35,6 +38,9 @@ impl Type {
     }
     pub fn int() -> Self {
         Type::Con(Symbol::int())
+    }
+    pub fn u8_() -> Self {
+        Type::Con(Symbol::u8_())
     }
     pub fn var(id: TypeVarId) -> Self {
         Type::Var(id)

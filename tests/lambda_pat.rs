@@ -61,7 +61,8 @@ fn test_lambda_constructor_pattern() {
 fn test_lambda_curried_add() {
     // add = \x. \y. x + y
     let (val, sch) = eval(
-        "let add = \\x. \\y. x + y;
+        // "let add = \\x. \\y. x + y;
+        "let add = \\x. \\y. x + y + 0;
          add 2 3"
     ).unwrap();
     assert_eq!(format!("{}", val), "5");
@@ -96,7 +97,8 @@ fn test_lambda_curried_tuple() {
 fn test_lambda_curried_three_args() {
     // f = \x. \y. \z. x + y + z
     let (val, sch) = eval(
-        "let f = \\x. \\y. \\z. x + y + z;
+        // "let f = \\x. \\y. \\z. x + y + z;
+        "let f = \\x. \\y. \\z. x + y + z + 0;
          f 1 2 3"
     ).unwrap();
     assert_eq!(format!("{}", val), "6");
@@ -108,7 +110,8 @@ fn test_lambda_partial_application() {
     // add = \x. \y. x + y
     // inc = add 1
     let (val, sch) = eval(
-        "let add = \\x. \\y. x + y;
+        // "let add = \\x. \\y. x + y;
+        "let add = \\x. \\y. x + y + 0;
          let inc = add 1;
          inc 41"
     ).unwrap();
@@ -157,7 +160,7 @@ fn test_let_polymorphism_with_partial_application() {
 #[test]
 fn test_type_error_add_int_and_bool() {
     let err = eval("1 + true").unwrap_err();
-    assert!(err.contains("type mismatch"), "unexpected error: {err}");
+    assert!(err.contains("no matching overload"), "unexpected error: {err}");
 }
 
 #[test]

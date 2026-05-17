@@ -484,6 +484,7 @@ pub fn infer_expr(
         ExprBody::Lit(Lit::Unit) => (Type::unit(), vec![]),
         ExprBody::Lit(Lit::Bool(_)) => (Type::bool_(), vec![]),
         ExprBody::Lit(Lit::Int(_)) => (Type::int(), vec![]),
+        ExprBody::Lit(Lit::U8(_)) => (Type::u8_(), vec![]),
 
         ExprBody::Builtin(f) => {
             let symbol_env = &mut phox.get_symbol_env(module);

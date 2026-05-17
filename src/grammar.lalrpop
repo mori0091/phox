@@ -27,6 +27,7 @@ extern {
         "false" => Token::False,
         "()"    => Token::Unit,
         "@[]"   => Token::EmptyArray,
+        "u8"    => Token::U8Type, // u8 型
 
         // --- 演算子・記号 ---
         ".." =>  Token::DotDot,
@@ -83,6 +84,7 @@ extern {
         "identifier" => Token::Ident(<String>),
         "Identifier" => Token::ConIdent(<String>),
         "int"        => Token::Int(<i64>),
+        "LitU8"      => Token::LitU8(<u8>), // u8 リテラル (123u8, 0xFFu8)
 
         // --- その他の演算子記号列 ---
         "infixOp" => Token::InfixOp(<String>),
@@ -738,8 +740,9 @@ PatArray: Pat = {
 // === literal ===
 Lit: Lit = {
     LitUnit,
-    LitInt,
     LitBool,
+    LitInt,
+    <"LitU8"> => Lit::U8(<>),
 };
 
 LitUnit: Lit = {
@@ -825,6 +828,7 @@ IdentOps: String = {
 
 ConIdent: String = {
     <"Identifier">,
+    <"u8"> => "u8".to_string(),
 };
 
 // === comma-separated list ===

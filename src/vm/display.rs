@@ -86,6 +86,8 @@ impl fmt::Display for Value {
             Value::Unit => write!(f, "()"),
             Value::Bool(b) => write!(f, "{b}"),
             Value::I64(i) => write!(f, "{i}"),
+            Value::U8(u) => write!(f, "{u}"),
+
             Value::Con(c, args) => {
                 let mut xs = Vec::with_capacity(1 + args.len());
                 xs.push(c.pretty());
@@ -132,6 +134,7 @@ impl fmt::Display for Value {
             }
 
             Value::Array(s) => write!(f, "{}", s),
+            Value::ArrayU8(s) => write!(f, "{}", s),
             Value::ArrayI64(s) => write!(f, "{}", s),
 
             Value::DynArray(arr) => {
@@ -251,6 +254,9 @@ impl fmt::Display for Code {
             }
             Code::Array(arity) => {
                 write!(f, "<Array({})>", arity)
+            }
+            Code::ArrayU8(arity) => {
+                write!(f, "<ArrayU8({})>", arity)
             }
             Code::ArrayI64(arity) => {
                 write!(f, "<ArrayI64({})>", arity)

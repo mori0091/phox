@@ -15,7 +15,8 @@ cargo run examples/identity.phx
 
 ## 2. カリー化と部分適用
 ```ml
-let add = λx. λy. x + y;
+// let add = λx. λy. x + y;
+let add = λx. λy. 0 + x + y;
 let inc = add 1;
 (inc 41, add 2 3)
 // => (42, 5): (Int, Int)
@@ -63,7 +64,8 @@ cargo run examples/pattern_match.phx
 
 ## 5. レコードパターン
 ```ml
-let f = λ@{ x, y }. x + y;
+// let f = λ@{ x, y }. x + y;
+let f = λ@{ x, y }. 0 + x + y;
 f @{ x = 10, y = 32 }
 // => 42: Int
 ```
@@ -123,7 +125,8 @@ cargo run examples/type_with_multiple_variants.phx
 
 ## 8. 高階関数と演算子
 ```ml
-let add = λx. λy. x + y;
+// let add = λx. λy. x + y;
+let add = λx. λy. 0 + x + y;
 let applyTwice = λf. λx. f (f x);
 applyTwice (add 1) 40
 // => 42: Int

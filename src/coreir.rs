@@ -36,10 +36,12 @@ pub enum CoreExpr {
     // values (saturated expressions)
     Lit(Lit),
     Con(Symbol, Vec<CoreExpr>),     // `Con "Cons" [x, xs]`, `Con "Nil" []`
-    Array(Vec<CoreExpr>),           // `Array [e1, e2, ...]`
-    ArrayI64(Vec<CoreExpr>),        // `Array<i64> [e1, e2, ...]`
     Tuple(Vec<CoreExpr>),           // `Tuple [e1, e2, ...]`
     Record(Vec<(Label, CoreExpr)>), // `Record [("x", e1), ("y", e2), ...]`
+
+    Array(Vec<CoreExpr>),           // `Array [e1, e2, ...]`
+    ArrayU8(Vec<CoreExpr>),         // `Array<u8> [e1, e2, ...]`
+    ArrayI64(Vec<CoreExpr>),        // `Array<i64> [e1, e2, ...]`
 }
 
 impl CoreExpr {
@@ -299,7 +301,10 @@ fn lower_expr(expr: &Expr) -> Result<CoreExpr, Error> {
             use crate::typesys::*;
             let Some(Type::Array(elem_ty)) = &expr.ty else { unreachable!() };
             let a = {
-                if elem_ty.is_int() {
+                if elem_ty.is_u8() {
+                    CoreExpr::ArrayU8(xs)
+                }
+                else if elem_ty.is_i64() {
                     CoreExpr::ArrayI64(xs)
                 }
                 else {
