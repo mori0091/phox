@@ -182,6 +182,11 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Code, Error>
             let t = vm::Code::ArrayU8(args.len());
             Ok(vm::Code::clo(t, args))
         }
+        CoreExpr::ArrayU32(xs) => {
+            let args = lower_expr_vec(env, xs)?;
+            let t = vm::Code::ArrayU32(args.len());
+            Ok(vm::Code::clo(t, args))
+        }
         CoreExpr::ArrayI64(xs) => {
             let args = lower_expr_vec(env, xs)?;
             let t = vm::Code::ArrayI64(args.len());

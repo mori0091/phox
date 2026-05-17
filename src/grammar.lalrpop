@@ -27,7 +27,14 @@ extern {
         "false" => Token::False,
         "()"    => Token::Unit,
         "@[]"   => Token::EmptyArray,
-        "u8"    => Token::U8Type, // u8 型
+        "u8"    => Token::U8Type,  // u8 型
+        // "u16"   => Token::U16Type, // u16 型 (reserved)
+        "u32"   => Token::U32Type, // u32 型
+        // "u64"   => Token::U64Type, // u64 型 (reserved)
+        // "i8"    => Token::I8Type,  // i8 型  (reserved)
+        // "i16"   => Token::I16Type, // i16 型 (reserved)
+        // "i32"   => Token::I32Type, // i32 型 (reserved)
+        // "i64"   => Token::I64Type, // i64 型 (reserved)
 
         // --- 演算子・記号 ---
         ".." =>  Token::DotDot,
@@ -84,7 +91,8 @@ extern {
         "identifier" => Token::Ident(<String>),
         "Identifier" => Token::ConIdent(<String>),
         "int"        => Token::Int(<i64>),
-        "LitU8"      => Token::LitU8(<u8>), // u8 リテラル (123u8, 0xFFu8)
+        "LitU8"      => Token::LitU8(<u8>),   // u8 リテラル (123u8, 0xFFu8)
+        "LitU32"     => Token::LitU32(<u32>), // u32 リテラル (123u32, 0xFFu32)
 
         // --- その他の演算子記号列 ---
         "infixOp" => Token::InfixOp(<String>),
@@ -743,6 +751,7 @@ Lit: Lit = {
     LitBool,
     LitInt,
     <"LitU8"> => Lit::U8(<>),
+    <"LitU32"> => Lit::U32(<>),
 };
 
 LitUnit: Lit = {
@@ -829,6 +838,7 @@ IdentOps: String = {
 ConIdent: String = {
     <"Identifier">,
     <"u8"> => "u8".to_string(),
+    <"u32"> => "u32".to_string(),
 };
 
 // === comma-separated list ===

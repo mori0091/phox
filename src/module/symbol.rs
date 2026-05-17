@@ -30,6 +30,9 @@ impl Symbol {
     pub fn u8_() -> Symbol {
         Symbol::Unique(Path::absolute(vec!["core", "u8"]))
     }
+    pub fn u32_() -> Symbol {
+        Symbol::Unique(Path::absolute(vec!["core", "u32"]))
+    }
     pub fn array() -> Symbol {
         Symbol::Unique(Path::absolute(vec!["core", "@[]"]))
     }
