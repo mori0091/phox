@@ -13,18 +13,56 @@ trait TryCast a b {
 impl Cast u8 Int {
     cast = __cast_u8_i64__;
 };
+impl Cast u8 u32 {
+    cast = __cast_u8_u32__;
+};
+
+impl Cast u32 Int {
+    cast = __cast_u32_i64__;
+};
+impl Cast u32 u8 {
+    cast = __cast_u32_u8__;
+};
+
 impl Cast Int u8 {
     cast = __cast_i64_u8__;
+};
+impl Cast Int u32 {
+    cast = __cast_i64_u32__;
 };
 
 impl TryCast u8 Int {
     cast = \x. Ok (@{Cast u8 Int}.cast x);
 };
+impl TryCast u8 u32 {
+    cast = \x. Ok (@{Cast u8 u32}.cast x);
+};
+
+impl TryCast u32 u8 {
+    cast = \x.
+        if (255u32 < x)
+            Err OutOfBounds
+        else
+            Ok (@{Cast u32 u8}.cast x)
+    ;
+};
+impl TryCast u32 Int {
+    cast = \x. Ok (@{Cast u32 Int}.cast x);
+};
+
 impl TryCast Int u8 {
     cast = \x.
         if (x < 0 || 255 < x)
             Err OutOfBounds
         else
             Ok (@{Cast Int u8}.cast x)
+    ;
+};
+impl TryCast Int u32 {
+    cast = \x.
+        if (x < 0 || 4294967295 < x)
+            Err OutOfBounds
+        else
+            Ok (@{Cast Int u32}.cast x)
     ;
 };

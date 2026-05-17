@@ -83,10 +83,11 @@ impl fmt::Display for Pat {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::Unit => write!(f, "()"),
+            Value::Unit    => write!(f, "()"),
             Value::Bool(b) => write!(f, "{b}"),
-            Value::I64(i) => write!(f, "{i}"),
-            Value::U8(u) => write!(f, "{u}"),
+            Value::I64(i)  => write!(f, "{i}"),
+            Value::U8(u)   => write!(f, "{u}"),
+            Value::U32(u)  => write!(f, "{u}"),
 
             Value::Con(c, args) => {
                 let mut xs = Vec::with_capacity(1 + args.len());
@@ -135,6 +136,7 @@ impl fmt::Display for Value {
 
             Value::Array(s) => write!(f, "{}", s),
             Value::ArrayU8(s) => write!(f, "{}", s),
+            Value::ArrayU32(s) => write!(f, "{}", s),
             Value::ArrayI64(s) => write!(f, "{}", s),
 
             Value::DynArray(arr) => {
@@ -257,6 +259,9 @@ impl fmt::Display for Code {
             }
             Code::ArrayU8(arity) => {
                 write!(f, "<ArrayU8({})>", arity)
+            }
+            Code::ArrayU32(arity) => {
+                write!(f, "<ArrayU32({})>", arity)
             }
             Code::ArrayI64(arity) => {
                 write!(f, "<ArrayI64({})>", arity)

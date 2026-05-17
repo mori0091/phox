@@ -40,6 +40,13 @@ pub enum Token {
     #[token("()"   , priority = 10)] Unit,
     #[token("@[]"  , priority = 10)] EmptyArray,
     #[token("u8"   , priority = 10)] U8Type,
+    // #[token("u16"  , priority = 10)] U16Type, // (reserved)
+    #[token("u32"  , priority = 10)] U32Type,
+    // #[token("u64"  , priority = 10)] U64Type, // (reserved)
+    // #[token("i8"   , priority = 10)] I8Type,  // (reserved)
+    // #[token("i16"  , priority = 10)] I16Type, // (reserved)
+    // #[token("i32"  , priority = 10)] I32Type, // (reserved)
+    // #[token("i64"  , priority = 10)] I64Type, // (reserved)
 
     // --- 演算子・記号 ---
     #[token(".."   , priority = 7)]  DotDot,
@@ -107,6 +114,9 @@ pub enum Token {
     #[regex(r"(0x[0-9a-fA-F]+|[0-9]+)u8", |lex| parse_u8_literal(lex.slice()))]
     LitU8(u8),
 
+    #[regex(r"(0x[0-9a-fA-F]+|[0-9]+)u32", |lex| parse_u32_literal(lex.slice()))]
+    LitU32(u32),
+
     // --- その他の演算子記号列 ---
     #[regex(r"[*+\-/!$%&=^?<>]+", |lex| lex.slice().to_string())]
     InfixOp(String),
@@ -124,6 +134,16 @@ fn parse_u8_literal(s: &str) -> Result<u8, LexicalError> {
         u8::from_str_radix(hex, 16)
     } else {
         body.parse::<u8>()
+    };
+    parsed.map_err(|_| LexicalError::InvalidToken)
+}
+
+fn parse_u32_literal(s: &str) -> Result<u32, LexicalError> {
+    let body = &s[..s.len()-3];
+    let parsed = if let Some(hex) = body.strip_prefix("0x") {
+        u32::from_str_radix(hex, 16)
+    } else {
+        body.parse::<u32>()
     };
     parsed.map_err(|_| LexicalError::InvalidToken)
 }

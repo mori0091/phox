@@ -41,6 +41,7 @@ pub enum CoreExpr {
 
     Array(Vec<CoreExpr>),           // `Array [e1, e2, ...]`
     ArrayU8(Vec<CoreExpr>),         // `Array<u8> [e1, e2, ...]`
+    ArrayU32(Vec<CoreExpr>),        // `Array<u32> [e1, e2, ...]`
     ArrayI64(Vec<CoreExpr>),        // `Array<i64> [e1, e2, ...]`
 }
 
@@ -301,11 +302,14 @@ fn lower_expr(expr: &Expr) -> Result<CoreExpr, Error> {
             use crate::typesys::*;
             let Some(Type::Array(elem_ty)) = &expr.ty else { unreachable!() };
             let a = {
-                if elem_ty.is_u8() {
+                if elem_ty.is_int() {
+                    CoreExpr::ArrayI64(xs)
+                }
+                else if elem_ty.is_u8() {
                     CoreExpr::ArrayU8(xs)
                 }
-                else if elem_ty.is_i64() {
-                    CoreExpr::ArrayI64(xs)
+                else if elem_ty.is_u32() {
+                    CoreExpr::ArrayU32(xs)
                 }
                 else {
                     CoreExpr::Array(xs)
