@@ -196,7 +196,7 @@ let normSq = λx.λy. 0 + x * x + y * y;
 
 - Infix notation with backticks allows any function to be used as an operator.
 
-> [NOTE!]
+> [!NOTE]
 > Why we use `0 + ...` ?  
 > Because primitive operators such as `+` are overloaded monomorphic functions.  
 > 👉 For more details (with Japanese explanations), see :

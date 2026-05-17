@@ -8,7 +8,7 @@ When multiple implementations of a trait exist for different types,
 A function defined with `let` must have **a single, fully determined type at the point of definition**.  
 Therefore, the following definition is ambiguous and results in an error:
 
-```
+```rust
 let add = \a.\b. a + b;
 // => ambiguous variable `(+)`
 ```
@@ -16,10 +16,10 @@ let add = \a.\b. a + b;
 At the point of `a + b`, the type of `a` is not yet known,  
 so the compiler cannot decide whether to use `Add Int` or `Add u8`.
 
-> [NOTE!]  
+> [!NOTE]  
 > Depending on context, `let` *can* become polymorphic.  
 > For example, at the module top level, the following definition becomes a polymorphic function:
-> ```
+> ```rust
 > // id : ∀ a. a -> a
 > let id = \x. x;
 > ```
@@ -28,7 +28,7 @@ so the compiler cannot decide whether to use `Add Int` or `Add u8`.
 > with multiple candidate implementations.  
 > Because the type cannot be uniquely determined, the definition is monomorphic and ambiguous.
 
-> [NOTE!]  
+> [!NOTE]  
 > A `let` binding becomes polymorphic **only when its definition contains no ambiguity**.  
 > For example, `let id = \x. x` has no constraints on `x`, so it generalizes.  
 >
@@ -44,7 +44,7 @@ so the compiler cannot decide whether to use `Add Int` or `Add u8`.
 Trait implementations are **statically resolved at compile time, based on the context in which the function is used**.  
 (This is not dictionary passing; the appropriate implementation is *statically baked into* each use site.)
 
-```
+```rust
 *let add = @{Add a}.(+);
 
 add 2 3       // Add Int is baked in
@@ -57,7 +57,7 @@ add 2u8 3u8   // Add u8 is baked in
 ## Type determination by literals
 A literal can force a specific type, resolving ambiguity:
 
-```
+```rust
 let add = \a.\b. 0 + a + b;
 // 0 is Int, so Add Int is selected
 ```
@@ -65,7 +65,7 @@ let add = \a.\b. 0 + a + b;
 ## Fixing an operator implementation in a local scope
 Inside a block `{ ... }`, you can bind a trait record to restrict which implementation is used:
 
-```
+```rust
 let add = {
   let @{(+)} = @{Add Int};
   \a.\b. a + b
@@ -76,7 +76,7 @@ add 2 3   // => 5: Int
 
 This is equivalent to:
 
-```
+```rust
 let add = {
   let (+) = @{Add Int}.(+);
   \a.\b. a + b
@@ -85,7 +85,7 @@ let add = {
 
 Or even more concisely:
 
-```
+```rust
 let add = @{Add Int}.(+);
 
 add 2 3   // => 5: Int
