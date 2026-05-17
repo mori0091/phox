@@ -134,6 +134,7 @@ impl fmt::Display for Value {
             }
 
             Value::Array(s) => write!(f, "{}", s),
+            Value::ArrayU8(s) => write!(f, "{}", s),
             Value::ArrayI64(s) => write!(f, "{}", s),
 
             Value::DynArray(arr) => {
@@ -253,6 +254,9 @@ impl fmt::Display for Code {
             }
             Code::Array(arity) => {
                 write!(f, "<Array({})>", arity)
+            }
+            Code::ArrayU8(arity) => {
+                write!(f, "<ArrayU8({})>", arity)
             }
             Code::ArrayI64(arity) => {
                 write!(f, "<ArrayI64({})>", arity)

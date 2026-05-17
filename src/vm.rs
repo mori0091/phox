@@ -57,6 +57,7 @@ pub enum Code {
     Con(ConId, usize),   // `Con "Cons" 2`, `Con "Nil" 0`
     Record(Vec<Label>),  // `Record ["x", "y"]`
     Array(usize),        // `Array 2`, `Array 1` ; Constructs slice (`@[a]`) of new array
+    ArrayU8(usize),
     ArrayI64(usize),
 
     // DynArray(Box<Code>), // Constructs mutable reference of new dynamic array (e.g. `buf @[a]`)
@@ -196,6 +197,7 @@ pub enum Value {
     Record(Vec<Label>, Vec<Term>),
 
     Array(Slice<Term>),         // immutable slice `@[a]`
+    ArrayU8(Slice<u8>),
     ArrayI64(Slice<i64>),
 
     DynArray(Buf<Term>),        // mutable reference of dynamic array
@@ -210,9 +212,16 @@ pub enum Term {
 
 // -------------------------------------------------------------
 // === boxing / unboxing ===
+// --- arrays ---
 impl Into<Value> for Slice<Term> {
     fn into(self) -> Value {
         Value::Array(self)
+    }
+}
+
+impl Into<Value> for Slice<u8> {
+    fn into(self) -> Value {
+        Value::ArrayU8(self)
     }
 }
 
@@ -222,6 +231,26 @@ impl Into<Value> for Slice<i64> {
     }
 }
 
+// --- u8 ---
+impl Into<Term> for u8 {
+    fn into(self) -> Term {
+        Term::Val(Value::U8(self))
+    }
+}
+
+impl TryFrom<Term> for u8 {
+    type Error = RuntimeError;
+    fn try_from(value: Term) -> Result<Self, Self::Error> {
+        if let Term::Val(Value::U8(i)) = value {
+            Ok(i)
+        }
+        else {
+            unreachable!()
+        }
+    }
+}
+
+// --- i64 ---
 impl Into<Term> for i64 {
     fn into(self) -> Term {
         Term::Val(Value::I64(self))
@@ -339,6 +368,20 @@ impl VM<'_> {
                         Slice::Some { arr, beg: 0, end: *arity }
                     };
                     return self.run_state_value(Value::Array(s));
+                }
+                Code::ArrayU8(arity) => {
+                    let s = if *arity == 0 {
+                        Slice::Empty
+                    }
+                    else {
+                        let xs: Vec<_> = self.env_values(*arity).into_iter().map(|t| {
+                            let Term::Val(Value::U8(i)) = t else { unreachable!() };
+                            i
+                        }).collect();
+                        let arr = self.heap_array(xs);
+                        Slice::Some { arr, beg: 0, end: *arity }
+                    };
+                    return self.run_state_value(Value::ArrayU8(s));
                 }
                 Code::ArrayI64(arity) => {
                     let s = if *arity == 0 {
@@ -611,6 +654,9 @@ fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
         (p, Term::Val(Value::Array(s))) => {
             match_pat_array(p, s)
         }
+        (p, Term::Val(Value::ArrayU8(s))) => {
+            match_pat_array(p, s)
+        }
         (p, Term::Val(Value::ArrayI64(s))) => {
             match_pat_array(p, s)
         }
@@ -785,6 +831,11 @@ impl VM<'_> {
         match self.value() {
             Value::Array(s) => {
                 self.state.term = heap::extract_1(s, index)?;
+                Ok(())
+            }
+            Value::ArrayU8(s) => {
+                let x = heap::extract_1(s, index)?;
+                self.state.term = x.into();
                 Ok(())
             }
             Value::ArrayI64(s) => {
@@ -1052,6 +1103,7 @@ impl VM<'_> {
                 let x = &self.env_get_value(0)?;
                 let len = match x {
                     Value::Array(s) => s.len(),
+                    Value::ArrayU8(s) => s.len(),
                     Value::ArrayI64(s) => s.len(),
                     _ => unreachable!(),
                 };
@@ -1063,6 +1115,12 @@ impl VM<'_> {
                 let j = self.env_get_i64(0)?;
                 match xs {
                     Value::Array(s) => {
+                        if !(0 <= i && i <= j && j <= s.len() as i64) {
+                            return Err(RuntimeError::IndexOutOfBounds);
+                        }
+                        s.slice(i as usize, j as usize).into()
+                    }
+                    Value::ArrayU8(s) => {
                         if !(0 <= i && i <= j && j <= s.len() as i64) {
                             return Err(RuntimeError::IndexOutOfBounds);
                         }
@@ -1083,6 +1141,10 @@ impl VM<'_> {
                 match xs {
                     Value::Array(s) => {
                         Value::Array(heap::push(s, x))
+                    }
+                    Value::ArrayU8(s) => {
+                        let x = x.try_into()?;
+                        Value::ArrayU8(heap::push(s, x))
                     }
                     Value::ArrayI64(s) => {
                         let x = x.try_into()?;

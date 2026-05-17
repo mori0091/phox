@@ -18,7 +18,10 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn is_int(&self) -> bool {
+    pub fn is_u8(&self) -> bool {
+        *self == Type::u8_()
+    }
+    pub fn is_i64(&self) -> bool {
         *self == Type::int()
     }
 }
