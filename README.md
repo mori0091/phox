@@ -40,7 +40,8 @@ _New to Phox? Start with [🚀 Getting Started](#-getting-started)._
 ## ✨ Features
 
 - **Hindley–Milner type inference**  
-  No need to annotate types in most cases. (In fact, Phox has no type-annotation syntax)
+  No need to annotate types in most cases.  
+  (Phox includes a minimal type-annotation syntax for expressions, used only when disambiguation is needed.)
 - **Algebraic data types (ADT)**  
   Define expressive data structures with variants.
 - **Pattern matching**  
@@ -49,12 +50,12 @@ _New to Phox? Start with [🚀 Getting Started](#-getting-started)._
   Cleaner syntax for single-constructor wrapper types.
 - **First-class functions**  
   Functions are values, operators are functions too.
-- **Generic function temlates**  
+- **Generic function templates**  
   Non-first class / overloadable generic function templates.
 - **Multi-parameter typeclasses (`trait`/`impl`)**  
   Define the relationship between multiple methods and multiple types.
 - **Trait record**  
-  Typeclasses (`trait`/`impl`) can be instansiated as a first-class record value, with a simple syntax.
+  Typeclasses (`trait`/`impl`) can be instantiated as a first-class record value, with a simple syntax.
 - **Module system**  
   Rust like module / namespace definition.
 - **Simple syntax**  
@@ -178,6 +179,8 @@ p[0] + p[1]
 // => 7: Int
 ```
 
+---
+
 ### Functions as operators
 Function `f(x) = x + x` can be defined like this:
 
@@ -202,6 +205,30 @@ let normSq = λx.λy. 0 + x * x + y * y;
 > 👉 For more details (with Japanese explanations), see :
 > - [Trait Resolution and the Difference Between `let` and `*let`](docs/trait_resolution_en.md).
 > - [トレイト解決と `let` / `*let` の違い](docs/trait_resolution_ja.md).
+
+
+### Minimal Type Annotations
+Once again, the function `f(x) = x + x` can also be defined as follows:
+
+``` rust
+let f = λx. (x + x): Int;
+f 3
+// => 6: Int
+```
+
+- Optional type annotations for **expressions** (`expr: T`) are available.  
+  This adds a `type_eq` (type equality) constraint between the inferred type and the annotated type.  
+  This helps type inference and the constraint solver resolve the last mile of ambiguity.
+
+- Type annotations as **signatures** are required only in `trait` declarations.  
+  Other bindings (such as `let` and lambda parameters) do not accept type signatures.
+
+> [!NOTE]  
+> The `expr: T` syntax is only permitted for **atomic** expressions.  
+> If you need to type-annotate a complex expression,  
+> enclose the expression in parentheses and follow it with the type annotation.
+
+---
 
 ### Operators as functions / User-defined operators
 ``` rust
@@ -237,10 +264,13 @@ let x = 3;
 not true  // => false: Bool  (unary not)
 ```
 
+---
+
 ### Pipeline and Composition operators
 
 Phox provides **pipeline operators** and **composition operators** to make function application and chaining more readable.  
 They allow you to express nested calls as a clear flow of data or a sequence of transformations.
+
 
 #### Pipeline operators
 - `x |> f` is the same as `f x`.  
@@ -282,6 +312,8 @@ f >> g >> h <| 1 |> f;  // => 36: Int  ; h (g (f (f 1)))
 
 👉 In short: **use pipelines to pass data, and composition to connect functions**. You can freely combine both styles to write in the way that feels most natural.
 
+---
+
 ### Infix-operator partial applications (a.k.a. section syntax)
 Assuming that `op` is a arbitrary infix-operator:
 - `|(e op)` or `|(e op _)` are same as `\rhs. e op rhs` (bind the 1st argument of `op` with `e`)
@@ -299,6 +331,8 @@ f 6    // 6 / 2
 // => 3
 ```
 
+---
+
 ### Pure type-safe `for`/`while` loop functions
 
 ``` rust
@@ -315,6 +349,8 @@ fact 5
 ```
 
 `while pred upd` is same as `\init. for init pred upd`.
+
+---
 
 ### Traits and Implementations
 Phox supports **traits** (`trait`; similar to type classes) to define shared behavior across types.
@@ -355,6 +391,8 @@ neq true true // => false
 2 `eq` 3      // => false
 ```
 
+---
+
 ### Trait Records
 A **trait record** is a first-class value representing a trait implementation.  
 You can explicitly pass or select an implementation:
@@ -371,6 +409,8 @@ If multiple candidates exist, ambiguity is reported as an error, and you can dis
 
 
 👉 For more examples (with Japanese explanations), see [トレイト利用例 (チートシート)](docs/cheatsheet_traits_ja.md).
+
+---
 
 ### Iterators, generators, and sink
 
@@ -402,6 +442,7 @@ The `::core::iter` module provides much more iterators / iterator-adapters, such
 
 👉 For more details, see also [`::core::iter` module](assets/core/iter.phx).
 
+---
 
 ### Arrays API
 
@@ -450,6 +491,86 @@ replaceN @[1,2,3,4] 1 3 @[10,20,30]
 ```
 
 👉 For more details, see also [`::core::array` module](assets/core/array.phx).
+
+---
+
+### Automatic Safety Mechanism Selection via Context-Sensitive Multi-Dispatch
+
+Phox can automatically select between **safe** and **unsafe** numeric conversions  
+using contextual multi-dispatch and type-directed constraint solving —  
+**without any built-in notion of safety in the type system.**
+
+In other words:  
+**Phox doesn’t know what “safe” means.  
+But the library design + trait resolution makes it emerge naturally.**
+
+#### Example
+```rust
+counter 250
+    |> map cast
+    |> take_while ok?
+    |> map (\Ok x. x)
+    |> collect @[]: @[u8]
+=> @[250, 251, 252, 253, 254, 255]: @[u8]
+```
+
+#### Or more explicitly:
+```rust
+counter 250
+    |> map @{TryCast a u8}.cast
+    |> take_while ok?
+    |> map (\Ok x. x)
+    |> collect @[]
+=> @[250, 251, 252, 253, 254, 255]: @[u8]
+```
+
+#### About `cast`
+
+```rust
+(cast 10): u8
+=> 10: u8
+
+(cast 10): (Result e u8)
+=> Ok 10: Result RuntimeError u8
+
+```
+
+<details>
+<summary>Advanced: full cast candidate list</summary>
+
+```rust
+> cast
+ambiguous variable `cast`
+candidates:
+  Int -> Result RuntimeError u32 requires TryCast Int u32.
+  Int -> Result RuntimeError u8 requires TryCast Int u8.
+  Int -> u32 requires Cast Int u32.
+  Int -> u8 requires Cast Int u8.
+  u32 -> Int requires Cast u32 Int.
+  u32 -> Result RuntimeError Int requires TryCast u32 Int.
+  u32 -> Result RuntimeError u8 requires TryCast u32 u8.
+  u32 -> u8 requires Cast u32 u8.
+  u8 -> Int requires Cast u8 Int.
+  u8 -> Result RuntimeError Int requires TryCast u8 Int.
+  u8 -> Result RuntimeError u32 requires TryCast u8 u32.
+  u8 -> u32 requires Cast u8 u32.
+solution:
+  @{Cast Int u32}.cast
+  @{Cast Int u8}.cast
+  @{Cast u32 Int}.cast
+  @{Cast u32 u8}.cast
+  @{Cast u8 Int}.cast
+  @{Cast u8 u32}.cast
+  @{TryCast Int u32}.cast
+  @{TryCast Int u8}.cast
+  @{TryCast u32 Int}.cast
+  @{TryCast u32 u8}.cast
+  @{TryCast u8 Int}.cast
+  @{TryCast u8 u32}.cast
+
+```
+
+</details>
 
 ---
 
@@ -615,7 +736,7 @@ Example programs are available in the `examples/` directory.
 
 ### Trait system
 - [X] Constraint-based multi-parameter type classes (`trait`/`impl`)
-- [X] Automatic requrirements inference for `impl`s
+- [X] Automatic requirements inference for `impl`s
 - [X] Higher order trait-record inference (e.g. `@{Iter s a}`)
 
 ### Record system
