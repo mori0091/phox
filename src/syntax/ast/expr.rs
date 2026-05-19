@@ -7,10 +7,17 @@ use crate::module::*;
 use crate::runtime::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TypeAnnotation {
+    Raw(RawType),
+    Named(Type),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Expr {
     pub span: (usize, usize),
     pub body: ExprBody,
     pub ty: Option<Type>,
+    pub ty_annotated: Option<TypeAnnotation>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -66,7 +73,7 @@ impl Expr {
 
 impl Expr {
     pub fn lit(x: Lit) -> Self {
-        Expr { span:(0,0), body: ExprBody::Lit(x), ty: None }
+        Expr::expr(ExprBody::Lit(x))
     }
     pub fn unit() -> Self {
         Expr::lit(Lit::Unit)
@@ -82,7 +89,7 @@ impl Expr {
     }
 
     pub fn expr(e: ExprBody) -> Self {
-        Expr { span:(0,0), body: e, ty: None }
+        Expr { span:(0,0), body: e, ty: None, ty_annotated: None, }
     }
     pub fn local_var<S: Into<String>>(s: S) -> Self {
         Expr::expr(ExprBody::Var(Symbol::local(s)))
@@ -243,6 +250,8 @@ impl Repr for Expr {
             Some(ty) => Some(ty.repr(ctx)),
             None => None,
         };
+        let ty_annotated = self.ty_annotated.clone();
+
         let Expr {body, ..} = match &self.body {
             ExprBody::Lit(_) => { self.clone() }
             ExprBody::Var(_) => { self.clone() }
@@ -317,7 +326,7 @@ impl Repr for Expr {
                 Expr::field_access(base, field_label)
             }
         };
-        Expr { span, body, ty }
+        Expr { span, body, ty, ty_annotated  }
     }
 }
 
@@ -330,6 +339,8 @@ impl ApplySubst for Expr {
             Some(ty) => Some(ty.apply_subst(subst)),
             None => None,
         };
+        let ty_annotated = self.ty_annotated.clone();
+
         let Expr {body, ..} = match &self.body {
             ExprBody::Lit(_) => { self.clone() }
             ExprBody::Var(_) => { self.clone() }
@@ -404,7 +415,7 @@ impl ApplySubst for Expr {
                 Expr::field_access(base, field_label)
             }
         };
-        Expr { span, body, ty }
+        Expr { span, body, ty, ty_annotated }
     }
 }
 
@@ -534,6 +545,8 @@ impl RenameForPretty for Expr {
             Some(ty) => Some(ty.rename_var(map)),
             None => None,
         };
+        let ty_annotated = self.ty_annotated.clone();
+
         let Expr {body, ..} = match &self.body {
             ExprBody::Lit(_) => { self.clone() }
             ExprBody::Var(_) => { self.clone() }
@@ -608,6 +621,6 @@ impl RenameForPretty for Expr {
                 Expr::field_access(base, field_label)
             }
         };
-        Expr { span, body, ty }
+        Expr { span, body, ty, ty_annotated }
     }
 }

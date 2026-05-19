@@ -161,6 +161,7 @@ impl Solver for TypeConstraint {
                         span: (0,0), // \TODO unused yet
                         body: ExprBody::Var(sym),
                         ty: Some(ty),
+                        ty_annotated: None,
                     })
                 }
             },
@@ -255,6 +256,7 @@ fn solve_overloaded(
             span: (0,0), // \TODO unused yet
             body: ExprBody::Var(sym.clone()),
             ty: Some(ty.clone()),
+            ty_annotated: None,
         }));
     }
 
