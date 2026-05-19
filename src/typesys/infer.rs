@@ -300,7 +300,7 @@ pub fn infer_expr(
     if let Some(ty) = expr.ty.clone() {
         return Ok((ty, vec![]))
     }
-    let (ty, cs) = match &mut expr.body {
+    let (ty, mut cs) = match &mut expr.body {
         ExprBody::Var(symbol) => {
             if phox.starlet_env.is_starlet(&symbol) {
                 let matches = phox.starlet_env.get_by_name(&symbol);
@@ -685,6 +685,9 @@ pub fn infer_expr(
         }
     };
     expr.ty = Some(ty.clone());
+    if let Some(TypeAnnotation::Named(annot)) = &expr.ty_annotated {
+        cs.push(Constraint::type_eq(&ty, annot));
+    }
     Ok((ty, cs))
 }
 

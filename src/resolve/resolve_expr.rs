@@ -9,6 +9,12 @@ pub fn resolve_expr(
     param_map: &mut TyParMap,
     expr: &mut Expr,
 ) -> Result<(), Error> {
+    // resolve optional type annotation
+    if let Some(TypeAnnotation::Raw(raw)) = &mut expr.ty_annotated {
+        let annot = resolve_raw_type(phox, module, symbol_env, raw, param_map)?;
+        expr.ty_annotated = Some(TypeAnnotation::Named(annot));
+    }
+    // resolve body
     match &mut expr.body {
         ExprBody::App(f, x) => {
             resolve_expr(phox, module, symbol_env, param_map, f)?;
