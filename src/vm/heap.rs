@@ -112,6 +112,14 @@ impl <T> ArrayLike for Slice<T> {
     }
 }
 
+/// Builtin::Slice
+pub fn slice<T: Clone>(s: Slice<T>, i: i64, j: i64) -> Result<Slice<T>, RuntimeError> {
+    if !(0 <= i && i <= j && j <= s.len() as i64) {
+        return Err(RuntimeError::IndexOutOfBounds);
+    }
+    Ok(s.slice(i as usize, j as usize))
+}
+
 /// Builtin::Push
 pub fn push<T: Clone>(s: Slice<T>, t: T) -> Slice<T> {
     let buf = thaw(s);          // thaw!

@@ -1239,8 +1239,8 @@ impl VM<'_> {
             Builtin::Len => {
                 let x = &self.env_get_value(0)?;
                 let len = match x {
-                    Value::Array(s) => s.len(),
-                    Value::ArrayU8(s) => s.len(),
+                    Value::Array(s)    => s.len(),
+                    Value::ArrayU8(s)  => s.len(),
                     Value::ArrayU32(s) => s.len(),
                     Value::ArrayI64(s) => s.len(),
                     _ => unreachable!(),
@@ -1252,30 +1252,10 @@ impl VM<'_> {
                 let i = self.env_get_i64(1)?;
                 let j = self.env_get_i64(0)?;
                 match xs {
-                    Value::Array(s) => {
-                        if !(0 <= i && i <= j && j <= s.len() as i64) {
-                            return Err(RuntimeError::IndexOutOfBounds);
-                        }
-                        s.slice(i as usize, j as usize).into()
-                    }
-                    Value::ArrayU8(s) => {
-                        if !(0 <= i && i <= j && j <= s.len() as i64) {
-                            return Err(RuntimeError::IndexOutOfBounds);
-                        }
-                        s.slice(i as usize, j as usize).into()
-                    }
-                    Value::ArrayU32(s) => {
-                        if !(0 <= i && i <= j && j <= s.len() as i64) {
-                            return Err(RuntimeError::IndexOutOfBounds);
-                        }
-                        s.slice(i as usize, j as usize).into()
-                    }
-                    Value::ArrayI64(s) => {
-                        if !(0 <= i && i <= j && j <= s.len() as i64) {
-                            return Err(RuntimeError::IndexOutOfBounds);
-                        }
-                        s.slice(i as usize, j as usize).into()
-                    }
+                    Value::Array(s)    => heap::slice(s, i, j)?.into(),
+                    Value::ArrayU8(s)  => heap::slice(s, i, j)?.into(),
+                    Value::ArrayU32(s) => heap::slice(s, i, j)?.into(),
+                    Value::ArrayI64(s) => heap::slice(s, i, j)?.into(),
                     _ => unreachable!(),
                 }
             }
@@ -1283,21 +1263,10 @@ impl VM<'_> {
                 let xs = self.env_get_value(1)?;
                 let x = self.env_get_term(0)?;
                 match xs {
-                    Value::Array(s) => {
-                        Value::Array(heap::push(s, x))
-                    }
-                    Value::ArrayU8(s) => {
-                        let x = x.try_into()?;
-                        Value::ArrayU8(heap::push(s, x))
-                    }
-                    Value::ArrayU32(s) => {
-                        let x = x.try_into()?;
-                        Value::ArrayU32(heap::push(s, x))
-                    }
-                    Value::ArrayI64(s) => {
-                        let x = x.try_into()?;
-                        Value::ArrayI64(heap::push(s, x))
-                    }
+                    Value::Array(s)    => heap::push(s, x).into(),
+                    Value::ArrayU8(s)  => heap::push(s, x.try_into()?).into(),
+                    Value::ArrayU32(s) => heap::push(s, x.try_into()?).into(),
+                    Value::ArrayI64(s) => heap::push(s, x.try_into()?).into(),
                     _ => unreachable!(),
                 }
             }
