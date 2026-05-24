@@ -574,6 +574,45 @@ solution:
 
 ---
 
+### String: A Type-Level Unicode String Framework
+
+Phox treats strings not as a single built-in primitive,  
+but as a family of types parameterized by *what you consider a character*.  
+All UTF-8 strings are guaranteed to be in canonical form at the type level.
+
+- `CodePoint`  
+  Type of Unicode Code Point (may include surrogates)
+
+- `ScalarValue`  
+  Type of Unicode Scalar Value (surrogates excluded)
+
+- `ScalarString` (synonym of `Str ScalarValue`)  
+  Type of UTF-8 strings (canonical UTF-8)
+
+```rust
+"Phox" |> collect @[]
+// UTF-8 decode into Unicode scalar values
+// => @['P', 'h', 'o', 'x']: @[ScalarValue]
+
+@['P', 'h', 'o', 'x'] |> collect ""
+// UTF-8 encode into ScalarString
+// => "Phox": ScalarString
+
+(cast "🎉🤣👍🍺"):@[u8]
+// O(1) unwrap of the underlying UTF-8 bytes
+// => @[240, 159, 142, 137, 240, 159, 164, 163, 240, 159, 145, 141, 240, 159, 141, 186]: @[u8]
+
+counter 65 |> map cast |> take_while ok? |> map (\Ok sv. sv) |> take 5 |> collect ""
+// Build a UTF-8 string from a numeric stream with no intermediate arrays
+// => "ABCDE": ScalarString
+
+collect "Hello " "World!"
+// Concatenate UTF-8 strings
+// => "Hello World!": ScalarString
+```
+
+---
+
 ## 💡 Sample Programs
 
 ### Identity
