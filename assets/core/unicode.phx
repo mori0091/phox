@@ -1,0 +1,112 @@
+use ::core::*;
+
+type CodePoint = MkCodePoint u32;
+type ScalarValue = MkScalarValue u32;
+type Grapheme = MkGrapheme @[u8];
+
+let scalar-value? = \MkCodePoint cp.
+    cp < 0xD800u32 || (0xDFFFu32 < cp && cp <= 0x10FFFFu32)
+;
+
+impl Cast CodePoint u32 {
+    cast = \MkCodePoint cp. cp;
+};
+
+impl TryCast u32 CodePoint {
+    cast = \cp. if (cp <= 0x10FFFFu32) {
+        Ok (MkCodePoint cp)
+    }
+    else {
+        Err OutOfBounds
+    };
+};
+
+impl Cast ScalarValue u32 {
+    cast = \MkScalarValue cp. cp;
+};
+
+impl TryCast u32 ScalarValue {
+    cast = \cp. if (scalar-value? (MkCodePoint cp)) {
+        Ok (MkScalarValue cp)
+    }
+    else {
+        Err OutOfBounds
+    };
+};
+
+impl TryCast Int ScalarValue {
+    // cast = \cp. if ((0 <= cp && cp < 0xD800) || (0xDFFF < cp && cp <= 0x10FFFF)) {
+    cast = \cp. if ((0 <= cp && cp < 55296) || (57343 < cp && cp <= 1114111)) {
+        Ok (MkScalarValue (@{Cast Int u32}.cast cp))
+    }
+    else {
+        Err OutOfBounds
+    };
+};
+
+impl Cast ScalarValue CodePoint {
+    cast = \MkScalarValue cp. MkCodePoint cp;
+};
+
+impl TryCast CodePoint ScalarValue {
+    cast = \cp. if (scalar-value? cp) match (cp) {
+        MkCodePoint cp' => Ok (MkScalarValue cp')
+    }
+    else {
+        Err OutOfBounds
+    };
+};
+
+mod utf8;
+
+impl serdes::Codec CodePoint {
+    encode = utf8::encode;
+    decode = utf8::decode;
+};
+
+impl serdes::Codec ScalarValue {
+    encode = \xs.\sv. utf8::encode xs (cast sv);
+    decode = \xs. match (utf8::decode xs) {
+        Some (cp, xs) => match (cast cp) {
+            Ok sv => Some (sv, xs),
+            _ => None,
+        },
+        _ => None,
+    };
+};
+
+// // Declares type constructor `Str` for representing various type of string.
+// type trait Str a;
+use ::core::Str;
+
+// // Define `Str ScalarValue` string type with synonym `ScalarString`.
+// type impl ScalarString as Str ScalarValue = MkScalarString @[u8];
+type ScalarString = MkScalarString @[u8];
+
+// // Define `Str Grapheme` string type with synonym `GraphemeString`.
+// type impl GraphemeString as Str Grapheme = MkGraphemeString @[u8];
+
+let string_uncons = \MkScalarString bytes. match (@{serdes::Codec ScalarValue}.decode bytes) {
+    Some (sv, bytes') => Some (sv, MkScalarString bytes'),
+    _ => None,
+};
+
+let string_push = \MkScalarString bytes.\sv.
+    MkScalarString (@{serdes::Codec ScalarValue}.encode bytes sv)
+;
+
+impl Iter Str ScalarValue {
+    // next : ScalarString -> Some (ScalarValue, ScalarString)
+    next = string_uncons;
+};
+
+impl Sink ScalarString ScalarValue ScalarString {
+    // update : ScalarString -> ScalarValue -> ScalarString
+    update = string_push;
+    // finish : ScalarString -> ScalarString
+    finish = id;
+};
+
+impl Cast ScalarString @[u8] {
+    cast = \MkScalarString bytes. bytes;
+};

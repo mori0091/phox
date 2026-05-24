@@ -71,3 +71,14 @@ use error::*;
 // -------------------------------------------------------------
 mod conv;
 use conv::*;
+
+// -------------------------------------------------------------
+mod serdes;
+// use conv::*;
+
+mod unicode;
+use unicode::{
+    CodePoint,
+    ScalarValue,
+    ScalarString,
+};

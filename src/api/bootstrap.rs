@@ -8,6 +8,7 @@ pub fn bootstrap(phox: &mut PhoxEngine, module: &RefModule) -> Result<(), Error>
     add_primitive_type(phox, module, "u8")?;
     add_primitive_type(phox, module, "u32")?;
     add_primitive_tycon1(phox, module, "@[]")?;
+    add_primitive_tycon1(phox, module, "Str")?;
 
     for b in ALL_BUILTINS {
         add_builtin(phox, module, b)?;

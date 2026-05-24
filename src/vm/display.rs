@@ -80,6 +80,48 @@ impl fmt::Display for Pat {
     }
 }
 
+fn escape_char(cp: u32) -> String {
+    match char::from_u32(cp) {
+        Some(c) => match c {
+            '\\' => "\\\\".to_string(),
+            '\'' => "\\'".to_string(),
+            '\n' => "\\n".to_string(),
+            '\r' => "\\r".to_string(),
+            '\t' => "\\t".to_string(),
+            '\0' => "\\0".to_string(),
+            c if c.is_control() => format!("\\u{{{:X}}}", cp),
+            c => c.to_string(),
+        },
+        None => format!("\\u{{{:X}}}", cp),
+    }
+}
+
+fn decode_utf8(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(s) => s.to_string(),
+        Err(_) => unreachable!(),
+    }
+}
+
+fn escape_string(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"'  => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\0' => out.push_str("\\0"),
+            c if c.is_control() => {
+                out.push_str(&format!("\\u{{{:X}}}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -89,6 +131,22 @@ impl fmt::Display for Value {
             Value::U8(u)   => write!(f, "{u}"),
             Value::U32(u)  => write!(f, "{u}"),
 
+            // Unicode Scalar Value
+            Value::Con(c, args) if c == &Symbol::unicode_mk_scalar_value() && args.len() == 1 => {
+                let Term::Val(Value::U32(cp)) = args[0] else { unreachable!() };
+                write!(f, "'{}'", escape_char(cp))
+            }
+            // UTF-8 sting
+            Value::Con(c, args) if c == &Symbol::unicode_mk_scalar_string() && args.len() == 1 => {
+                let Term::Val(Value::ArrayU8(ref s)) = args[0] else { unreachable!() };
+                match s {
+                    Slice::Empty => write!(f, "\"\""),
+                    Slice::Some { arr, beg, end } => {
+                        let bytes = &arr.borrow()[*beg..*end];
+                        write!(f, "\"{}\"", escape_string(&decode_utf8(bytes)))
+                    }
+                }
+            }
             Value::Con(c, args) => {
                 let mut xs = Vec::with_capacity(1 + args.len());
                 xs.push(c.pretty());

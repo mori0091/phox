@@ -1,0 +1,92 @@
+use ::core::*;
+
+use ::core::unicode::MkCodePoint as Cp;
+
+let utf8_head_1? = \x. x <= 0x7Fu8;
+let utf8_head_2? = \x. 0xC2u8 <= x && x <= 0xDFu8;
+let utf8_head_3? = \x. 0xE0u8 <= x && x <= 0xEFu8;
+let utf8_head_4? = \x. 0xF0u8 <= x && x <= 0xF4u8;
+let utf8_tail?   = \x. 0x80u8 <= x && x <= 0xBFu8;
+
+let encode = \xs.\Cp cp. {
+    if (cp <= 0x007Fu32) {
+        let x0 = cast cp;
+        // collect xs @[x0]
+        push xs x0
+    }
+    else if (cp <= 0x07FFu32) {
+        let x0 = 0xC0u8 + (cast (cp / 0x40u32)) % 0x20u8;
+        let x1 = 0x80u8 + (cast (cp)          ) % 0x40u8;
+        // collect xs @[x0, x1]
+        push (push xs x0) x1
+    }
+    else if (cp <= 0xFFFFu32) {
+        let x0 = 0xE0u8 + (cast (cp / 0x1000u32)) % 0x10u8;
+        let x1 = 0x80u8 + (cast (cp / 0x40u32)  ) % 0x40u8;
+        let x2 = 0x80u8 + (cast (cp)            ) % 0x40u8;
+        // collect xs @[x0, x1, x2]
+        push (push (push xs x0) x1) x2
+    }
+    else if (cp <= 0x10FFFFu32) {
+        let x0 = 0xF0u8 + (cast (cp / 0x40000u32)) % 0x08u8;
+        let x1 = 0x80u8 + (cast (cp / 0x1000u32) ) % 0x40u8;
+        let x2 = 0x80u8 + (cast (cp / 0x40u32)   ) % 0x40u8;
+        let x3 = 0x80u8 + (cast (cp)             ) % 0x40u8;
+        // collect xs @[x0, x1, x2, x3]
+        push (push (push (push xs x0) x1) x2) x3
+    }
+    else {
+        xs
+    }
+};
+
+let decode = \xs. match (xs) {
+    @[] => None,
+    @[x0, xs..] => if (utf8_head_1? x0) {
+        let x = cast x0;
+        Some (Cp x, xs)
+    }
+    else if (utf8_head_2? x0) match (xs) {
+        @[x1, xs..] => {
+            if (utf8_tail? x1) {
+                let x0 = (cast (x0 % 0x20u8)) * 0x40u32;
+                let x1 = (cast (x1 % 0x40u8));
+                let x = x0 + x1;
+                Some (Cp x, xs)
+            }
+            else
+                None
+        },
+        _ => None,
+    }
+    else if (utf8_head_3? x0) match (xs) {
+        @[x1, x2, xs..] => {
+            if (utf8_tail? x1 && utf8_tail? x2) {
+                let x0 = (cast (x0 % 0x10u8)) * 0x1000u32;
+                let x1 = (cast (x1 % 0x40u8)) * 0x40u32;
+                let x2 = (cast (x2 % 0x40u8));
+                let x = x0 + x1 + x2;
+                Some (Cp x, xs)
+            }
+            else
+                None
+        },
+        _ => None,
+    }
+    else if (utf8_head_4? x0) match (xs) {
+        @[x1, x2, x3, xs..] => {
+            if (utf8_tail? x1 && utf8_tail? x2 && utf8_tail? x3) {
+                let x0 = (cast (x0 % 0x08u8)) * 0x40000u32;
+                let x1 = (cast (x1 % 0x40u8)) * 0x1000u32;
+                let x2 = (cast (x2 % 0x40u8)) * 0x40u32;
+                let x3 = (cast (x3 % 0x40u8));
+                let x = x0 + x1 + x2 + x3;
+                Some (Cp x, xs)
+            }
+            else
+                None
+        },
+        _ => None,
+    }
+    else None,
+};

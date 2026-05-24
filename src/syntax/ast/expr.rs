@@ -87,6 +87,19 @@ impl Expr {
     pub fn u8_(x: u8) -> Self {
         Expr::lit(Lit::U8(x))
     }
+    pub fn u32_(x: u32) -> Self {
+        Expr::lit(Lit::U32(x))
+    }
+    pub fn unicode_scalar_value(cp: u32) -> Self {
+        Expr::con(Symbol::unicode_mk_scalar_value(), vec![
+            Expr::u32_(cp)
+        ])
+    }
+    pub fn unicode_scalar_string(utf8: Vec<u8>) -> Self {
+        Expr::con(Symbol::unicode_mk_scalar_string(), vec![
+            Expr::array(utf8.into_iter().map(|x| Expr::u8_(x)).collect())
+        ])
+    }
 
     pub fn expr(e: ExprBody) -> Self {
         Expr { span:(0,0), body: e, ty: None, ty_annotated: None, }

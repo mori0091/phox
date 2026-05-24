@@ -36,6 +36,25 @@ impl Symbol {
     pub fn array() -> Symbol {
         Symbol::Unique(Path::absolute(vec!["core", "@[]"]))
     }
+
+    // === for primitive strings ===
+    // --- type constructors ---
+    pub fn str_() -> Symbol {
+        Symbol::Unique(Path::absolute(vec!["core", "Str"]))
+    }
+    pub fn unicode_scalar_value() -> Symbol {
+        Symbol::Unique(Path::absolute(vec!["core", "unicode", "ScalarValue"]))
+    }
+    pub fn unicode_scalar_string() -> Symbol {
+        Symbol::Unique(Path::absolute(vec!["core", "unicode", "ScalarString"]))
+    }
+    // --- constructors ---
+    pub fn unicode_mk_scalar_value() -> Symbol {
+        Symbol::Unique(Path::absolute(vec!["core", "unicode", "MkScalarValue"]))
+    }
+    pub fn unicode_mk_scalar_string() -> Symbol {
+        Symbol::Unique(Path::absolute(vec!["core", "unicode", "MkScalarString"]))
+    }
 }
 
 impl std::fmt::Debug for Symbol {
