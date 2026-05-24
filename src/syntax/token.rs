@@ -117,6 +117,14 @@ pub enum Token {
     #[regex(r"(0x[0-9a-fA-F]+|[0-9]+)u32", |lex| parse_u32_literal(lex.slice()))]
     LitU32(u32),
 
+    // --- 文字リテラル ---
+    #[regex(r"'([^'\\]|\\.)'", parse_char_literal)]
+    LitUnicodeScalarValue(u32),
+
+    // --- 文字列リテラル ---
+    #[token("\"", parse_string_literal)]
+    LitUTF8(Vec<u8>),
+
     // --- その他の演算子記号列 ---
     #[regex(r"[*+\-/!$%&=^?<>]+", |lex| lex.slice().to_string())]
     InfixOp(String),
@@ -146,4 +154,109 @@ fn parse_u32_literal(s: &str) -> Result<u32, LexicalError> {
         body.parse::<u32>()
     };
     parsed.map_err(|_| LexicalError::InvalidToken)
+}
+
+
+// --- Unicode Scalar Value and UTF-8 String literals ---
+
+fn next_char(s: &str, pos: usize) -> Result<(char, usize), LexicalError> {
+    let ch = s[pos..].chars().next().ok_or(LexicalError::InvalidToken)?;
+    Ok((ch, ch.len_utf8()))
+}
+
+fn parse_char_literal(lex: &mut logos::Lexer<Token>) -> Result<u32, LexicalError> {
+    let slice = lex.slice(); // 例: "'a'", "'\n'", "'\u{1F600}'"
+    let inner = &slice[1..slice.len()-1];
+
+    let mut pos = 0;
+    let ch = parse_char_from(inner, &mut pos)?;
+
+    // 1 文字分だけ消費していることを確認（ゴミが残ってないか）
+    if pos != inner.len() {
+        return Err(LexicalError::InvalidToken);
+    }
+
+    Ok(ch as u32)
+}
+
+fn parse_char_from(s: &str, pos: &mut usize) -> Result<char, LexicalError> {
+    if *pos >= s.len() {
+        return Err(LexicalError::InvalidToken);
+    }
+    let (ch, len) = next_char(s, *pos)?;
+    *pos += len;
+
+    if ch == '\\' {
+        // エスケープシーケンス
+        parse_escape_from(s, pos)
+    } else {
+        Ok(ch)
+    }
+}
+
+fn parse_string_literal(lex: &mut logos::Lexer<Token>) -> Result<Vec<u8>, LexicalError> {
+    let src = lex.remainder(); // 開きの " の直後から
+    let mut pos = 0;
+    let mut out = String::new();
+
+    while pos < src.len() {
+        let (ch, len) = next_char(src, pos)?;
+        pos += len;
+
+        match ch {
+            '"' => {
+                // ここまで（中身＋閉じ "）を消費したことにする
+                lex.bump(pos);
+                return Ok(out.into_bytes());
+            }
+            '\\' => {
+                let esc = parse_escape_from(src, &mut pos)?;
+                out.push(esc);
+            }
+            _ => out.push(ch),
+        }
+    }
+
+    Err(LexicalError::InvalidToken) // 閉じ " が来なかった
+}
+
+fn parse_escape_from(s: &str, pos: &mut usize) -> Result<char, LexicalError> {
+    let (ch, len) = next_char(s, *pos)?;
+    *pos += len;
+
+    match ch {
+        'n'  => Ok('\n'),
+        'r'  => Ok('\r'),
+        't'  => Ok('\t'),
+        '0'  => Ok('\0'),
+        '\\' => Ok('\\'),
+        '"'  => Ok('"'),
+        '\'' => Ok('\''),
+        'u'  => parse_unicode_escape_from(s, pos),
+        _    => Err(LexicalError::InvalidToken),
+    }
+}
+
+fn parse_unicode_escape_from(s: &str, pos: &mut usize) -> Result<char, LexicalError> {
+    let (brace, len) = next_char(s, *pos)?;
+    if brace != '{' {
+        return Err(LexicalError::InvalidToken);
+    }
+    *pos += len;
+
+    let start = *pos;
+    while *pos < s.len() {
+        let (ch, clen) = next_char(s, *pos)?;
+        if ch == '}' {
+            let hex = &s[start..*pos];
+            *pos += clen;
+
+            let value = u32::from_str_radix(hex, 16)
+                .map_err(|_| LexicalError::InvalidToken)?;
+            return std::char::from_u32(value).ok_or(LexicalError::InvalidToken);
+        }
+        *pos += clen;
+    }
+
+    Err(LexicalError::InvalidToken)
 }

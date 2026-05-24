@@ -1,0 +1,14 @@
+use ::core::*;
+
+/// Round-trip oriented codec (for types with known layout)
+trait Codec a {
+    /// Push encoded bytes
+    encode: @[u8] -> a -> @[u8];
+    /// Uncons with decode
+    decode: @[u8] -> Option (a, @[u8]);
+};
+
+/// Fallible decode (for parsing external or untrusted data)
+trait TryDecode e s a b {
+    decode: s a -> Result (e, s a) (b, s a);
+};

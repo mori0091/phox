@@ -94,6 +94,9 @@ extern {
         "LitU8"      => Token::LitU8(<u8>),   // u8 リテラル (123u8, 0xFFu8)
         "LitU32"     => Token::LitU32(<u32>), // u32 リテラル (123u32, 0xFFu32)
 
+        "LitUnicodeScalarValue" => Token::LitUnicodeScalarValue(<u32>),
+        "LitUTF8" => Token::LitUTF8(<Vec<u8>>),
+
         // --- その他の演算子記号列 ---
         "infixOp" => Token::InfixOp(<String>),
     }
@@ -561,6 +564,9 @@ Atom0: Expr = {
     ExprFieldAccess,
     ExprTupleAccess,
     ExprIndexAccess,
+
+    <"LitUnicodeScalarValue"> => Expr::unicode_scalar_value(<>),
+    <"LitUTF8"> => Expr::unicode_scalar_string(<>),
 };
 
 ExprSectionL: Expr = {

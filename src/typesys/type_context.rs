@@ -42,6 +42,14 @@ impl TypeContext {
 
 impl TypeContext {
     pub fn unify(&mut self, a: &Type, b: &Type) -> Result<(), Error> {
+        if let (Type::Con(c), Type::App(f, x)) | (Type::App(f, x), Type::Con(c)) = (a, b) {
+            if c == &Symbol::unicode_scalar_string() {
+                self.unify(f.as_ref_type(), &Type::Con(Symbol::str_()))?;
+                self.unify(x.as_ref_type(), &Type::Con(Symbol::unicode_scalar_value()))?;
+                return Ok(())
+            }
+        }
+
         match (a, b) {
             (Type::Var(v), t) | (t, Type::Var(v)) => {
                 self.unify_var(*v, t)
