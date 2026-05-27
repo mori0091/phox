@@ -6,7 +6,9 @@ pub enum Lit {
     Bool(bool),  // true / false
     Int(i64),    // 整数リテラル
     U8(u8),
+    U16(u16),
     U32(u32),
+    U64(u64),
 }
 
 impl fmt::Display for Lit {
@@ -16,7 +18,9 @@ impl fmt::Display for Lit {
             Lit::Bool(b) => write!(f, "{}", b),
             Lit::Int(i)  => write!(f, "{}", i),
             Lit::U8(u)   => write!(f, "{}", u),
+            Lit::U16(u)  => write!(f, "{}", u),
             Lit::U32(u)  => write!(f, "{}", u),
+            Lit::U64(u)  => write!(f, "{}", u),
         }
     }
 }

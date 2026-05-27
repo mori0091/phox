@@ -41,7 +41,9 @@ pub enum CoreExpr {
 
     Array(Vec<CoreExpr>),           // `Array [e1, e2, ...]`
     ArrayU8(Vec<CoreExpr>),         // `Array<u8> [e1, e2, ...]`
+    ArrayU16(Vec<CoreExpr>),        // `Array<u16> [e1, e2, ...]`
     ArrayU32(Vec<CoreExpr>),        // `Array<u32> [e1, e2, ...]`
+    ArrayU64(Vec<CoreExpr>),        // `Array<u64> [e1, e2, ...]`
     ArrayI64(Vec<CoreExpr>),        // `Array<i64> [e1, e2, ...]`
 }
 
@@ -308,8 +310,14 @@ fn lower_expr(expr: &Expr) -> Result<CoreExpr, Error> {
                 else if elem_ty.is_u8() {
                     CoreExpr::ArrayU8(xs)
                 }
+                else if elem_ty.is_u16() {
+                    CoreExpr::ArrayU16(xs)
+                }
                 else if elem_ty.is_u32() {
                     CoreExpr::ArrayU32(xs)
+                }
+                else if elem_ty.is_u64() {
+                    CoreExpr::ArrayU64(xs)
                 }
                 else {
                     CoreExpr::Array(xs)

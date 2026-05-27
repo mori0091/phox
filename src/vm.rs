@@ -58,7 +58,9 @@ pub enum Code {
     Record(Vec<Label>),  // `Record ["x", "y"]`
     Array(usize),        // `Array 2`, `Array 1` ; Constructs slice (`@[a]`) of new array
     ArrayU8(usize),
+    ArrayU16(usize),
     ArrayU32(usize),
+    ArrayU64(usize),
     ArrayI64(usize),
 
     // DynArray(Box<Code>), // Constructs mutable reference of new dynamic array (e.g. `buf @[a]`)
@@ -193,14 +195,18 @@ pub enum Value {
     Bool(bool),
     I64(i64),
     U8(u8),
+    U16(u16),
     U32(u32),
+    U64(u64),
     Tuple(Vec<Term>),
     Con(ConId, Vec<Term>),
     Record(Vec<Label>, Vec<Term>),
 
     Array(Slice<Term>),         // immutable slice `@[a]`
     ArrayU8(Slice<u8>),
+    ArrayU16(Slice<u16>),
     ArrayU32(Slice<u32>),
+    ArrayU64(Slice<u64>),
     ArrayI64(Slice<i64>),
 
     DynArray(Buf<Term>),        // mutable reference of dynamic array
@@ -228,9 +234,21 @@ impl Into<Value> for Slice<u8> {
     }
 }
 
+impl Into<Value> for Slice<u16> {
+    fn into(self) -> Value {
+        Value::ArrayU16(self)
+    }
+}
+
 impl Into<Value> for Slice<u32> {
     fn into(self) -> Value {
         Value::ArrayU32(self)
+    }
+}
+
+impl Into<Value> for Slice<u64> {
+    fn into(self) -> Value {
+        Value::ArrayU64(self)
     }
 }
 
@@ -259,6 +277,25 @@ impl TryFrom<Term> for u8 {
     }
 }
 
+// --- u16 ---
+impl Into<Term> for u16 {
+    fn into(self) -> Term {
+        Term::Val(Value::U16(self))
+    }
+}
+
+impl TryFrom<Term> for u16 {
+    type Error = RuntimeError;
+    fn try_from(value: Term) -> Result<Self, Self::Error> {
+        if let Term::Val(Value::U16(i)) = value {
+            Ok(i)
+        }
+        else {
+            unreachable!()
+        }
+    }
+}
+
 // --- u32 ---
 impl Into<Term> for u32 {
     fn into(self) -> Term {
@@ -270,6 +307,25 @@ impl TryFrom<Term> for u32 {
     type Error = RuntimeError;
     fn try_from(value: Term) -> Result<Self, Self::Error> {
         if let Term::Val(Value::U32(i)) = value {
+            Ok(i)
+        }
+        else {
+            unreachable!()
+        }
+    }
+}
+
+// --- u64 ---
+impl Into<Term> for u64 {
+    fn into(self) -> Term {
+        Term::Val(Value::U64(self))
+    }
+}
+
+impl TryFrom<Term> for u64 {
+    type Error = RuntimeError;
+    fn try_from(value: Term) -> Result<Self, Self::Error> {
+        if let Term::Val(Value::U64(i)) = value {
             Ok(i)
         }
         else {
@@ -375,7 +431,9 @@ impl VM<'_> {
                         Lit::Bool(b) => Value::Bool(*b),
                         Lit::Int(i)  => Value::I64(*i),
                         Lit::U8(u)   => Value::U8(*u),
+                        Lit::U16(u)  => Value::U16(*u),
                         Lit::U32(u)  => Value::U32(*u),
+                        Lit::U64(u)  => Value::U64(*u),
                     };
                     return self.run_state_value(val);
                 }
@@ -412,6 +470,20 @@ impl VM<'_> {
                     };
                     return self.run_state_value(Value::ArrayU8(s));
                 }
+                Code::ArrayU16(arity) => {
+                    let s = if *arity == 0 {
+                        Slice::Empty
+                    }
+                    else {
+                        let xs: Vec<_> = self.env_values(*arity).into_iter().map(|t| {
+                            let Term::Val(Value::U16(i)) = t else { unreachable!() };
+                            i
+                        }).collect();
+                        let arr = self.heap_array(xs);
+                        Slice::Some { arr, beg: 0, end: *arity }
+                    };
+                    return self.run_state_value(Value::ArrayU16(s));
+                }
                 Code::ArrayU32(arity) => {
                     let s = if *arity == 0 {
                         Slice::Empty
@@ -425,6 +497,20 @@ impl VM<'_> {
                         Slice::Some { arr, beg: 0, end: *arity }
                     };
                     return self.run_state_value(Value::ArrayU32(s));
+                }
+                Code::ArrayU64(arity) => {
+                    let s = if *arity == 0 {
+                        Slice::Empty
+                    }
+                    else {
+                        let xs: Vec<_> = self.env_values(*arity).into_iter().map(|t| {
+                            let Term::Val(Value::U64(i)) = t else { unreachable!() };
+                            i
+                        }).collect();
+                        let arr = self.heap_array(xs);
+                        Slice::Some { arr, beg: 0, end: *arity }
+                    };
+                    return self.run_state_value(Value::ArrayU64(s));
                 }
                 Code::ArrayI64(arity) => {
                     let s = if *arity == 0 {
@@ -701,7 +787,13 @@ fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
         (p, Term::Val(Value::ArrayU8(s))) => {
             match_pat_array(p, s)
         }
+        (p, Term::Val(Value::ArrayU16(s))) => {
+            match_pat_array(p, s)
+        }
         (p, Term::Val(Value::ArrayU32(s))) => {
+            match_pat_array(p, s)
+        }
+        (p, Term::Val(Value::ArrayU64(s))) => {
             match_pat_array(p, s)
         }
         (p, Term::Val(Value::ArrayI64(s))) => {
@@ -885,7 +977,17 @@ impl VM<'_> {
                 self.state.term = x.into();
                 Ok(())
             }
+            Value::ArrayU16(s) => {
+                let x = heap::extract_1(s, index)?;
+                self.state.term = x.into();
+                Ok(())
+            }
             Value::ArrayU32(s) => {
+                let x = heap::extract_1(s, index)?;
+                self.state.term = x.into();
+                Ok(())
+            }
+            Value::ArrayU64(s) => {
                 let x = heap::extract_1(s, index)?;
                 self.state.term = x.into();
                 Ok(())
@@ -1000,8 +1102,24 @@ impl VM<'_> {
         }
     }
 
+    fn env_get_u16(&self, i: usize) -> Result<u16, RuntimeError> {
+        if let Value::U16(v) = self.env_get_value(i)? {
+            Ok(v)
+        } else {
+            unreachable!()
+        }
+    }
+
     fn env_get_u32(&self, i: usize) -> Result<u32, RuntimeError> {
         if let Value::U32(v) = self.env_get_value(i)? {
+            Ok(v)
+        } else {
+            unreachable!()
+        }
+    }
+
+    fn env_get_u64(&self, i: usize) -> Result<u64, RuntimeError> {
+        if let Value::U64(v) = self.env_get_value(i)? {
             Ok(v)
         } else {
             unreachable!()
@@ -1022,9 +1140,21 @@ impl VM<'_> {
         Ok((a, b))
     }
 
+    fn env_get_u16x2(&self) -> Result<(u16, u16), RuntimeError> {
+        let a = self.env_get_u16(1)?;
+        let b = self.env_get_u16(0)?;
+        Ok((a, b))
+    }
+
     fn env_get_u32x2(&self) -> Result<(u32, u32), RuntimeError> {
         let a = self.env_get_u32(1)?;
         let b = self.env_get_u32(0)?;
+        Ok((a, b))
+    }
+
+    fn env_get_u64x2(&self) -> Result<(u64, u64), RuntimeError> {
+        let a = self.env_get_u64(1)?;
+        let b = self.env_get_u64(0)?;
         Ok((a, b))
     }
 
@@ -1042,9 +1172,34 @@ impl VM<'_> {
                 let a = self.env_get_u8(0)?;
                 Value::I64(a as i64)
             }
+            Builtin::CastU8toU16 => {
+                let a = self.env_get_u8(0)?;
+                Value::U16(a as u16)
+            }
             Builtin::CastU8toU32 => {
                 let a = self.env_get_u8(0)?;
                 Value::U32(a as u32)
+            }
+            Builtin::CastU8toU64 => {
+                let a = self.env_get_u8(0)?;
+                Value::U64(a as u64)
+            }
+            // --- u16 -> a ---
+            Builtin::CastU16toI64 => {
+                let a = self.env_get_u16(0)?;
+                Value::I64(a as i64)
+            }
+            Builtin::CastU16toU8 => {
+                let a = self.env_get_u16(0)?;
+                Value::U8(a as u8)
+            }
+            Builtin::CastU16toU32 => {
+                let a = self.env_get_u16(0)?;
+                Value::U32(a as u32)
+            }
+            Builtin::CastU16toU64 => {
+                let a = self.env_get_u16(0)?;
+                Value::U64(a as u64)
             }
             // --- u32 -> a ---
             Builtin::CastU32toI64 => {
@@ -1055,14 +1210,47 @@ impl VM<'_> {
                 let a = self.env_get_u32(0)?;
                 Value::U8(a as u8)
             }
+            Builtin::CastU32toU16 => {
+                let a = self.env_get_u32(0)?;
+                Value::U16(a as u16)
+            }
+            Builtin::CastU32toU64 => {
+                let a = self.env_get_u32(0)?;
+                Value::U64(a as u64)
+            }
+            // --- u64 -> a ---
+            Builtin::CastU64toI64 => {
+                let a = self.env_get_u64(0)?;
+                Value::I64(a as i64)
+            }
+            Builtin::CastU64toU8 => {
+                let a = self.env_get_u64(0)?;
+                Value::U8(a as u8)
+            }
+            Builtin::CastU64toU16 => {
+                let a = self.env_get_u64(0)?;
+                Value::U16(a as u16)
+            }
+            Builtin::CastU64toU32 => {
+                let a = self.env_get_u64(0)?;
+                Value::U32(a as u32)
+            }
             // --- i64 -> a ---
             Builtin::CastI64toU8 => {
                 let a = self.env_get_i64(0)?;
                 Value::U8(a as u8)
             }
+            Builtin::CastI64toU16 => {
+                let a = self.env_get_i64(0)?;
+                Value::U16(a as u16)
+            }
             Builtin::CastI64toU32 => {
                 let a = self.env_get_i64(0)?;
                 Value::U32(a as u32)
+            }
+            Builtin::CastI64toU64 => {
+                let a = self.env_get_i64(0)?;
+                Value::U64(a as u64)
             }
 
             // === unary operators ===
@@ -1127,6 +1315,60 @@ impl VM<'_> {
                 Value::U8(a % b)
             }
 
+            // --- u16 ---
+            Builtin::U16Eq => {
+                let (a, b) = self.env_get_u16x2()?;
+                Value::Bool(a == b)
+            }
+            Builtin::U16Neq => {
+                let (a, b) = self.env_get_u16x2()?;
+                Value::Bool(a != b)
+            }
+
+            Builtin::U16Lt => {
+                let (a, b) = self.env_get_u16x2()?;
+                Value::Bool(a < b)
+            }
+            Builtin::U16Le => {
+                let (a, b) = self.env_get_u16x2()?;
+                Value::Bool(a <= b)
+            }
+            Builtin::U16Gt => {
+                let (a, b) = self.env_get_u16x2()?;
+                Value::Bool(a > b)
+            }
+            Builtin::U16Ge => {
+                let (a, b) = self.env_get_u16x2()?;
+                Value::Bool(a >= b)
+            }
+
+            Builtin::U16Add => {
+                let (a, b) = self.env_get_u16x2()?;
+                Value::U16(a + b)
+            }
+            Builtin::U16Sub => {
+                let (a, b) = self.env_get_u16x2()?;
+                Value::U16(a - b)
+            }
+            Builtin::U16Mul => {
+                let (a, b) = self.env_get_u16x2()?;
+                Value::U16(a * b)
+            }
+            Builtin::U16Div => {
+                let (a, b) = self.env_get_u16x2()?;
+                if b == 0 {
+                    return Err(RuntimeError::DivisionByZero);
+                }
+                Value::U16(a / b)
+            }
+            Builtin::U16Mod => {
+                let (a, b) = self.env_get_u16x2()?;
+                if b == 0 {
+                    return Err(RuntimeError::DivisionByZero);
+                }
+                Value::U16(a % b)
+            }
+
             // --- u32 ---
             Builtin::U32Eq => {
                 let (a, b) = self.env_get_u32x2()?;
@@ -1179,6 +1421,60 @@ impl VM<'_> {
                     return Err(RuntimeError::DivisionByZero);
                 }
                 Value::U32(a % b)
+            }
+
+            // --- u64 ---
+            Builtin::U64Eq => {
+                let (a, b) = self.env_get_u64x2()?;
+                Value::Bool(a == b)
+            }
+            Builtin::U64Neq => {
+                let (a, b) = self.env_get_u64x2()?;
+                Value::Bool(a != b)
+            }
+
+            Builtin::U64Lt => {
+                let (a, b) = self.env_get_u64x2()?;
+                Value::Bool(a < b)
+            }
+            Builtin::U64Le => {
+                let (a, b) = self.env_get_u64x2()?;
+                Value::Bool(a <= b)
+            }
+            Builtin::U64Gt => {
+                let (a, b) = self.env_get_u64x2()?;
+                Value::Bool(a > b)
+            }
+            Builtin::U64Ge => {
+                let (a, b) = self.env_get_u64x2()?;
+                Value::Bool(a >= b)
+            }
+
+            Builtin::U64Add => {
+                let (a, b) = self.env_get_u64x2()?;
+                Value::U64(a + b)
+            }
+            Builtin::U64Sub => {
+                let (a, b) = self.env_get_u64x2()?;
+                Value::U64(a - b)
+            }
+            Builtin::U64Mul => {
+                let (a, b) = self.env_get_u64x2()?;
+                Value::U64(a * b)
+            }
+            Builtin::U64Div => {
+                let (a, b) = self.env_get_u64x2()?;
+                if b == 0 {
+                    return Err(RuntimeError::DivisionByZero);
+                }
+                Value::U64(a / b)
+            }
+            Builtin::U64Mod => {
+                let (a, b) = self.env_get_u64x2()?;
+                if b == 0 {
+                    return Err(RuntimeError::DivisionByZero);
+                }
+                Value::U64(a % b)
             }
 
             // --- i64 ---
@@ -1241,7 +1537,9 @@ impl VM<'_> {
                 let len = match x {
                     Value::Array(s)    => s.len(),
                     Value::ArrayU8(s)  => s.len(),
+                    Value::ArrayU16(s) => s.len(),
                     Value::ArrayU32(s) => s.len(),
+                    Value::ArrayU64(s) => s.len(),
                     Value::ArrayI64(s) => s.len(),
                     _ => unreachable!(),
                 };
@@ -1254,7 +1552,9 @@ impl VM<'_> {
                 match xs {
                     Value::Array(s)    => heap::slice(s, i, j)?.into(),
                     Value::ArrayU8(s)  => heap::slice(s, i, j)?.into(),
+                    Value::ArrayU16(s) => heap::slice(s, i, j)?.into(),
                     Value::ArrayU32(s) => heap::slice(s, i, j)?.into(),
+                    Value::ArrayU64(s) => heap::slice(s, i, j)?.into(),
                     Value::ArrayI64(s) => heap::slice(s, i, j)?.into(),
                     _ => unreachable!(),
                 }
@@ -1265,7 +1565,9 @@ impl VM<'_> {
                 match xs {
                     Value::Array(s)    => heap::push(s, x).into(),
                     Value::ArrayU8(s)  => heap::push(s, x.try_into()?).into(),
+                    Value::ArrayU16(s) => heap::push(s, x.try_into()?).into(),
                     Value::ArrayU32(s) => heap::push(s, x.try_into()?).into(),
+                    Value::ArrayU64(s) => heap::push(s, x.try_into()?).into(),
                     Value::ArrayI64(s) => heap::push(s, x.try_into()?).into(),
                     _ => unreachable!(),
                 }

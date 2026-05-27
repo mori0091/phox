@@ -24,8 +24,14 @@ impl Type {
     pub fn is_u8(&self) -> bool {
         *self == Type::u8_()
     }
+    pub fn is_u16(&self) -> bool {
+        *self == Type::u16_()
+    }
     pub fn is_u32(&self) -> bool {
         *self == Type::u32_()
+    }
+    pub fn is_u64(&self) -> bool {
+        *self == Type::u64_()
     }
 }
 
@@ -45,8 +51,14 @@ impl Type {
     pub fn u8_() -> Self {
         Type::Con(Symbol::u8_())
     }
+    pub fn u16_() -> Self {
+        Type::Con(Symbol::u16_())
+    }
     pub fn u32_() -> Self {
         Type::Con(Symbol::u32_())
+    }
+    pub fn u64_() -> Self {
+        Type::Con(Symbol::u64_())
     }
     pub fn var(id: TypeVarId) -> Self {
         Type::Var(id)

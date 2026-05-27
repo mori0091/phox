@@ -129,7 +129,9 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{b}"),
             Value::I64(i)  => write!(f, "{i}"),
             Value::U8(u)   => write!(f, "{u}"),
+            Value::U16(u)  => write!(f, "{u}"),
             Value::U32(u)  => write!(f, "{u}"),
+            Value::U64(u)  => write!(f, "{u}"),
 
             // Unicode Scalar Value
             Value::Con(c, args) if c == &Symbol::unicode_mk_scalar_value() && args.len() == 1 => {
@@ -194,7 +196,9 @@ impl fmt::Display for Value {
 
             Value::Array(s) => write!(f, "{}", s),
             Value::ArrayU8(s) => write!(f, "{}", s),
+            Value::ArrayU16(s) => write!(f, "{}", s),
             Value::ArrayU32(s) => write!(f, "{}", s),
+            Value::ArrayU64(s) => write!(f, "{}", s),
             Value::ArrayI64(s) => write!(f, "{}", s),
 
             Value::DynArray(arr) => {
@@ -318,8 +322,14 @@ impl fmt::Display for Code {
             Code::ArrayU8(arity) => {
                 write!(f, "<ArrayU8({})>", arity)
             }
+            Code::ArrayU16(arity) => {
+                write!(f, "<ArrayU16({})>", arity)
+            }
             Code::ArrayU32(arity) => {
                 write!(f, "<ArrayU32({})>", arity)
+            }
+            Code::ArrayU64(arity) => {
+                write!(f, "<ArrayU64({})>", arity)
             }
             Code::ArrayI64(arity) => {
                 write!(f, "<ArrayI64({})>", arity)
