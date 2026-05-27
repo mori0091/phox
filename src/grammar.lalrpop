@@ -28,9 +28,9 @@ extern {
         "()"    => Token::Unit,
         "@[]"   => Token::EmptyArray,
         "u8"    => Token::U8Type,  // u8 型
-        // "u16"   => Token::U16Type, // u16 型 (reserved)
+        "u16"   => Token::U16Type, // u16 型
         "u32"   => Token::U32Type, // u32 型
-        // "u64"   => Token::U64Type, // u64 型 (reserved)
+        "u64"   => Token::U64Type, // u64 型
         // "i8"    => Token::I8Type,  // i8 型  (reserved)
         // "i16"   => Token::I16Type, // i16 型 (reserved)
         // "i32"   => Token::I32Type, // i32 型 (reserved)
@@ -92,7 +92,9 @@ extern {
         "Identifier" => Token::ConIdent(<String>),
         "int"        => Token::Int(<i64>),
         "LitU8"      => Token::LitU8(<u8>),   // u8 リテラル (123u8, 0xFFu8)
+        "LitU16"     => Token::LitU16(<u16>), // u16 リテラル (123u16, 0xFFu16)
         "LitU32"     => Token::LitU32(<u32>), // u32 リテラル (123u32, 0xFFu32)
+        "LitU64"     => Token::LitU64(<u64>), // u64 リテラル (123u64, 0xFFu64)
 
         "LitUnicodeScalarValue" => Token::LitUnicodeScalarValue(<u32>),
         "LitUTF8" => Token::LitUTF8(<Vec<u8>>),
@@ -761,7 +763,9 @@ Lit: Lit = {
     LitBool,
     LitInt,
     <"LitU8"> => Lit::U8(<>),
+    <"LitU16"> => Lit::U16(<>),
     <"LitU32"> => Lit::U32(<>),
+    <"LitU64"> => Lit::U64(<>),
 };
 
 LitUnit: Lit = {
@@ -848,7 +852,9 @@ IdentOps: String = {
 ConIdent: String = {
     <"Identifier">,
     <"u8"> => "u8".to_string(),
+    <"u16"> => "u16".to_string(),
     <"u32"> => "u32".to_string(),
+    <"u64"> => "u64".to_string(),
 };
 
 // === comma-separated list ===

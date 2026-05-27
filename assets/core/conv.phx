@@ -10,34 +10,121 @@ trait TryCast a b {
 };
 
 // -------------------------------------------------------------
+impl Cast a a {
+    cast = id;
+};
+
+impl TryCast a a {
+    cast = Ok;
+};
+
+// -------------------------------------------------------------
 impl Cast u8 Int {
     cast = __cast_u8_i64__;
+};
+impl Cast u8 u16 {
+    cast = __cast_u8_u16__;
 };
 impl Cast u8 u32 {
     cast = __cast_u8_u32__;
 };
+impl Cast u8 u64 {
+    cast = __cast_u8_u64__;
+};
 
+// -------------------------------------------------------------
+impl Cast u16 Int {
+    cast = __cast_u16_i64__;
+};
+impl Cast u16 u8 {
+    cast = __cast_u16_u8__;
+};
+impl Cast u16 u32 {
+    cast = __cast_u16_u32__;
+};
+impl Cast u16 u64 {
+    cast = __cast_u16_u64__;
+};
+
+// -------------------------------------------------------------
 impl Cast u32 Int {
     cast = __cast_u32_i64__;
 };
 impl Cast u32 u8 {
     cast = __cast_u32_u8__;
 };
+impl Cast u32 u16 {
+    cast = __cast_u32_u16__;
+};
+impl Cast u32 u64 {
+    cast = __cast_u32_u64__;
+};
 
+// -------------------------------------------------------------
+impl Cast u64 Int {
+    cast = __cast_u64_i64__;
+};
+impl Cast u64 u8 {
+    cast = __cast_u64_u8__;
+};
+impl Cast u64 u16 {
+    cast = __cast_u64_u16__;
+};
+impl Cast u64 u32 {
+    cast = __cast_u64_u32__;
+};
+
+// -------------------------------------------------------------
 impl Cast Int u8 {
     cast = __cast_i64_u8__;
+};
+impl Cast Int u16 {
+    cast = __cast_i64_u16__;
 };
 impl Cast Int u32 {
     cast = __cast_i64_u32__;
 };
+impl Cast Int u64 {
+    cast = __cast_i64_u64__;
+};
 
+// -------------------------------------------------------------
 impl TryCast u8 Int {
     cast = \x. Ok (@{Cast u8 Int}.cast x);
+};
+impl TryCast u8 u16 {
+    cast = \x. Ok (@{Cast u8 u16}.cast x);
 };
 impl TryCast u8 u32 {
     cast = \x. Ok (@{Cast u8 u32}.cast x);
 };
+impl TryCast u8 u64 {
+    cast = \x. Ok (@{Cast u8 u64}.cast x);
+};
 
+// -------------------------------------------------------------
+impl TryCast u16 Int {
+    cast = \x. Ok (@{Cast u16 Int}.cast x);
+};
+impl TryCast u16 u8 {
+    cast = \x.
+        if (255u16 < x)
+            Err OutOfBounds
+        else
+            Ok (@{Cast u16 u8}.cast x)
+    ;
+};
+impl TryCast u16 u32 {
+    cast = \x. Ok (@{Cast u16 u32}.cast x);
+};
+impl TryCast u16 u64 {
+    cast = \x. Ok (@{Cast u16 u64}.cast x);
+};
+
+// -------------------------------------------------------------
+impl TryCast u32 Int {
+    cast = \x. Ok (@{Cast u32 Int}.cast x);
+};
 impl TryCast u32 u8 {
     cast = \x.
         if (255u32 < x)
@@ -46,10 +133,53 @@ impl TryCast u32 u8 {
             Ok (@{Cast u32 u8}.cast x)
     ;
 };
-impl TryCast u32 Int {
-    cast = \x. Ok (@{Cast u32 Int}.cast x);
+impl TryCast u32 u16 {
+    cast = \x.
+        if (65535u32 < x)
+            Err OutOfBounds
+        else
+            Ok (@{Cast u32 u16}.cast x)
+    ;
+};
+impl TryCast u32 u64 {
+    cast = \x. Ok (@{Cast u32 u64}.cast x);
 };
 
+// -------------------------------------------------------------
+impl TryCast u64 Int {
+    cast = \x.
+        if (0x7FFFFFFFFFFFFFFFu64 < x)
+            Err OutOfBounds
+        else
+            Ok (@{Cast u64 Int}.cast x)
+    ;
+};
+impl TryCast u64 u8 {
+    cast = \x.
+        if (255u64 < x)
+            Err OutOfBounds
+        else
+            Ok (@{Cast u64 u8}.cast x)
+    ;
+};
+impl TryCast u64 u16 {
+    cast = \x.
+        if (65535u64 < x)
+            Err OutOfBounds
+        else
+            Ok (@{Cast u64 u16}.cast x)
+    ;
+};
+impl TryCast u64 u32 {
+    cast = \x.
+        if (0xFFFFFFFFu64 < x)
+            Err OutOfBounds
+        else
+            Ok (@{Cast u64 u32}.cast x)
+    ;
+};
+
+// -------------------------------------------------------------
 impl TryCast Int u8 {
     cast = \x.
         if (x < 0 || 255 < x)
@@ -58,11 +188,27 @@ impl TryCast Int u8 {
             Ok (@{Cast Int u8}.cast x)
     ;
 };
+impl TryCast Int u16 {
+    cast = \x.
+        if (x < 0 || 65535 < x)
+            Err OutOfBounds
+        else
+            Ok (@{Cast Int u16}.cast x)
+    ;
+};
 impl TryCast Int u32 {
     cast = \x.
         if (x < 0 || 4294967295 < x)
             Err OutOfBounds
         else
             Ok (@{Cast Int u32}.cast x)
+    ;
+};
+impl TryCast Int u64 {
+    cast = \x.
+        if (x < 0)
+            Err OutOfBounds
+        else
+            Ok (@{Cast Int u64}.cast x)
     ;
 };

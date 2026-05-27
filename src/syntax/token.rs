@@ -40,9 +40,9 @@ pub enum Token {
     #[token("()"   , priority = 10)] Unit,
     #[token("@[]"  , priority = 10)] EmptyArray,
     #[token("u8"   , priority = 10)] U8Type,
-    // #[token("u16"  , priority = 10)] U16Type, // (reserved)
+    #[token("u16"  , priority = 10)] U16Type,
     #[token("u32"  , priority = 10)] U32Type,
-    // #[token("u64"  , priority = 10)] U64Type, // (reserved)
+    #[token("u64"  , priority = 10)] U64Type,
     // #[token("i8"   , priority = 10)] I8Type,  // (reserved)
     // #[token("i16"  , priority = 10)] I16Type, // (reserved)
     // #[token("i32"  , priority = 10)] I32Type, // (reserved)
@@ -114,8 +114,14 @@ pub enum Token {
     #[regex(r"(0x[0-9a-fA-F]+|[0-9]+)u8", |lex| parse_u8_literal(lex.slice()))]
     LitU8(u8),
 
+    #[regex(r"(0x[0-9a-fA-F]+|[0-9]+)u16", |lex| parse_u16_literal(lex.slice()))]
+    LitU16(u16),
+
     #[regex(r"(0x[0-9a-fA-F]+|[0-9]+)u32", |lex| parse_u32_literal(lex.slice()))]
     LitU32(u32),
+
+    #[regex(r"(0x[0-9a-fA-F]+|[0-9]+)u64", |lex| parse_u64_literal(lex.slice()))]
+    LitU64(u64),
 
     // --- 文字リテラル ---
     #[regex(r"'([^'\\]|\\.)'", parse_char_literal)]
@@ -146,12 +152,32 @@ fn parse_u8_literal(s: &str) -> Result<u8, LexicalError> {
     parsed.map_err(|_| LexicalError::InvalidToken)
 }
 
+fn parse_u16_literal(s: &str) -> Result<u16, LexicalError> {
+    let body = &s[..s.len()-3];
+    let parsed = if let Some(hex) = body.strip_prefix("0x") {
+        u16::from_str_radix(hex, 16)
+    } else {
+        body.parse::<u16>()
+    };
+    parsed.map_err(|_| LexicalError::InvalidToken)
+}
+
 fn parse_u32_literal(s: &str) -> Result<u32, LexicalError> {
     let body = &s[..s.len()-3];
     let parsed = if let Some(hex) = body.strip_prefix("0x") {
         u32::from_str_radix(hex, 16)
     } else {
         body.parse::<u32>()
+    };
+    parsed.map_err(|_| LexicalError::InvalidToken)
+}
+
+fn parse_u64_literal(s: &str) -> Result<u64, LexicalError> {
+    let body = &s[..s.len()-3];
+    let parsed = if let Some(hex) = body.strip_prefix("0x") {
+        u64::from_str_radix(hex, 16)
+    } else {
+        body.parse::<u64>()
     };
     parsed.map_err(|_| LexicalError::InvalidToken)
 }
