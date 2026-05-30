@@ -18,8 +18,8 @@ jobs:
         with:
           toolchain: stable
           override: true
-      - run: cargo build --verbose
-      - run: cargo test --verbose
+      - run: cargo build -r --verbose
+      - run: cargo test -r --verbose
 
   run-examples:
     runs-on: ubuntu-latest
@@ -33,5 +33,5 @@ jobs:
         run: |
           for f in examples/*.phx; do
             echo ">>> Running $f"
-            cargo run "$f"
+            cargo run -r "$f"
           done
