@@ -718,6 +718,8 @@ PatAtom: Pat = {
     PatTuple,
     PatRecord,
     PatArray,
+    <"LitUnicodeScalarValue"> => Pat::unicode_scalar_value(<>),
+    // <"LitUTF8"> => Expr::unicode_scalar_string(<>),
 };
 
 PatVar: Pat = {

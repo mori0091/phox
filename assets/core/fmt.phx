@@ -1,0 +1,163 @@
+use ::core::*;
+
+trait Pretty a {
+    pp: ScalarString -> a -> ScalarString;
+};
+
+*let show = @{Pretty a}.pp "";
+
+// -------------------------------------------------------------
+mod prim;
+use prim::{
+    Unsigned,
+    PpDigits, digits,
+    PpHexDigits, hex-digits,
+    PpHex, hex,
+};
+
+// -------------------------------------------------------------
+type PpEnclose p = PpEnclose ScalarString ScalarString p;
+
+let enclose = PpEnclose;
+let paren   = enclose "(" ")";
+let brace   = enclose "{" "}";
+let bracket = enclose "[" "]";
+let prefix  = \pre. enclose pre "";
+let suffix  = \suf. enclose "" suf;
+
+impl Pretty (PpEnclose p) {
+    pp = \txt.\PpEnclose pre suf p.
+        (@{Pretty a}.pp (txt ++ pre) p) ++ suf
+    ;
+};
+
+// -------------------------------------------------------------
+type PpSepBy s a = PpSepBy ScalarString (s a);
+
+let sep_by = PpSepBy;
+
+impl Pretty (PpSepBy s a) {
+    pp = \txt.\PpSepBy sep xs. {
+        let @{next} = @{Iter s a};
+        let @{pp} = @{Pretty a};
+        match (next xs) {
+            None => txt,
+            Some (x, xs) => {
+                let (s, _) = for
+                    (pp txt x, next xs)
+                    (\(_, opt). some? opt)
+                    (\(s, Some (x, xs)). (pp (s ++ sep) x, next xs))
+                ;
+                s
+            },
+        }
+    };
+};
+
+// -------------------------------------------------------------
+type PpLPad p = PpLPad Int ScalarValue p;
+
+let lpad = PpLPad;
+
+impl Pretty (PpLPad p) {
+    pp = \txt.\PpLPad width pad p. {
+        let s = show p;
+        let n = count s;
+        if (n < width)
+            txt ++ (repeat pad |> take (width - n)) ++ s
+        else
+            txt ++ s
+    };
+};
+
+// -------------------------------------------------------------
+type PpRPad p = PpRPad Int ScalarValue p;
+
+let rpad = PpRPad;
+
+impl Pretty (PpRPad p) {
+    pp = \txt.\PpRPad width pad p. {
+        let s = show p;
+        let n = count s;
+        if (n < width)
+            txt ++ s ++ (repeat pad |> take (width - n))
+        else
+            txt ++ s
+    };
+};
+
+// -------------------------------------------------------------
+type PpPad p = PpPad Int ScalarValue ScalarValue p;
+
+let pad = PpPad;
+
+impl Pretty (PpPad p) {
+    pp = \txt.\PpPad width l r p. {
+        let s = show p;
+        let n = count s;
+        if (n < width) {
+            let m = (width - n);
+            let nl = m / 2;
+            let nr = m - nl;
+            txt ++ (repeat l |> take nl) ++ s ++ (repeat r |> take nr)
+        }
+        else {
+            txt ++ s
+        }
+    };
+};
+
+// -------------------------------------------------------------
+let hex-dump = \xs. sep_by " " <| map (lpad 2 '0' << hex-digits) <| xs:@[u8];
+
+// -------------------------------------------------------------
+type PpEscape p = PpEscape p;
+
+let escape = PpEscape;
+let quote = \p. enclose "\"" "\"" <| escape p;
+
+impl Pretty (PpEscape p) {
+    pp = \txt.\PpEscape p. {
+        let xs = show p;
+        let (s, _) = for
+            (txt, next xs)
+            (\(_, opt). some? opt)
+            (\(s, Some (x, xs)). {
+                let e = match (x) {
+                    '\n' => "\\n",
+                    '\r' => "\\r",
+                    '\t' => "\\t",
+                    '\0' => "\\0",
+                    '\\' => "\\\\",
+                    '"'  => "\\\"",
+                    '\'' => "'",
+                    _    => show x,
+                };
+                (s ++ e, next xs)
+            })
+        ;
+        s
+    };
+};
+
+// -------------------------------------------------------------
+type PpEscape1 = PpEscape1 ScalarValue;
+
+let escape1 = PpEscape1;
+let single-quote = \c. enclose "'" "'" <| escape1 c;
+
+impl Pretty PpEscape1 {
+    pp = \txt.\PpEscape1 c. {
+        let e = match (c) {
+            '\n' => "\\n",
+            '\r' => "\\r",
+            '\t' => "\\t",
+            '\0' => "\\0",
+            '\\' => "\\\\",
+            '"'  => "\"",
+            '\'' => "\\'",
+            _    => show c,
+        };
+        txt ++ e
+    };
+};

@@ -32,6 +32,17 @@ impl Pat {
     pub fn unresolved_qcon(path: Path, args: Vec<Pat>) -> Self {
         Pat::Con(Symbol::Unresolved(path), args)
     }
+    pub fn con(name: Symbol, es: Vec<Pat>) -> Self {
+        Pat::Con(name, es)
+    }
+    pub fn u32_(x: u32) -> Self {
+        Pat::Lit(Lit::U32(x))
+    }
+    pub fn unicode_scalar_value(cp: u32) -> Self {
+        Pat::con(Symbol::unicode_mk_scalar_value(), vec![
+            Pat::u32_(cp)
+        ])
+    }
 }
 
 impl fmt::Display for Pat {
