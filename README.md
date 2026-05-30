@@ -542,31 +542,107 @@ counter 250
 > cast
 ambiguous variable `cast`
 candidates:
+  CodePoint -> Result RuntimeError ScalarValue requires TryCast CodePoint ScalarValue.
+  CodePoint -> u32 requires Cast CodePoint u32.
+  Int -> Result RuntimeError ScalarValue requires TryCast Int ScalarValue.
+  Int -> Result RuntimeError u16 requires TryCast Int u16.
   Int -> Result RuntimeError u32 requires TryCast Int u32.
+  Int -> Result RuntimeError u64 requires TryCast Int u64.
   Int -> Result RuntimeError u8 requires TryCast Int u8.
+  Int -> u16 requires Cast Int u16.
   Int -> u32 requires Cast Int u32.
+  Int -> u64 requires Cast Int u64.
   Int -> u8 requires Cast Int u8.
+  ScalarString -> @[u8] requires Cast ScalarString @[u8].
+  ScalarValue -> CodePoint requires Cast ScalarValue CodePoint.
+  ScalarValue -> u32 requires Cast ScalarValue u32.
+  u16 -> Int requires Cast u16 Int.
+  u16 -> Result RuntimeError Int requires TryCast u16 Int.
+  u16 -> Result RuntimeError u32 requires TryCast u16 u32.
+  u16 -> Result RuntimeError u64 requires TryCast u16 u64.
+  u16 -> Result RuntimeError u8 requires TryCast u16 u8.
+  u16 -> u32 requires Cast u16 u32.
+  u16 -> u64 requires Cast u16 u64.
+  u16 -> u8 requires Cast u16 u8.
   u32 -> Int requires Cast u32 Int.
+  u32 -> Result RuntimeError CodePoint requires TryCast u32 CodePoint.
   u32 -> Result RuntimeError Int requires TryCast u32 Int.
+  u32 -> Result RuntimeError ScalarValue requires TryCast u32 ScalarValue.
+  u32 -> Result RuntimeError u16 requires TryCast u32 u16.
+  u32 -> Result RuntimeError u64 requires TryCast u32 u64.
   u32 -> Result RuntimeError u8 requires TryCast u32 u8.
+  u32 -> u16 requires Cast u32 u16.
+  u32 -> u64 requires Cast u32 u64.
   u32 -> u8 requires Cast u32 u8.
+  u64 -> Int requires Cast u64 Int.
+  u64 -> Result RuntimeError Int requires TryCast u64 Int.
+  u64 -> Result RuntimeError u16 requires TryCast u64 u16.
+  u64 -> Result RuntimeError u32 requires TryCast u64 u32.
+  u64 -> Result RuntimeError u8 requires TryCast u64 u8.
+  u64 -> u16 requires Cast u64 u16.
+  u64 -> u32 requires Cast u64 u32.
+  u64 -> u8 requires Cast u64 u8.
   u8 -> Int requires Cast u8 Int.
   u8 -> Result RuntimeError Int requires TryCast u8 Int.
+  u8 -> Result RuntimeError u16 requires TryCast u8 u16.
   u8 -> Result RuntimeError u32 requires TryCast u8 u32.
+  u8 -> Result RuntimeError u64 requires TryCast u8 u64.
+  u8 -> u16 requires Cast u8 u16.
   u8 -> u32 requires Cast u8 u32.
+  u8 -> u64 requires Cast u8 u64.
+  ∀ a. a -> Result RuntimeError a requires TryCast a a.
+  ∀ a. a -> a requires Cast a a.
 solution:
+  @{Cast CodePoint u32}.cast
+  @{Cast Int u16}.cast
   @{Cast Int u32}.cast
+  @{Cast Int u64}.cast
   @{Cast Int u8}.cast
+  @{Cast ScalarString @[u8]}.cast
+  @{Cast ScalarValue CodePoint}.cast
+  @{Cast ScalarValue u32}.cast
+  @{Cast a a}.cast
+  @{Cast u16 Int}.cast
+  @{Cast u16 u32}.cast
+  @{Cast u16 u64}.cast
+  @{Cast u16 u8}.cast
   @{Cast u32 Int}.cast
+  @{Cast u32 u16}.cast
+  @{Cast u32 u64}.cast
   @{Cast u32 u8}.cast
+  @{Cast u64 Int}.cast
+  @{Cast u64 u16}.cast
+  @{Cast u64 u32}.cast
+  @{Cast u64 u8}.cast
   @{Cast u8 Int}.cast
+  @{Cast u8 u16}.cast
   @{Cast u8 u32}.cast
+  @{Cast u8 u64}.cast
+  @{TryCast CodePoint ScalarValue}.cast
+  @{TryCast Int ScalarValue}.cast
+  @{TryCast Int u16}.cast
   @{TryCast Int u32}.cast
+  @{TryCast Int u64}.cast
   @{TryCast Int u8}.cast
+  @{TryCast a a}.cast
+  @{TryCast u16 Int}.cast
+  @{TryCast u16 u32}.cast
+  @{TryCast u16 u64}.cast
+  @{TryCast u16 u8}.cast
+  @{TryCast u32 CodePoint}.cast
   @{TryCast u32 Int}.cast
+  @{TryCast u32 ScalarValue}.cast
+  @{TryCast u32 u16}.cast
+  @{TryCast u32 u64}.cast
   @{TryCast u32 u8}.cast
+  @{TryCast u64 Int}.cast
+  @{TryCast u64 u16}.cast
+  @{TryCast u64 u32}.cast
+  @{TryCast u64 u8}.cast
   @{TryCast u8 Int}.cast
+  @{TryCast u8 u16}.cast
   @{TryCast u8 u32}.cast
+  @{TryCast u8 u64}.cast
 
 ```
 
@@ -609,6 +685,152 @@ counter 65 |> map cast |> take_while ok? |> map (\Ok sv. sv) |> take 5 |> collec
 collect "Hello " "World!"
 // Concatenate UTF-8 strings
 // => "Hello World!": ScalarString
+```
+
+---
+### Pretty-Printing Combinators (`::core::fmt`)
+
+The `::core::fmt` module provides a **difference-list–based pretty-printing combinator library**.
+
+`Pretty a` defines the minimal primitive for formatting a value `a` into a `ScalarString`.  
+All higher-level formatting is expressed through **combinator composition**.
+
+👉 For more details, see also [`::core::fmt` module](assets/core/fmt.phx).
+
+#### Basics
+
+```rust
+trait Pretty a {
+    pp : ScalarString -> a -> ScalarString;
+};
+
+*let show = @{Pretty a}.pp "";
+```
+
+> [!NOTE]  
+> The `::core::fmt` module is **not imported by default**.  
+> You must either:
+> - call functions with a module path such as `fmt::show`, or  
+> - explicitly import the module with `use ::core::fmt::*;`
+>
+> All examples below assume **`use ::core::fmt::*;`** has already been performed.
+
+---
+
+#### Enclose / Prefix / Suffix
+
+```rust
+show <| paren 123
+// => "(123)": ScalarString
+
+show <| brace 123
+// => "{123}": ScalarString
+
+show <| bracket 123
+// => "[123]": ScalarString
+
+show <| prefix "@" "value"
+// => "@value": ScalarString
+
+show <| suffix "!!" "value"
+// => "value!!": ScalarString
+
+show <| enclose "<<" ">>" "value"
+// => "<<value>>": ScalarString
+```
+
+---
+
+#### sep_by - separated lists
+
+```rust
+show <| sep_by ", " @[1, 2, 3]
+// => "1, 2, 3": ScalarString
+```
+
+---
+
+#### Padding
+
+```rust
+show <| lpad 8 '_' "abc"
+// => "_____abc": ScalarString
+
+show <| rpad 8 '_' "abc"
+// => "abc_____": ScalarString
+
+show <| pad 8 '_' '/' "abc"
+// => "__abc///": ScalarString
+```
+
+---
+
+#### Digits / Hex
+
+```rust
+show <| digits 100u8
+// => "100": ScalarString
+
+show <| hex-digits 200u8
+// => "C8": ScalarString
+
+show <| hex 100
+// => "0x64": ScalarString
+```
+
+---
+
+#### hex-dump - hexadecimal dump of byte arrays
+
+```rust
+show <| hex-dump @[10u8, 100u8, 200u8]
+// => "0A 64 C8": ScalarString
+
+show <| hex-dump <| cast "🎉🤣👍🍺"
+// => "F0 9F 8E 89 F0 9F A4 A3 F0 9F 91 8D F0 9F 8D BA": ScalarString
+```
+
+---
+
+#### escape / quote - string escaping
+
+```rust
+show <| quote "A\nB"
+// => "\"A\\nB\"": ScalarString
+```
+
+---
+
+#### escape1 / single-quote - escaping a single Unicode scalar
+
+```rust
+show <| single-quote '\n'
+// => "'\\n'": ScalarString
+
+show <| sep_by ", " <| map single-quote <| "🎉🤣👍🍺"
+// => "'🎉', '🤣', '👍', '🍺'": ScalarString
+```
+
+---
+
+#### Combinator composition examples
+
+```rust
+show <| prefix "@"
+     <| bracket
+     <| sep_by ", "
+     <| map hex
+     <| (cast "🎉"):@[u8]
+// => "@[0xF0u8, 0x9Fu8, 0x8Eu8, 0x89u8]": ScalarString
+```
+
+```rust
+show <| prefix "@"
+     <| bracket
+     <| sep_by ", "
+     <| map (hex << @{Cast a u32}.cast)
+     <| "🎉🤣"
+// => "@[0x1F389u32, 0x1F923u32]": ScalarString
 ```
 
 ---
