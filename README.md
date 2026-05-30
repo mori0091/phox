@@ -16,11 +16,14 @@ Phox is a small functional programming language with:
 - Rust-like **module system**,
 - and more.
 
-It aims to be a simple yet expressive tool — your clever companion for exploring type theory and practical programming.
+It aims to be a simple yet expressive tool - your clever companion for exploring type theory and practical programming.
 
-> Note: Phox currently has no string type or I/O.  
-> That means you can’t even write “Hello, World!” yet —  
-> but you can prove that `fact 5 = 120` with full type safety 😉
+> [!NOTE]
+> Phox is still under active development.  
+> I/O primitives are not yet implemented, but the following core features are already available:
+> - Type-level Unicode String Framework (`ScalarString`, UTF-8, etc.)
+> - Pretty-Printing Combinators
+> - Rich pure-functional core libraries (iter, array, fmt, ...)
 
 See also <https://mori0091.github.io/phox-book/>
 
