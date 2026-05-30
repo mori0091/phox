@@ -222,6 +222,8 @@ impl Sink (List a) a (List a) {
     finish acc
 };
 
+use collect as (++);
+
 // -------------------------------------------------------------
 /// impl Sink Int a Int
 impl Sink Int a Int {

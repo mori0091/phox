@@ -1,0 +1,141 @@
+use ::core::fmt::*;
+use ::core::unicode::string_push;
+
+impl Pretty () {
+    pp = \txt.\_. txt ++ "()";
+};
+
+impl Pretty Bool {
+    pp = \txt.\b. txt ++ (if (b) "true" else "false");
+};
+
+impl Pretty ScalarValue {
+    pp = string_push;
+};
+
+impl Pretty ScalarString {
+    pp = \txt.\s. txt ++ s;
+};
+
+// -------------------------------------------------------------
+trait Unsigned a { expect_unsigned : a -> a; };
+impl Unsigned u8  { expect_unsigned = id; };
+impl Unsigned u16 { expect_unsigned = id; };
+impl Unsigned u32 { expect_unsigned = id; };
+impl Unsigned u64 { expect_unsigned = id; };
+
+// -------------------------------------------------------------
+*let div = \x.\y. (@{Div a}.(/) x y, @{Mod a}.(%) x y);
+
+// -------------------------------------------------------------
+*let __digits__ = \radix.\x. {
+    let (xs, msb) = for
+        (@[], x)
+        (\(_, x). @{Ord a}.(<=) radix x)
+        (\(xs, x). {
+            let (quot, rem) = div x radix;
+            (push xs rem, quot)
+        })
+    ;
+    push xs msb
+};
+
+// -------------------------------------------------------------
+type PpDigits = PpDigits u64;
+
+*let digits = @{Unsigned a}.expect_unsigned >> @{Cast a u64}.cast >> PpDigits;
+
+impl Pretty PpDigits {
+    pp = \txt.\PpDigits x. {
+        let xs = __digits__ 10u64 x;
+        let (s, _) = for
+            (txt, xs)
+            (\(_, xs). 0 < len xs)
+            (\(s, xs). {
+                let Some (xs', x) = pop xs;
+                let d = cast '0' + (cast x):u32;
+                let digit = ((cast >> (\Ok x. x)) d):ScalarValue;
+                (string_push s digit, xs')
+            })
+        ;
+        s
+    };
+};
+
+// -------------------------------------------------------------
+type PpHexDigits = PpHexDigits u64;
+
+*let hex-digits = @{Cast a u64}.cast >> PpHexDigits;
+
+impl Pretty PpHexDigits {
+    pp = \txt.\PpHexDigits x. {
+        let xs = __digits__ 16u64 x;
+        let (s, _) = for
+            (txt, xs)
+            (\(_, xs). 0 < len xs)
+            (\(s, xs). {
+                let Some (xs', x) = pop xs;
+                let d =
+                    if (x < 10u64) cast '0' + (cast x):u32
+                    else           cast 'A' + (cast (x - 10u64)):u32
+                ;
+                let digit = ((cast >> (\Ok x. x)) d):ScalarValue;
+                (string_push s digit, xs')
+            })
+        ;
+        s
+    };
+};
+
+// -------------------------------------------------------------
+impl Pretty Int {
+    pp = \txt.\x. {
+        let @{pp} = @{Pretty a};
+        let @{cast} = @{Cast Int u64};
+        if (x < 0)
+            pp (txt ++ "-") (digits (cast (-x)))
+        else
+            pp txt (digits (cast x))
+    };
+};
+
+impl Pretty u8 {
+    pp = \txt.\x. (@{Pretty a}.pp txt (digits x)) ++ "u8";
+};
+
+impl Pretty u16 {
+    pp = \txt.\x. (@{Pretty a}.pp txt (digits x)) ++ "u16";
+};
+
+impl Pretty u32 {
+    pp = \txt.\x. (@{Pretty a}.pp txt (digits x)) ++ "u32";
+};
+
+impl Pretty u64 {
+    pp = \txt.\x. (@{Pretty a}.pp txt (digits x)) ++ "u64";
+};
+
+// -------------------------------------------------------------
+type PpHex a = PpHex a;
+
+let hex = PpHex;
+
+impl Pretty (PpHex Int) {
+    pp = \txt.\PpHex x. @{Pretty a}.pp (txt ++ "0x") (hex-digits x);
+};
+
+impl Pretty (PpHex u8) {
+    pp = \txt.\PpHex x. (@{Pretty a}.pp (txt ++ "0x") (hex-digits x)) ++ "u8";
+};
+
+impl Pretty (PpHex u16) {
+    pp = \txt.\PpHex x. (@{Pretty a}.pp (txt ++ "0x") (hex-digits x)) ++ "u16";
+};
+
+impl Pretty (PpHex u32) {
+    pp = \txt.\PpHex x. (@{Pretty a}.pp (txt ++ "0x") (hex-digits x)) ++ "u32";
+};
+
+impl Pretty (PpHex u64) {
+    pp = \txt.\PpHex x. (@{Pretty a}.pp (txt ++ "0x") (hex-digits x)) ++ "u64";
+};
