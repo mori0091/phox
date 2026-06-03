@@ -261,10 +261,7 @@ fn solve_overloaded(
     }
 
     if candidates.len() > 1 {
-        let tmpls = candidates
-            .into_iter()
-            .map(|tmpl| tmpl.clone())
-            .collect::<Vec<_>>();
+        let tmpls = candidates.into_iter().cloned().collect::<Vec<_>>();
         return Ok(vec![Constraint::overloaded(sym, ty, &tmpls)]);
     }
 

@@ -27,11 +27,10 @@ fn check_impl_conflict(
     phox: &mut PhoxEngine,
     impl_head: &TraitHead,
 ) -> Result<(), Error> {
-    for tmpl in phox.impl_env.iter() {
+    for tmpl in phox.impl_env.get_by_head(&impl_head) {
         let mut ctx2 = phox.ctx.clone();
         let sch = tmpl.fresh_copy(&mut ctx2);
         let head = &sch.target.head;
-        if head.name != impl_head.name { continue }
         let mut same = true;
         for (t1, t2) in head.params.iter().zip(impl_head.params.iter()) {
             if ctx2.ty.unify(t1, t2).is_err() {
