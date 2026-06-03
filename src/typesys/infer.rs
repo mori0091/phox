@@ -329,7 +329,8 @@ pub fn infer_expr(
                             cands.push(member_sch_tmpl);
                         }
                         let ty = Type::Var(phox.ctx.ty.fresh_var_id());
-                        (ty.clone(), vec![Constraint::overloaded(&symbol, &ty, &cands)])
+                        let cs = vec![Constraint::overloaded(&symbol, &ty, &cands)];
+                        (ty, cs)
                     }
                 }
             }
@@ -340,34 +341,19 @@ pub fn infer_expr(
                         (ty, constraints.into_vec())
                     }
                     None => {
-                        let mut matches = Vec::new();
-                        for tmpl in phox.impl_env.iter() {
-                            if !tmpl.scheme_ref().target.members.iter().any(|(sym, _e, _ty)| sym == symbol) {
-                                continue;
-                            }
-                            matches.push(tmpl.clone())
-                        }
+                        let matches = phox.impl_env.get_by_member_name(&symbol);
                         match matches.len() {
                             0 => return Err(Error::UnboundVariable(symbol.clone())),
                             1 => {
                                 let tmpl = &matches.iter().cloned().next().unwrap();
-                                let sch = &tmpl.fresh_copy(&mut phox.ctx);
-                                let member_sch = sch.get_member_scheme(symbol).unwrap();
+                                let member_sch = &tmpl.fresh_copy(&mut phox.ctx);
                                 let (constraints, ty_inst) = member_sch.instantiate(&mut phox.ctx);
                                 (ty_inst, constraints.into_vec())
                             }
                             _ => {
-                                let symbol = symbol.clone();
-                                let mut cands = Vec::new();
-                                for sch_tmpl in &matches {
-                                    let sch = sch_tmpl.fresh_copy(&mut phox.ctx);
-                                    let member_sch = sch.get_member_scheme(&symbol).unwrap();
-                                    let member_sch_tmpl = SchemeTemplate::new(member_sch);
-                                    cands.push(member_sch_tmpl);
-                                }
-                                let cands: Vec<_> = cands.iter().cloned().collect();
                                 let ty = Type::Var(phox.ctx.ty.fresh_var_id());
-                                (ty.clone(), vec![Constraint::overloaded(&symbol, &ty, &cands)])
+                                let cs = vec![Constraint::overloaded(&symbol, &ty, &matches)];
+                                (ty, cs)
                             }
                         }
                     }
