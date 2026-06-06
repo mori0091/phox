@@ -742,11 +742,13 @@ fn match_pat(pat: &Pat, val: &Term) -> Option<Env> {
     match (pat, val) {
         (Pat::Wildcard, _) => Some(env),
 
-        (Pat::Lit(Lit::Unit), Term::Val(Value::Unit)) => Some(env),
+        (Pat::Lit(Lit::Unit)   , Term::Val(Value::Unit))              => Some(env),
         (Pat::Lit(Lit::Bool(p)), Term::Val(Value::Bool(x))) if p == x => Some(env),
-        (Pat::Lit(Lit::Int(p)), Term::Val(Value::I64(x))) if p == x => Some(env),
-        (Pat::Lit(Lit::U8(p)), Term::Val(Value::U8(x))) if p == x => Some(env),
-        (Pat::Lit(Lit::U32(p)), Term::Val(Value::U32(x))) if p == x => Some(env),
+        (Pat::Lit(Lit::Int(p)) , Term::Val(Value::I64(x)))  if p == x => Some(env),
+        (Pat::Lit(Lit::U8(p))  , Term::Val(Value::U8(x)))   if p == x => Some(env),
+        (Pat::Lit(Lit::U16(p)) , Term::Val(Value::U16(x)))  if p == x => Some(env),
+        (Pat::Lit(Lit::U32(p)) , Term::Val(Value::U32(x)))  if p == x => Some(env),
+        (Pat::Lit(Lit::U64(p)) , Term::Val(Value::U64(x)))  if p == x => Some(env),
 
         (Pat::Var, v) => {
             env.push(heap::alloc(v.clone()));
