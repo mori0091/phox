@@ -1,0 +1,42 @@
+// use ::std::*;
+
+/// I/O error
+///
+/// > [!NOTE]
+/// > Experimental implementation.
+/// > The definition of `::std::io::Error` probably changed in future.
+type Error = Unexpected;
+
+use ::core::*;
+
+let __write_all__ = \fd.\xs. {
+    let write = __write__ fd;
+    let (b, _) = for
+        (true, xs)
+        (\(b, xs). b && 0 < len xs)
+        (\(_, xs). {
+            let status = write xs;
+            if (0 < status)
+                (true, slice xs status (len xs))
+            else
+                (false, xs)
+        })
+    ;
+    if (b) Ok () else Err Unexpected
+};
+
+let print = \s.
+    __write_all__ 1 (@{Cast ScalarString @[u8]}.cast s)
+;
+
+let println = \s.
+    print (::core::unicode::string_push s '\n')
+;
+
+let eprint = \s.
+    __write_all__ 2 (@{Cast ScalarString @[u8]}.cast s)
+;
+
+let eprintln = \s.
+    eprint (::core::unicode::string_push s '\n')
+;

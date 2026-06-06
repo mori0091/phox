@@ -62,20 +62,25 @@ impl PhoxEngine {
     }
 
     fn boot(&mut self) -> Result<(), Error> {
-        let (_file, src) = load_module_src(&Path::absolute(vec!["core"]))?;
-        self.new_core("core", &src)?;
+        self.new_core()?;
 
         let (_file, src) = load_module_src(&Path::absolute(vec!["prelude"]))?;
         self.new_root("prelude", &src)?;
 
-        self.new_root(DEFAULT_USER_ROOT_MODULE_NAME, "use ::prelude::*;")?;
+        let (_file, src) = load_module_src(&Path::absolute(vec!["std"]))?;
+        self.new_root("std", &src)?;
+
+        // self.new_root(DEFAULT_USER_ROOT_MODULE_NAME, "use ::prelude::*;")?;
+        self.new_root(DEFAULT_USER_ROOT_MODULE_NAME,
+                      "use ::prelude::*; use ::std::*;")?;
 
         Ok(())
     }
 
     // Bootstrap and register "::core" module.
-    fn new_core(&mut self, name: &str, src: &str) -> Result<(), Error> {
-        let root = Module::new_root(name);
+    fn new_core(&mut self) -> Result<(), Error> {
+        let (_file, src) = &load_module_src(&Path::absolute(vec!["core"]))?;
+        let root = Module::new_root("core");
         bootstrap(self, &root).expect("fatal error");
         self.roots.add(root.clone());
         self.run_mod(&root, src)?;

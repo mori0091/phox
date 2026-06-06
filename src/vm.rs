@@ -2,6 +2,7 @@ mod display;
 pub mod heap;
 use heap::{Addr, Buf, Slice, ArrayLike};
 
+use std::io::Write;
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::collection::RefStack;
@@ -1573,6 +1574,27 @@ impl VM<'_> {
                     Value::ArrayI64(s) => heap::push(s, x.try_into()?).into(),
                     _ => unreachable!(),
                 }
+            }
+
+            Builtin::Write => {
+                let fd = self.env_get_i64(1)?;
+                let Value::ArrayU8(s) = self.env_get_value(0)? else { unreachable!() };
+                let x = match s {
+                    Slice::Empty => 0,
+                    Slice::Some { arr, beg, end } => {
+                        let buf = &arr.borrow()[beg..end];
+                        let res = match fd {
+                            1 => std::io::stdout().write(buf),
+                            2 => std::io::stderr().write(buf),
+                            _ => { return Ok(Term::Val(Value::I64(-1))) }
+                        };
+                        match res {
+                            Ok(n) => n as i64,
+                            Err(_) => -1,
+                        }
+                    }
+                };
+                Value::I64(x)
             }
         };
         Ok(Term::Val(val))
