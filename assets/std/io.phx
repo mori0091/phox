@@ -4,7 +4,7 @@
 ///
 /// > [!NOTE]
 /// > Experimental implementation.
-/// > The definition of `::core::io::Error` probably changed in future.
+/// > The definition of `::std::io::Error` probably changed in future.
 type Error = Unexpected;
 
 use ::core::*;
