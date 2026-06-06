@@ -1,0 +1,9 @@
+// use ::core::*;
+
+mod io;
+// use io:*;
+use io;
+use io::{
+    print, println,
+    eprint, eprintln,
+};

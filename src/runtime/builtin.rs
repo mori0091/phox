@@ -59,6 +59,9 @@ pub enum Builtin {
     Len,
     Slice,
     Push,
+
+    // === i/o ===
+    Write,
 }
 
 pub const ALL_BUILTINS: &[Builtin] = &[
@@ -121,6 +124,9 @@ pub const ALL_BUILTINS: &[Builtin] = &[
     Builtin::Len,
     Builtin::Slice,
     Builtin::Push,
+
+    // === i/o ===
+    Builtin::Write,
 ];
 
 impl Builtin {
@@ -243,6 +249,9 @@ impl Builtin {
             Builtin::Len   => ("len"   , 1, "@[a] -> Int"),
             Builtin::Slice => ("slice" , 3, "@[a] -> Int -> Int -> @[a]"),
             Builtin::Push  => ("push"  , 2, "@[a] -> a -> @[a]"),
+
+            // === i/o ===
+            Builtin::Write => ("__write__", 2, "Int -> @[u8] -> Int"),
         }
     }
 }
