@@ -4,6 +4,18 @@ type CodePoint = MkCodePoint u32;
 type ScalarValue = MkScalarValue u32;
 type Grapheme = MkGrapheme @[u8];
 
+// -------------------------------------------------------------
+impl Eq CodePoint {
+    (==) = \MkCodePoint a.\MkCodePoint b. a == b;
+    (!=) = \MkCodePoint a.\MkCodePoint b. a != b;
+};
+
+impl Eq ScalarValue {
+    (==) = \MkScalarValue a.\MkScalarValue b. a == b;
+    (!=) = \MkScalarValue a.\MkScalarValue b. a != b;
+};
+
+// -------------------------------------------------------------
 let scalar-value? = \MkCodePoint cp.
     cp < 0xD800u32 || (0xDFFFu32 < cp && cp <= 0x10FFFFu32)
 ;
