@@ -122,3 +122,9 @@ impl Sink ScalarString ScalarValue ScalarString {
 impl Cast ScalarString @[u8] {
     cast = \MkScalarString bytes. bytes;
 };
+
+// -------------------------------------------------------------
+impl Eq ScalarString {
+    (==) = \MkScalarString xs.\MkScalarString ys. @{Eq @[u8]}.(==) xs ys;
+    (!=) = \MkScalarString xs.\MkScalarString ys. @{Eq @[u8]}.(!=) xs ys;
+};

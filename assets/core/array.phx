@@ -104,3 +104,34 @@ let removeN = \xs.\i.\j.
 let remove1 = \xs.\i.
     removeN xs i (i + 1)
 ;
+
+// -------------------------------------------------------------
+mod array_cmp {
+    use ::core::*;
+
+    trait EqArray a {
+        eq_array : @[a] -> @[a] -> Bool;
+    };
+
+    impl EqArray a {
+        eq_array = \@[xs..].\@[ys..]. {
+            let n = len xs;
+            if (n != len ys) false
+            else {
+                let (==) = @{Eq a}.(==);
+                let (r, _) = for
+                    (true, 0)
+                    (λ(b, i). b && (i < n))
+                    (λ(_, i). (xs[i] == ys[i], i + 1))
+                    ;
+                r
+            }
+        };
+    };
+
+    // ----
+    impl Eq @[a] {
+        (==) = @{EqArray a}.eq_array;
+        (!=) = \xs.\ys. ! (@{EqArray a}.eq_array xs ys);
+    };
+};
