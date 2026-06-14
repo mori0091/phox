@@ -161,3 +161,224 @@ impl Pretty PpEscape1 {
         txt ++ e
     };
 };
+
+// -------------------------------------------------------------
+type Debug a = Debug a;
+
+impl Pretty (Debug (a -> b)) {
+    pp = \txt.\Debug _. txt ++ "<closure>";
+};
+
+impl Pretty (Debug ScalarValue) {
+    pp = \txt.\Debug c. @{Pretty a}.pp txt (single-quote c);
+};
+
+impl Pretty (Debug ScalarString) {
+    pp = \txt.\Debug s. @{Pretty a}.pp txt (quote s);
+};
+
+impl Pretty (Debug Int) {
+    pp = \txt.\Debug x. @{Pretty Int}.pp txt x;
+};
+
+impl Pretty (Debug u8) {
+    pp = \txt.\Debug x. @{Pretty u8}.pp txt x;
+};
+
+impl Pretty (Debug u16) {
+    pp = \txt.\Debug x. @{Pretty u16}.pp txt x;
+};
+
+impl Pretty (Debug u32) {
+    pp = \txt.\Debug x. @{Pretty u32}.pp txt x;
+};
+
+impl Pretty (Debug u64) {
+    pp = \txt.\Debug x. @{Pretty u64}.pp txt x;
+};
+
+impl Pretty (Debug @[a]) {
+    pp = \txt.\Debug @[xs..].
+        @{Pretty _a}.pp txt
+        <| prefix "@"
+        <| bracket
+        <| sep_by ", "
+        <| map Debug
+        <| xs
+    ;
+};
+
+impl Pretty (Debug Bool) {
+    pp = \txt.\Debug b. txt ++ (if (b) "true" else "false");
+};
+
+impl Pretty (Debug (Option a)) {
+    pp = \txt.\Debug opt. match (opt) {
+        Some x => @{Pretty _a}.pp (txt ++ "Some ") (paren (Debug x)),
+        None   => txt ++ "None",
+    };
+};
+
+impl Pretty (Debug (Result e a)) {
+    pp = \txt.\Debug res. match (res) {
+        Ok  ok  => @{Pretty _a}.pp (txt ++ "Ok ") (paren (Debug ok)),
+        Err err => @{Pretty _e}.pp (txt ++ "Err ") (paren (Debug err)),
+    };
+};
+
+impl Pretty (Debug ()) {
+    pp = \txt.\_. txt ++ "()";
+};
+
+impl Pretty (Debug (a,)) {
+    pp = \txt.\Debug (x0,).
+        @{Pretty _a}.pp txt
+        <| paren
+        <| suffix ","
+        <| Debug x0
+    ;
+};
+
+impl Pretty (Debug (t0, t1)) {
+    pp = \txt.\Debug (x0, x1).
+        @{Pretty _a}.pp txt
+        <| paren
+        <| sep_by ", "
+        <| @[
+            show (Debug x0),
+            show (Debug x1),
+        ]
+    ;
+};
+
+impl Pretty (Debug (t0, t1, t2)) {
+    pp = \txt.\Debug (x0, x1, x2).
+        @{Pretty _a}.pp txt
+        <| paren
+        <| sep_by ", "
+        <| @[
+            show (Debug x0),
+            show (Debug x1),
+            show (Debug x2),
+        ]
+    ;
+};
+
+impl Pretty (Debug (t0, t1, t2, t3)) {
+    pp = \txt.\Debug (x0, x1, x2, x3).
+        @{Pretty _a}.pp txt
+        <| paren
+        <| sep_by ", "
+        <| @[
+            show (Debug x0),
+            show (Debug x1),
+            show (Debug x2),
+            show (Debug x3),
+        ]
+    ;
+};
+
+impl Pretty (Debug (t0, t1, t2, t3, t4)) {
+    pp = \txt.\Debug (x0, x1, x2, x3, x4).
+        @{Pretty _a}.pp txt
+        <| paren
+        <| sep_by ", "
+        <| @[
+            show (Debug x0),
+            show (Debug x1),
+            show (Debug x2),
+            show (Debug x3),
+            show (Debug x4),
+        ]
+    ;
+};
+
+impl Pretty (Debug (t0, t1, t2, t3, t4, t5)) {
+    pp = \txt.\Debug (x0, x1, x2, x3, x4, x5).
+        @{Pretty _a}.pp txt
+        <| paren
+        <| sep_by ", "
+        <| @[
+            show (Debug x0),
+            show (Debug x1),
+            show (Debug x2),
+            show (Debug x3),
+            show (Debug x4),
+            show (Debug x5),
+        ]
+    ;
+};
+
+impl Pretty (Debug (t0, t1, t2, t3, t4, t5, t6)) {
+    pp = \txt.\Debug (x0, x1, x2, x3, x4, x5, x6).
+        @{Pretty _a}.pp txt
+        <| paren
+        <| sep_by ", "
+        <| @[
+            show (Debug x0),
+            show (Debug x1),
+            show (Debug x2),
+            show (Debug x3),
+            show (Debug x4),
+            show (Debug x5),
+            show (Debug x6),
+        ]
+    ;
+};
+
+impl Pretty (Debug (t0, t1, t2, t3, t4, t5, t6, t7)) {
+    pp = \txt.\Debug (x0, x1, x2, x3, x4, x5, x6, x7).
+        @{Pretty _a}.pp txt
+        <| paren
+        <| sep_by ", "
+        <| @[
+            show (Debug x0),
+            show (Debug x1),
+            show (Debug x2),
+            show (Debug x3),
+            show (Debug x4),
+            show (Debug x5),
+            show (Debug x6),
+            show (Debug x7),
+        ]
+    ;
+};
+
+impl Pretty (Debug (t0, t1, t2, t3, t4, t5, t6, t7, t8)) {
+    pp = \txt.\Debug (x0, x1, x2, x3, x4, x5, x6, x7, x8).
+        @{Pretty _a}.pp txt
+        <| paren
+        <| sep_by ", "
+        <| @[
+            show (Debug x0),
+            show (Debug x1),
+            show (Debug x2),
+            show (Debug x3),
+            show (Debug x4),
+            show (Debug x5),
+            show (Debug x6),
+            show (Debug x7),
+            show (Debug x8),
+        ]
+    ;
+};
+
+impl Pretty (Debug (t0, t1, t2, t3, t4, t5, t6, t7, t8, t9)) {
+    pp = \txt.\Debug (x0, x1, x2, x3, x4, x5, x6, x7, x8, x9).
+        @{Pretty _a}.pp txt
+        <| paren
+        <| sep_by ", "
+        <| @[
+            show (Debug x0),
+            show (Debug x1),
+            show (Debug x2),
+            show (Debug x3),
+            show (Debug x4),
+            show (Debug x5),
+            show (Debug x6),
+            show (Debug x7),
+            show (Debug x8),
+            show (Debug x9),
+        ]
+    ;
+};
