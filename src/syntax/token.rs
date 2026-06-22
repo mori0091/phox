@@ -124,7 +124,7 @@ pub enum Token {
     LitU64(u64),
 
     // --- 文字リテラル ---
-    #[regex(r"'([^'\\]|\\.)'", parse_char_literal)]
+    #[regex(r"'(\\u\{[0-9A-Fa-f]+\}|\\.|[^'\\])'", parse_char_literal)]
     LitUnicodeScalarValue(u32),
 
     // --- 文字列リテラル ---
