@@ -426,107 +426,6 @@ impl VM<'_> {
                 return Ok(())
             }
             match self.code() {
-                Code::Lit(x) => {
-                    let val = match x {
-                        Lit::Unit    => Value::Unit,
-                        Lit::Bool(b) => Value::Bool(*b),
-                        Lit::Int(i)  => Value::I64(*i),
-                        Lit::U8(u)   => Value::U8(*u),
-                        Lit::U16(u)  => Value::U16(*u),
-                        Lit::U32(u)  => Value::U32(*u),
-                        Lit::U64(u)  => Value::U64(*u),
-                    };
-                    return self.run_state_value(val);
-                }
-                Code::Con(c, arity) => {
-                    return self.run_state_value(Value::Con(c.clone(), self.env_values(*arity)));
-                }
-                Code::Tuple(arity) => {
-                    return self.run_state_value(Value::Tuple(self.env_values(*arity)));
-                }
-                Code::Record(labels) => {
-                    return self.run_state_value(Value::Record(labels.clone(), self.env_values(labels.len())));
-                }
-                Code::Array(arity) => {
-                    let s = if *arity == 0 {
-                        Slice::Empty
-                    }
-                    else {
-                        let arr = self.heap_array(self.env_values(*arity));
-                        Slice::Some { arr, beg: 0, end: *arity }
-                    };
-                    return self.run_state_value(Value::Array(s));
-                }
-                Code::ArrayU8(arity) => {
-                    let s = if *arity == 0 {
-                        Slice::Empty
-                    }
-                    else {
-                        let xs: Vec<_> = self.env_values(*arity).into_iter().map(|t| {
-                            let Term::Val(Value::U8(i)) = t else { unreachable!() };
-                            i
-                        }).collect();
-                        let arr = self.heap_array(xs);
-                        Slice::Some { arr, beg: 0, end: *arity }
-                    };
-                    return self.run_state_value(Value::ArrayU8(s));
-                }
-                Code::ArrayU16(arity) => {
-                    let s = if *arity == 0 {
-                        Slice::Empty
-                    }
-                    else {
-                        let xs: Vec<_> = self.env_values(*arity).into_iter().map(|t| {
-                            let Term::Val(Value::U16(i)) = t else { unreachable!() };
-                            i
-                        }).collect();
-                        let arr = self.heap_array(xs);
-                        Slice::Some { arr, beg: 0, end: *arity }
-                    };
-                    return self.run_state_value(Value::ArrayU16(s));
-                }
-                Code::ArrayU32(arity) => {
-                    let s = if *arity == 0 {
-                        Slice::Empty
-                    }
-                    else {
-                        let xs: Vec<_> = self.env_values(*arity).into_iter().map(|t| {
-                            let Term::Val(Value::U32(i)) = t else { unreachable!() };
-                            i
-                        }).collect();
-                        let arr = self.heap_array(xs);
-                        Slice::Some { arr, beg: 0, end: *arity }
-                    };
-                    return self.run_state_value(Value::ArrayU32(s));
-                }
-                Code::ArrayU64(arity) => {
-                    let s = if *arity == 0 {
-                        Slice::Empty
-                    }
-                    else {
-                        let xs: Vec<_> = self.env_values(*arity).into_iter().map(|t| {
-                            let Term::Val(Value::U64(i)) = t else { unreachable!() };
-                            i
-                        }).collect();
-                        let arr = self.heap_array(xs);
-                        Slice::Some { arr, beg: 0, end: *arity }
-                    };
-                    return self.run_state_value(Value::ArrayU64(s));
-                }
-                Code::ArrayI64(arity) => {
-                    let s = if *arity == 0 {
-                        Slice::Empty
-                    }
-                    else {
-                        let xs: Vec<_> = self.env_values(*arity).into_iter().map(|t| {
-                            let Term::Val(Value::I64(i)) = t else { unreachable!() };
-                            i
-                        }).collect();
-                        let arr = self.heap_array(xs);
-                        Slice::Some { arr, beg: 0, end: *arity }
-                    };
-                    return self.run_state_value(Value::ArrayI64(s));
-                }
                 Code::Lam(_) if self.args_is_empty() => {
                     if self.upds_is_empty() {
                         return Ok(());
@@ -555,6 +454,21 @@ impl VM<'_> {
 
     fn run_state(&mut self) -> Result<(), RuntimeError> {
         match self.code() {
+            // functions
+            Code::Lam(_) => {
+                if !self.args_is_empty() {
+                    self.run_lam();
+                    Ok(())
+                }
+                else {
+                    unreachable!()
+                }
+            }
+            Code::Builtin(_) => {
+                self.run_builtin()
+            }
+
+            // expressions
             Code::GlobalVar(_) => {
                 self.run_global_access()
             }
@@ -580,14 +494,6 @@ impl VM<'_> {
                 self.run_field_access()
             }
 
-            Code::Lam(_) if !self.args_is_empty() => {
-                self.run_lam();
-                Ok(())
-            }
-            Code::Builtin(_) => {
-                self.run_builtin()
-            }
-
             Code::Let(_, _) => {
                 self.run_let()
             }
@@ -595,14 +501,54 @@ impl VM<'_> {
                 self.run_letrec()
             }
 
-            _ => {
-                if !self.upds_is_empty() {
-                    self.run_update();
-                    Ok(())
-                }
-                else {
-                    Err(RuntimeError::Fatal)
-                }
+            // value constructors (`Closure {code, env} -> Value`)
+            Code::Lit(x) => {
+                let val = match x {
+                    Lit::Unit    => Value::Unit,
+                    Lit::Bool(b) => Value::Bool(*b),
+                    Lit::Int(i)  => Value::I64(*i),
+                    Lit::U8(u)   => Value::U8(*u),
+                    Lit::U16(u)  => Value::U16(*u),
+                    Lit::U32(u)  => Value::U32(*u),
+                    Lit::U64(u)  => Value::U64(*u),
+                };
+                self.run_state_value(val)
+            }
+            Code::Con(c, arity) => {
+                let xs = self.env_values(*arity);
+                self.run_state_value(Value::Con(c.clone(), xs))
+            }
+            Code::Tuple(arity) => {
+                let xs = self.env_values(*arity);
+                self.run_state_value(Value::Tuple(xs))
+            }
+            Code::Record(labels) => {
+                let xs = self.env_values(labels.len());
+                self.run_state_value(Value::Record(labels.clone(), xs))
+            }
+            Code::Array(arity) => {
+                let s = self.env_array_slice(*arity);
+                self.run_state_value(Value::Array(s))
+            }
+            Code::ArrayU8(arity) => {
+                let s = self.env_array_slice(*arity);
+                self.run_state_value(Value::ArrayU8(s))
+            }
+            Code::ArrayU16(arity) => {
+                let s = self.env_array_slice(*arity);
+                self.run_state_value(Value::ArrayU16(s))
+            }
+            Code::ArrayU32(arity) => {
+                let s = self.env_array_slice(*arity);
+                self.run_state_value(Value::ArrayU32(s))
+            }
+            Code::ArrayU64(arity) => {
+                let s = self.env_array_slice(*arity);
+                self.run_state_value(Value::ArrayU64(s))
+            }
+            Code::ArrayI64(arity) => {
+                let s = self.env_array_slice(*arity);
+                self.run_state_value(Value::ArrayI64(s))
             }
         }
     }
@@ -656,11 +602,26 @@ impl VM<'_> {
         *self.env_mut() = env;
     }
 
-    fn env_values(&self, arity: usize) -> Vec<Term> {
+    fn env_values<T: Clone + TryFrom<Term>>(&self, arity: usize) -> Vec<T> {
         let env = self.env();
         let idx = env.len() - arity;
-        let vals: Vec<_> = env[idx..].iter().map(|a| a.borrow().clone()).collect();
+        let vals: Vec<T> = env[idx..].iter().map(
+            |a| match a.borrow().clone().try_into() {
+                Ok(x) => x,
+                _ => unreachable!(),
+            }
+        ).collect();
         vals
+    }
+
+    fn env_array_slice<T: Clone + TryFrom<Term>>(&self, arity: usize) -> Slice<T> {
+        if arity == 0 {
+            Slice::Empty
+        }
+        else {
+            let arr = self.heap_array(self.env_values(arity));
+            Slice::Some { arr, beg: 0, end: arity }
+        }
     }
 
     fn env_push(&mut self, a: Addr) {
@@ -873,8 +834,8 @@ impl VM<'_> {
         self.env_replace(env);
         let x = self.eval_code(*t2)?;
         let a = self.heap_alloc(x);
-        self.state.term = f;
         self.args_push(a);
+        self.state.term = f;
         Ok(())
     }
 
@@ -920,10 +881,7 @@ impl VM<'_> {
                 Ok(())
             }
             Term::Clo(c) => match c.code {
-                Code::Lam(_)     |
-                Code::Tuple(_)   |
-                Code::Con(_, _)  |
-                Code::Record(_) => {
+                Code::Lam(_) | Code::Builtin(_) => {
                     // no need to UPDATE
                     Ok(())
                 }
