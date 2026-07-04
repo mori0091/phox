@@ -20,10 +20,6 @@ impl fmt::Display for RuntimeError {
                 write!(f, "global variable not found: `{}`", sym),
             RuntimeError::VariableNotFound(index) =>
                 write!(f, "local variable not found: `?{}`", index),
-            RuntimeError::DanglingReadPointer =>
-                write!(f, "read from dangling pointer"),
-            RuntimeError::DanglingWritePointer =>
-                write!(f, "write to dangling pointer"),
         }
     }
 }
@@ -248,7 +244,7 @@ impl Code {
             Code::Lam(_)       |
             Code::Match(_, _)  |
             Code::For(_, _, _) |
-            Code ::Let(_, _)   |
+            Code::Let(_, _)    |
             Code::LetRec(_, _) => {
                 format!("({})", self)
             }
@@ -340,6 +336,10 @@ impl fmt::Display for Code {
             Code::Record(ix) => {
                 let ix: Vec<_> = ix.iter().map(|label| PathComponent::Name(label.clone()).pretty()).collect();
                 write!(f, "<Record({})>", ix.join(", "))
+            }
+
+            _ => {
+                write!(f, "<continuation>")
             }
         }
     }

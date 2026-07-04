@@ -24,8 +24,6 @@ pub enum RuntimeError {
     Fatal,
     GlobalVariableNotFound(Symbol),
     VariableNotFound(usize),
-    DanglingReadPointer,
-    DanglingWritePointer,
 }
 
 // -------------------------------------------------------------
@@ -48,9 +46,18 @@ pub enum Code {
     IndexAccess(Box<Code>, Box<Code>),    // ex. `p[0]`
     TupleAccess(Box<Code>, usize),  // ex. `p.0`
     FieldAccess(Box<Code>, Label),  // ex. `p.x`
-
     Let(Box<Code>, Box<Code>),
     LetRec(Box<Code>, Box<Code>),
+
+    // continuations
+    KApp,
+    KMatch(Vec<(Pat, Code)>),
+    KFor,
+    KFor2,
+    KIndexAccess,               // ex. `p[0]`
+    KTupleAccess(usize),        // ex. `p.0`
+    KFieldAccess(Label),        // ex. `p.x`
+    KLetRec(Box<Code>),
 
     // value constructors (`Closure {code, env} -> Value`)
     Lit(Lit),
@@ -188,6 +195,7 @@ pub type GlobalEnv = IndexMap<Symbol, Code>; // Vec<Code> in future
 type Env = Vec<Addr>;
 type AStack = RefStack<Addr>;
 type UStack = Vec<(Addr, AStack)>;
+type CStack = Vec<Term>;
 
 // -------------------------------------------------------------
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -385,6 +393,20 @@ pub struct State {
     pub term: Term,
     pub args: AStack,
     pub upds: UStack,
+    pub whnfs: AStack,
+    pub conts: CStack,
+}
+
+impl State {
+    pub fn new(code: Code) -> Self {
+        State {
+            term: Term::Clo(Closure { code, env: Env::new() }),
+            args: AStack::new(),
+            upds: UStack::new(),
+            whnfs: AStack::new(),
+            conts: CStack::new(),
+        }
+    }
 }
 
 // -------------------------------------------------------------
@@ -401,18 +423,13 @@ impl <'a> VM<'a> {
 
 impl <'a> VM<'a> {
     pub fn new(globals: &'a GlobalEnv, code: Code) -> Self {
-        let state = State {
-            term: Term::Clo(Closure { code, env: Env::new() }),
-            args: AStack::new(),
-            upds: UStack::new(),
-            // heap: Heap::new(),
-        };
+        let state = State::new(code);
         VM { globals, state }
     }
 
     /// Evaluate the current closure and return the result closure.
     pub fn eval(&mut self) -> Result<Term, RuntimeError> {
-        self.run_state_whnf()?;
+        self.mainloop()?;
         Ok(self.state.term.clone())
     }
 }
@@ -420,36 +437,48 @@ impl <'a> VM<'a> {
 // -------------------------------------------------------------
 // === VM internal evaluation APIs ===
 impl VM<'_> {
-    fn run_state_whnf(&mut self) -> Result<(), RuntimeError> {
+    fn mainloop(&mut self) -> Result<(), RuntimeError> {
         loop {
-            if let Term::Val(_) = &self.state.term {
-                return Ok(())
-            }
-            match self.code() {
-                Code::Lam(_) if self.args_is_empty() => {
-                    if self.upds_is_empty() {
-                        return Ok(());
-                    }
-                    else {
-                        return Err(RuntimeError::DanglingWritePointer);
-                    }
+            self.run_state_whnf()?;
+            match self.state.conts.pop() {
+                Some(t) => {
+                    let x = self.state.term.clone();
+                    let a = self.heap_alloc(x);
+                    self.whnfs_push(a);
+                    self.state.term = t;
                 }
-                _ => {}
+                None => {
+                    assert!(self.state.whnfs.is_empty());
+                    return Ok(())
+                }
             }
-            self.run_state()?;
         }
     }
 
-    fn run_state_value(&mut self, val: Value) -> Result<(), RuntimeError> {
-        self.set_value(val);
-        if self.upds_is_empty() {
-            return Ok(());
+    fn run_state_whnf(&mut self) -> Result<(), RuntimeError> {
+        loop {
+            match &self.state.term {
+                Term::Val(_) => break,
+                Term::Clo(Closure { code, env: _ }) => match code {
+                    Code::Lam(_) if self.args_is_empty() => {
+                        if self.upds_is_empty() {
+                            break;
+                        }
+                        self.run_update();
+                    }
+                    _ => self.run_state()?
+                }
+            }
         }
-        if self.args_is_empty() {
-            return Err(RuntimeError::DanglingWritePointer);
-        }
-        self.run_update();
         Ok(())
+    }
+
+    fn run_state_value(&mut self, val: Value) {
+        self.set_value(val);
+        if !self.upds_is_empty() {
+            assert!(self.args_is_empty());
+            self.run_update();
+        }
     }
 
     fn run_state(&mut self) -> Result<(), RuntimeError> {
@@ -457,49 +486,35 @@ impl VM<'_> {
             // functions
             Code::Lam(_) => {
                 if !self.args_is_empty() {
-                    self.run_lam();
-                    Ok(())
+                    self.run_lam()
                 }
                 else {
                     unreachable!()
                 }
             }
-            Code::Builtin(_) => {
-                self.run_builtin()
-            }
+            Code::Builtin(_) => self.run_builtin()?,
 
             // expressions
-            Code::GlobalVar(_) => {
-                self.run_global_access()
-            }
-            Code::Var(_) => {
-                self.run_access()
-            }
-            Code::App(_, _) => {
-                self.run_app()
-            }
-            Code::Match(_, _) => {
-                self.run_match()
-            }
-            Code::For(_, _, _) => {
-                self.run_for()
-            }
-            Code::IndexAccess(_, _) => {
-                self.run_index_access()
-            }
-            Code::TupleAccess(_, _) => {
-                self.run_tuple_access()
-            }
-            Code::FieldAccess(_, _) => {
-                self.run_field_access()
-            }
+            Code::GlobalVar(_)      => self.run_global_access()?,
+            Code::Var(_)            => self.run_access()?,
+            Code::App(_, _)         => self.run_app(),
+            Code::Match(_, _)       => self.run_match(),
+            Code::For(_, _, _)      => self.run_for()?,
+            Code::IndexAccess(_, _) => self.run_index_access(),
+            Code::TupleAccess(_, _) => self.run_tuple_access(),
+            Code::FieldAccess(_, _) => self.run_field_access(),
+            Code::Let(_, _)         => self.run_let(),
+            Code::LetRec(_, _)      => self.run_letrec(),
 
-            Code::Let(_, _) => {
-                self.run_let()
-            }
-            Code::LetRec(_, _) => {
-                self.run_letrec()
-            }
+            // continuations
+            Code::KApp              => self.run_kapp(),
+            Code::KMatch(_)         => self.run_kmatch()?,
+            Code::KIndexAccess      => self.run_kindex_access()?,
+            Code::KTupleAccess(_)   => self.run_ktuple_access(),
+            Code::KFieldAccess(_)   => self.run_kfield_access(),
+            Code::KFor              => self.run_kfor()?,
+            Code::KFor2             => self.run_kfor2()?,
+            Code::KLetRec(_)        => self.run_kletrec()?,
 
             // value constructors (`Closure {code, env} -> Value`)
             Code::Lit(x) => {
@@ -550,14 +565,8 @@ impl VM<'_> {
                 let s = self.env_array_slice(*arity);
                 self.run_state_value(Value::ArrayI64(s))
             }
-        }
-    }
-
-    /// Evaluates the given code in the current closure's environment and
-    /// returns the resulting value.
-    fn eval_code(&mut self, code: Code) -> Result<Term, RuntimeError> {
-        self.code_replace(code);
-        self.eval()
+        };
+        Ok(())
     }
 }
 
@@ -596,10 +605,6 @@ impl VM<'_> {
             Term::Clo(c) => &mut c.env,
             _ => unreachable!(),
         }
-    }
-
-    fn env_replace(&mut self, env: Env) {
-        *self.env_mut() = env;
     }
 
     fn env_values<T: Clone + TryFrom<Term>>(&self, arity: usize) -> Vec<T> {
@@ -672,6 +677,28 @@ impl VM<'_> {
         let (a, args) = self.state.upds.pop().unwrap();
         self.state.args = args;
         a
+    }
+
+    /// Push to WHNF-stack.
+    fn whnfs_push(&mut self, a: Addr) {
+        self.state.whnfs.push(a);
+    }
+    /// Pop from WHNF-stack.
+    fn whnfs_pop(&mut self) -> Addr {
+        self.state.whnfs.pop().unwrap()
+    }
+
+    /// Push term to continuations-stack.
+    fn conts_push(&mut self, t: Term) {
+        self.state.conts.push(t);
+    }
+    /// Push closure (w/ empty env) to continuations-stack.
+    fn conts_push_code(&mut self, code: Code) {
+        self.conts_push(Term::Clo(Closure { code, env: Env::new() }));
+    }
+    /// Push closure (w/ duplicated env) to continuations-stack.
+    fn conts_push_closure(&mut self, code: Code) {
+        self.conts_push(Term::Clo(Closure { code, env: self.env_dup() }));
     }
 
     /// Allocate fresh address
@@ -817,26 +844,28 @@ where
 }
 
 // -------------------------------------------------------------
-// === VM basic state transitions ("lazy Krivine machine", Lang(2007)) ===
+// === VM basic state transitions ===
+// > [!NOTE]
+// > The Phox VM is originaly based on "Lazy Krivine Machine", Lang(2007).
+// > But the Phox VM is an abstract machine with *strict*/*eagar* evaluation strategy.
+// > And it has now WHNF stack and continuation stack.
+// > So maybe, the current implementation of the Phox VM is similar to SECD machine rather than LKM.
+//
+// > [!TODO]
+// > - Refactor `for` to builtin function that wraps continuation-based implementtation.
 impl VM<'_> {
-    // fn run_app(&mut self) {
-    //     let Code::App(t1, t2) = self.code().clone() else { unreachable!() };
-    //     let c = Term::Clo(Closure { code: *t2, env: self.env_dup() });
-    //     let a = self.heap_alloc(c);
-    //     self.args_push(a);
-    //     self.code_replace(*t1);
-    // }
-    fn run_app(&mut self) -> Result<(), RuntimeError> {
+    fn run_app(&mut self) {
         // strict App f x
-        let Code::App(t1, t2) = self.code().clone() else { unreachable!() };
-        let env = self.env_dup();
-        let f = self.eval_code(*t1)?;
-        self.env_replace(env);
-        let x = self.eval_code(*t2)?;
-        let a = self.heap_alloc(x);
-        self.args_push(a);
-        self.state.term = f;
-        Ok(())
+        let Code::App(f, x) = self.code().clone() else { unreachable!() };
+        self.conts_push_code(Code::KApp);
+        self.conts_push_closure(*f);
+        self.code_replace(*x);
+    }
+    fn run_kapp(&mut self) {
+        let f = self.whnfs_pop();
+        let x = self.whnfs_pop();
+        self.heap_load(f);
+        self.args_push(x);
     }
 
     fn run_lam(&mut self) {
@@ -846,26 +875,26 @@ impl VM<'_> {
         self.env_push(a);
     }
 
-    fn run_let(&mut self) -> Result<(), RuntimeError> {
+    fn run_let(&mut self) {
         let Code::Let(x, e) = self.code().clone() else { unreachable!() };
-        let mut env = self.env_dup();
-        let x = self.eval_code(*x)?;
-        let a = self.heap_alloc(x);
-        env.push(a);
-        self.set_closure(*e, env);
-        Ok(())
+        self.conts_push_code(Code::KApp);
+        self.conts_push_closure(Code::Lam(e));
+        self.code_replace(*x);
     }
 
-    fn run_letrec(&mut self) -> Result<(), RuntimeError> {
+    fn run_letrec(&mut self) {
         let Code::LetRec(x, e) = self.code().clone() else { unreachable!() };
-        let mut env = self.env_dup();
         let a = self.heap_alloc_reserved();
-        self.env_push(a.clone());
+        self.env_mut().push(a);
+        self.conts_push_closure(Code::KLetRec(e));
         self.code_replace(*x);
-        self.run_state_whnf()?;
-        self.heap_store(a.clone());
-        env.push(a);
-        self.set_closure(*e, env);
+    }
+    fn run_kletrec(&mut self) -> Result<(), RuntimeError> {
+        let Code::KLetRec(e) = self.code().clone() else { unreachable!() };
+        let x = self.whnfs_pop();
+        let a = self.env_get(0)?;
+        heap::store(a, &heap::load(x));
+        self.code_replace(*e);
         Ok(())
     }
 
@@ -919,84 +948,73 @@ impl VM<'_> {
         }
     }
 
-    fn run_index_access(&mut self) -> Result<(), RuntimeError> {
+    fn run_index_access(&mut self) {
         let Code::IndexAccess(code, arg) = self.code().clone() else { unreachable!() };
-        let env = self.env_dup();
-        let Term::Val(Value::I64(index)) = self.eval_code(*arg)? else { unreachable!() };
-        self.set_closure(*code, env);
-        self.run_state_whnf()?;
-
-        self.run_unwrap();
-
-        match self.value() {
-            Value::Array(s) => {
-                self.state.term = heap::extract_1(s, index)?;
-                Ok(())
-            }
-            Value::ArrayU8(s) => {
-                let x = heap::extract_1(s, index)?;
-                self.state.term = x.into();
-                Ok(())
-            }
-            Value::ArrayU16(s) => {
-                let x = heap::extract_1(s, index)?;
-                self.state.term = x.into();
-                Ok(())
-            }
-            Value::ArrayU32(s) => {
-                let x = heap::extract_1(s, index)?;
-                self.state.term = x.into();
-                Ok(())
-            }
-            Value::ArrayU64(s) => {
-                let x = heap::extract_1(s, index)?;
-                self.state.term = x.into();
-                Ok(())
-            }
-            Value::ArrayI64(s) => {
-                let x = heap::extract_1(s, index)?;
-                self.state.term = x.into();
-                Ok(())
-            }
-            _ => {
-                unreachable!()
-            }
-        }
+        self.conts_push_closure(Code::KIndexAccess);
+        self.conts_push_closure(*code);
+        self.code_replace(*arg);
     }
-
-    fn run_tuple_access(&mut self) -> Result<(), RuntimeError> {
-        let Code::TupleAccess(code, index) = self.code().clone() else { unreachable!() };
-        self.code_replace(*code);
-        self.run_state_whnf()?;
-
+    fn run_kindex_access(&mut self) -> Result<(), RuntimeError> {
+        let a = self.whnfs_pop();
+        let i = self.whnfs_pop();
+        let Term::Val(Value::I64(index)) = heap::load(i) else { unreachable!() };
+        self.heap_load(a);
         self.run_unwrap();
-
-        let Value::Tuple(args) = self.value() else { unreachable!() };
-        self.state.term = args[index].clone();
+        self.state.term = match self.value() {
+            Value::Array(s)    => heap::extract_1(s, index)?,
+            Value::ArrayU8(s)  => heap::extract_1(s, index)?.into(),
+            Value::ArrayU16(s) => heap::extract_1(s, index)?.into(),
+            Value::ArrayU32(s) => heap::extract_1(s, index)?.into(),
+            Value::ArrayU64(s) => heap::extract_1(s, index)?.into(),
+            Value::ArrayI64(s) => heap::extract_1(s, index)?.into(),
+            _ => unreachable!(),
+        };
         Ok(())
     }
 
-    fn run_field_access(&mut self) -> Result<(), RuntimeError> {
-        let Code::FieldAccess(code, label) = self.code().clone() else { unreachable!() };
+    fn run_tuple_access(&mut self) {
+        let Code::TupleAccess(code, index) = self.code().clone() else { unreachable!() };
+        self.conts_push_closure(Code::KTupleAccess(index));
         self.code_replace(*code);
-        self.run_state_whnf()?;
+    }
 
+    fn run_ktuple_access(&mut self) {
+        let Code::KTupleAccess(index) = self.code().clone() else { unreachable!() };
+        let a = self.whnfs_pop();
+        self.heap_load(a);
         self.run_unwrap();
+        let Value::Tuple(args) = self.value() else { unreachable!() };
+        self.state.term = args[index].clone();
+    }
 
+    fn run_field_access(&mut self) {
+        let Code::FieldAccess(code, label) = self.code().clone() else { unreachable!() };
+        self.conts_push_closure(Code::KFieldAccess(label));
+        self.code_replace(*code);
+    }
+    fn run_kfield_access(&mut self) {
+        let Code::KFieldAccess(label) = self.code().clone() else { unreachable!() };
+        let a = self.whnfs_pop();
+        self.heap_load(a);
+        self.run_unwrap();
         let Value::Record(fs, args) = self.value() else { unreachable!() };
         let index = fs.iter().position(|s| *s == label).unwrap();
         self.state.term = args[index].clone();
-        Ok(())
     }
 
-    fn run_match(&mut self) -> Result<(), RuntimeError> {
+    fn run_match(&mut self) {
         let Code::Match(code, arms) = self.code().clone() else { unreachable!() };
-        let mut env = self.env_dup();
-        let v_scrut = self.eval_code(*code)?;
+        self.conts_push_closure(Code::KMatch(arms));
+        self.code_replace(*code);
+    }
+    fn run_kmatch(&mut self) -> Result<(), RuntimeError> {
+        let Code::KMatch(arms) = self.code().clone() else { unreachable!() };
+        let a = self.whnfs_pop();
+        let v_scrut = heap::load(a);
         for (pat, body) in arms {
             if let Some(bindings) = match_pat(&pat, &v_scrut) {
-                env.extend(bindings);
-                self.set_closure(body, env);
+                self.env_mut().extend(bindings);
+                self.code_replace(body);
                 return Ok(())
             }
         }
@@ -1004,34 +1022,28 @@ impl VM<'_> {
     }
 
     fn run_for(&mut self) -> Result<(), RuntimeError> {
-        let Code::For(init, pred, next) = self.code().clone() else { unreachable!() };
-
-        let p_env = self.env_dup();
-        let n_env = self.env_dup();
-
-        let a = {
-            let x = self.eval_code(*init)?;
-            self.heap_alloc(x)
-        };
-
-        self.set_closure(*pred, p_env);
-        let pred = self.eval()?;
-
-        self.set_closure(*next, n_env);
-        let next = self.eval()?;
-
-        loop {
-            self.state.term = pred.clone();
-            self.args_push(a.clone());
-            self.run_state_whnf()?;
-            let Value::Bool(b) = self.value() else { unreachable!() };
-            if !b { break; }
-            self.state.term = next.clone();
-            self.args_push(a.clone());
-            self.run_state_whnf()?;
-            self.heap_store(a.clone());
+        self.conts_push_closure(Code::KFor);
+        self.args_push(self.env_get(2)?); // init
+        self.heap_load(self.env_get(1)?); // pred
+        Ok(())
+    }
+    fn run_kfor(&mut self) -> Result<(), RuntimeError> {
+        let a = self.whnfs_pop();
+        let t = heap::load(a);
+        if let Value::Bool(false) = t.value() {
+            self.heap_load(self.env_get(2)?); // return `init`
+            return Ok(())
         }
-        self.heap_load(a);
+        self.conts_push_closure(Code::KFor2);
+        self.args_push(self.env_get(2)?); // init
+        self.heap_load(self.env_get(0)?); // next
+        Ok(())
+    }
+    fn run_kfor2(&mut self) -> Result<(), RuntimeError> {
+        let a = self.whnfs_pop();
+        heap::store(self.env_get(2)?, &heap::load(a)); // update `init`
+        let k = Code::for_(Code::unit(), Code::unit(), Code::unit());
+        self.code_replace(k);
         Ok(())
     }
 
