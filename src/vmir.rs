@@ -143,12 +143,6 @@ fn lower_expr(env: &mut Vec<Symbol>, expr: &CoreExpr) -> Result<vm::Code, Error>
             }
             Ok(vm::Code::match_(scrut, xs))
         }
-        CoreExpr::For(init, pred, next) => {
-            let init = lower_expr(&mut env.clone(), init)?;
-            let pred = lower_expr(&mut env.clone(), pred)?;
-            let next = lower_expr(env, next)?;
-            Ok(vm::Code::for_(init, pred, next))
-        }
 
         CoreExpr::IndexAccess(a, i) => {
             let a = lower_expr(&mut env.clone(), a)?;

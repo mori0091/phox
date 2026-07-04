@@ -451,6 +451,11 @@ fn test_nested_block_shadowing() {
     assert_eq!(result.value(), &Value::I64(2));
 }
 
+fn for_(init: Code, pred: Code, next: Code) -> Code {
+    let e = Code::lam(Code::lam(Code::lam(Code::For)));
+    Code::app(Code::app(Code::app(e, init), pred), next)
+}
+
 #[test]
 fn test_for_loop() {
     // init = 0;
@@ -470,9 +475,9 @@ fn test_for_loop() {
         )
     );
 
-    let coce = Code::for_(init, pred, next);
+    let code = for_(init, pred, next);
 
-    let result = VM::run(&globals(), coce).unwrap();
+    let result = VM::run(&globals(), code).unwrap();
 
     assert_eq!(result.value(), &Value::I64(100000));
 }
@@ -492,7 +497,7 @@ fn test_for_loop2() {
     //      = |(2 +);
     let next = Code::app(Code::GlobalVar(symbol("+")), Code::int(2));
 
-    let code = Code::for_(init, pred, next);
+    let code = for_(init, pred, next);
 
     let result = VM::run(&globals(), code).unwrap();
 
@@ -549,7 +554,7 @@ fn test_for_loop_tuple() {
         )
     };
 
-    let code = Code::tuple_access(Code::for_(init, pred, next), 1);
+    let code = Code::tuple_access(for_(init, pred, next), 1);
 
     let result = VM::run(&globals(), code).unwrap();
 
