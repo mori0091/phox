@@ -1,5 +1,8 @@
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Builtin {
+    // === for loop ===
+    For,
+
     // === cast operators ===
     // --- u8 -> a ---
     CastU8toI64,
@@ -65,6 +68,9 @@ pub enum Builtin {
 }
 
 pub const ALL_BUILTINS: &[Builtin] = &[
+    // === for loop ===
+    Builtin::For,
+
     // === cast operators ===
     // --- u8 -> a ---
     Builtin::CastU8toI64,
@@ -138,6 +144,9 @@ impl Builtin {
     }
     pub fn signature(&self) -> (&'static str, usize, &'static str) {
         match self {
+            // === for loop ===
+            Builtin::For => ("__for__", 3, "a -> (a -> Bool) -> (a -> a) -> a"),
+
             // === cast operators ===
             // --- u8 -> a ---
             Builtin::CastU8toI64  => ("__cast_u8_i64__", 1, "u8 -> Int"),

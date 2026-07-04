@@ -25,7 +25,6 @@ pub enum CoreExpr {
     Var(Symbol),                                      // local variables
     App(Box<CoreExpr>, Box<CoreExpr>),                // strict App `f x`
     Match(Box<CoreExpr>, Vec<(Pat, CoreExpr)>),       // `match (e) { p1 => e1, ... }`
-    For(Box<CoreExpr>, Box<CoreExpr>, Box<CoreExpr>), // `__for__ (init; pred; next)`
     IndexAccess(Box<CoreExpr>, Box<CoreExpr>),        // ex. `p[v]`
     TupleAccess(Box<CoreExpr>, usize),                // ex. `p.0`
     FieldAccess(Box<CoreExpr>, Label),                // ex. `p.x`
@@ -67,9 +66,6 @@ impl CoreExpr {
     }
     pub fn match_(scrut: CoreExpr, arms: Vec<(Pat, CoreExpr)>) -> CoreExpr {
         CoreExpr::Match(Box::new(scrut), arms)
-    }
-    pub fn for_(init: CoreExpr, pred: CoreExpr, next: CoreExpr) -> CoreExpr {
-        CoreExpr::For(Box::new(init), Box::new(pred), Box::new(next))
     }
     pub fn index_access(t: CoreExpr, i: CoreExpr) -> CoreExpr {
         CoreExpr::IndexAccess(Box::new(t), Box::new(i))
@@ -247,12 +243,6 @@ fn lower_expr(expr: &Expr) -> Result<CoreExpr, Error> {
         }
         ExprBody::Builtin(b) => {
             Ok(CoreExpr::Builtin(b.clone()))
-        }
-        ExprBody::For(init, pred, next) => {
-            let init = lower_expr(init)?;
-            let pred = lower_expr(pred)?;
-            let next = lower_expr(next)?;
-            Ok(CoreExpr::for_(init, pred, next))
         }
         ExprBody::If(c, t, f) => {
             let c = lower_expr(c)?;

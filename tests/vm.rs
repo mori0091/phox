@@ -452,8 +452,7 @@ fn test_nested_block_shadowing() {
 }
 
 fn for_(init: Code, pred: Code, next: Code) -> Code {
-    let e = Code::for_(Code::unit(), Code::unit(), Code::unit());
-    let e = Code::lam(Code::lam(Code::lam(e)));
+    let e = Code::lam(Code::lam(Code::lam(Code::For)));
     Code::app(Code::app(Code::app(e, init), pred), next)
 }
 

@@ -61,11 +61,6 @@ pub fn apply_trait_impls_expr(
                 apply_trait_impls_expr(phox, module, arm_expr)?;
             }
         }
-        ExprBody::For(init, pred, next) => {
-            apply_trait_impls_expr(phox, module, init)?;
-            apply_trait_impls_expr(phox, module, pred)?;
-            apply_trait_impls_expr(phox, module, next)?;
-        }
         ExprBody::Builtin(_) => {
         }
         ExprBody::Con(_, es) => {

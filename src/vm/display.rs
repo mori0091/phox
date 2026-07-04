@@ -243,7 +243,7 @@ impl Code {
             Code::App(_, _)    |
             Code::Lam(_)       |
             Code::Match(_, _)  |
-            Code::For(_, _, _) |
+            // Code::For(_, _, _) |
             Code::Let(_, _)    |
             Code::LetRec(_, _) => {
                 format!("({})", self)
@@ -287,8 +287,8 @@ impl fmt::Display for Code {
                 }
                 write!(f, "match ({}) {{\n{}\n}}", scrut, xs.join(",\n"))
             }
-            Code::For(i, p, n) => {
-                write!(f, "__for__ ({}; {}; {})", i, p, n)
+            Code::For => {
+                write!(f, "<for-loop>")
             }
             Code::IndexAccess(a, e) => {
                 write!(f, "{}[{}]", a.enclose(), e)

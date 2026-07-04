@@ -42,7 +42,7 @@ pub enum Code {
     Var(usize),                 // de Bruijn index
     App(Box<Code>, Box<Code>),  // strict App f x
     Match(Box<Code>, Vec<(Pat, Code)>),
-    For(Box<Code>, Box<Code>, Box<Code>), // `__for__ init pred next`
+    For,                               // `__for__ init pred next`
     IndexAccess(Box<Code>, Box<Code>),    // ex. `p[0]`
     TupleAccess(Box<Code>, usize),  // ex. `p.0`
     FieldAccess(Box<Code>, Label),  // ex. `p.x`
@@ -83,9 +83,6 @@ impl Code {
     }
     pub fn match_(scrut: Code, arms: Vec<(Pat, Code)>) -> Code {
         Code::Match(Box::new(scrut), arms)
-    }
-    pub fn for_(init: Code, pred: Code, next: Code) -> Code {
-        Code::For(Box::new(init), Box::new(pred), Box::new(next))
     }
     pub fn index_access(t: Code, i: Code) -> Code {
         Code::IndexAccess(Box::new(t), Box::new(i))
@@ -499,7 +496,7 @@ impl VM<'_> {
             Code::Var(_)            => self.run_access()?,
             Code::App(_, _)         => self.run_app(),
             Code::Match(_, _)       => self.run_match(),
-            Code::For(_, _, _)      => self.run_for()?,
+            Code::For               => self.run_for()?,
             Code::IndexAccess(_, _) => self.run_index_access(),
             Code::TupleAccess(_, _) => self.run_tuple_access(),
             Code::FieldAccess(_, _) => self.run_field_access(),
@@ -1042,16 +1039,20 @@ impl VM<'_> {
     fn run_kfor2(&mut self) -> Result<(), RuntimeError> {
         let a = self.whnfs_pop();
         heap::store(self.env_get(2)?, &heap::load(a)); // update `init`
-        let k = Code::for_(Code::unit(), Code::unit(), Code::unit());
-        self.code_replace(k);
+        self.code_replace(Code::For);
         Ok(())
     }
 
     fn run_builtin(&mut self) -> Result<(), RuntimeError> {
         let Code::Builtin(f) = self.code().clone() else { unreachable!() };
-        let v = self.builtin(f)?;
-        self.state.term = v;
-        Ok(())
+        if let Builtin::For = f {
+            self.run_for()
+        }
+        else {
+            let v = self.builtin(f)?;
+            self.state.term = v;
+            Ok(())
+        }
     }
 }
 
@@ -1139,6 +1140,9 @@ impl VM<'_> {
 
     fn builtin(&self, f: Builtin) -> Result<Term, RuntimeError> {
         let val = match f {
+            // === for loop ===
+            Builtin::For => unreachable!(),
+
             // === cast operators ===
             // --- u8 -> a ---
             Builtin::CastU8toI64 => {

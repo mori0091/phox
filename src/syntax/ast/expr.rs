@@ -36,7 +36,6 @@ pub enum ExprBody {
     App(Box<Expr>, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     Match(Box<Expr>, Vec<(Pat, Expr)>),
-    For(Box<Expr>, Box<Expr>, Box<Expr>),
     Block(Vec<Item>),               // ex. `{stmt; stmt; expr; expr}`
     IndexAccess(Box<Expr>, Box<Expr>), // ex. `p.0`
     TupleAccess(Box<Expr>, usize),  // ex. `p.0`
@@ -62,7 +61,6 @@ impl Expr {
             ExprBody::App(_, _)         => false,
             ExprBody::If(_, _, _)       => false,
             ExprBody::Match(_, _)       => false,
-            ExprBody::For(_, _, _)      => false,
             ExprBody::Block(_)          => false,
             ExprBody::IndexAccess(_, _) => false,
             ExprBody::TupleAccess(_, _) => false,
@@ -131,9 +129,6 @@ impl Expr {
     pub fn match_(e: Expr, arms: Vec<(Pat, Expr)>) -> Self {
         Expr::expr(ExprBody::Match(Box::new(e), arms))
     }
-    pub fn for_(init: Expr, pred: Expr, next: Expr) -> Self {
-        Expr::expr(ExprBody::For(Box::new(init), Box::new(pred), Box::new(next)))
-    }
 
     pub fn record(fields: Vec<(String, Expr)>) -> Self {
         Expr::expr(ExprBody::Record(fields))
@@ -199,11 +194,6 @@ impl FreeVars for Expr {
                 for (_pat, e) in arms {
                     e.free_vars(ctx, acc);
                 }
-            }
-            ExprBody::For(init, pred, next) => {
-                init.free_vars(ctx, acc);
-                pred.free_vars(ctx, acc);
-                next.free_vars(ctx, acc);
             }
             ExprBody::Block(items) => {
                 for item in items {
@@ -290,12 +280,6 @@ impl Repr for Expr {
                 let arms = arms.iter().map(|(p, e)| (p.clone(), e.repr(ctx))).collect();
                 Expr::match_(expr, arms)
             }
-            ExprBody::For(init, pred, next) => {
-                let init = init.repr(ctx);
-                let pred = pred.repr(ctx);
-                let next = next.repr(ctx);
-                Expr::for_(init, pred, next)
-            }
             ExprBody::Block(items) => {
                 let items = items.iter().map(|item| item.repr(ctx)).collect();
                 Expr::block(items)
@@ -379,12 +363,6 @@ impl ApplySubst for Expr {
                 let arms = arms.iter().map(|(p, e)| (p.clone(), e.apply_subst(subst))).collect();
                 Expr::match_(expr, arms)
             }
-            ExprBody::For(init, pred, next) => {
-                let init = init.apply_subst(subst);
-                let pred = pred.apply_subst(subst);
-                let next = next.apply_subst(subst);
-                Expr::for_(init, pred, next)
-            }
             ExprBody::Block(items) => {
                 let items = items.iter().map(|item| item.apply_subst(subst)).collect();
                 Expr::block(items)
@@ -464,9 +442,6 @@ impl fmt::Display for Expr {
                           .map(|(p, e)| format!("  {} => {},", p, e))
                           .collect();
                 write!(f, "match ({}) {{\n{}\n}}", *expr, s.join("\n"))
-            }
-            ExprBody::For(init, pred, next) => {
-                write!(f, "__for__ ({}; {}; {})", init, pred, next)
             }
             ExprBody::Builtin(b) => write!(f, "{:?}", b),
             ExprBody::Con(name, args) => {
@@ -584,12 +559,6 @@ impl RenameForPretty for Expr {
                 let expr = expr.rename_var(map);
                 let arms = arms.iter().map(|(p, e)| (p.clone(), e.rename_var(map))).collect();
                 Expr::match_(expr, arms)
-            }
-            ExprBody::For(init, pred, next) => {
-                let init = init.rename_var(map);
-                let pred = pred.rename_var(map);
-                let next = next.rename_var(map);
-                Expr::for_(init, pred, next)
             }
             ExprBody::Block(items) => {
                 let items = items.iter().map(|item| item.rename_var(map)).collect();
