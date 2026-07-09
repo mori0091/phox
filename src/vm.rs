@@ -5,7 +5,6 @@ use heap::{Addr, Buf, Slice, ArrayLike};
 use std::io::Write;
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::collection::RefStack;
 
 pub use indexmap::IndexMap;
 pub use crate::module::Symbol;
@@ -41,13 +40,9 @@ pub enum Code {
     GlobalVar(Symbol),          // GlobalVar(usize) in future.
     Var(usize),                 // de Bruijn index
     App(Box<Code>, Box<Code>),  // strict App f x
-    Match(Box<Code>, Vec<(Pat, Code)>),
-    For,                               // `__for__ init pred next`
-    IndexAccess(Box<Code>, Box<Code>),    // ex. `p[0]`
-    TupleAccess(Box<Code>, usize),  // ex. `p.0`
-    FieldAccess(Box<Code>, Label),  // ex. `p.x`
-    Let(Box<Code>, Box<Code>),
+    For,                        // `__for__ init pred next`
     LetRec(Box<Code>, Box<Code>),
+    CSeq(Box<Code>, Box<Code>), // Continuation Sequencer `CSeq(a, b)` => { ctx_conts_push_closure(b); code_replace(a) }
 
     // continuations
     KApp,
@@ -81,22 +76,25 @@ impl Code {
     pub fn app(f: Code, x: Code) -> Code {
         Code::App(Box::new(f), Box::new(x))
     }
+    fn cseq(c: Code, k: Code) -> Code {
+        Code::CSeq(Box::new(c), Box::new(k))
+    }
     pub fn match_(scrut: Code, arms: Vec<(Pat, Code)>) -> Code {
-        Code::Match(Box::new(scrut), arms)
+        Code::cseq(scrut, Code::KMatch(arms))
     }
     pub fn index_access(t: Code, i: Code) -> Code {
-        Code::IndexAccess(Box::new(t), Box::new(i))
+        Code::cseq(t, Code::cseq(i, Code::KIndexAccess))
     }
     pub fn tuple_access(t: Code, index: usize) -> Code {
-        Code::TupleAccess(Box::new(t), index)
+        Code::cseq(t, Code::KTupleAccess(index))
     }
     pub fn field_access(r: Code, label: Label) -> Code {
-        Code::FieldAccess(Box::new(r), label)
+        Code::cseq(r, Code::KFieldAccess(label))
     }
 
     /// `let f = x in e` ; Short-circuit of `app(lam(e), x)`
     pub fn let_(x: Code, e: Code) -> Code {
-        Code::Let(Box::new(x), Box::new(e))
+        Code::app(Code::lam(e), x)
     }
 
     /// `let rec f = x in e`
@@ -185,10 +183,7 @@ pub enum PatRest {
 // -------------------------------------------------------------
 pub type GlobalEnv = IndexMap<Symbol, Code>; // Vec<Code> in future
 type Env = Vec<Addr>;
-type AStack = RefStack<Addr>;
-type UStack = Vec<(Addr, AStack)>;
-type WStack = Vec<Addr>;
-type CStack = Vec<Term>;
+type CStack = Vec<Closure>;
 
 // -------------------------------------------------------------
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -385,23 +380,30 @@ impl Term {
 }
 
 // -------------------------------------------------------------
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Context {
+    pub conts: CStack,
+    pub env: Env,
+}
+
+// -------------------------------------------------------------
 #[derive(Clone, Debug)]
 pub struct State {
     pub term: Term,
-    pub args: AStack,
-    pub upds: UStack,
-    pub whnfs: WStack,
-    pub conts: CStack,
+    pub context: Context,
 }
 
 impl State {
     pub fn new(code: Code) -> Self {
         State {
-            term: Term::Clo(Closure { code, env: Env::new() }),
-            args: AStack::new(),
-            upds: UStack::new(),
-            whnfs: WStack::new(),
-            conts: CStack::new(),
+            term: Term::Clo(Closure {
+                code,
+                env: Env::new(),
+            }),
+            context: Context {
+                conts: CStack::new(),
+                env: Env::new(),
+            },
         }
     }
 }
@@ -446,12 +448,7 @@ impl VM<'_> {
         match self.code() {
             // functions
             Code::Lam(_) => {
-                if self.args_is_empty() {
-                    return self.run_whnf()
-                }
-                else {
-                    self.run_lam()
-                }
+                return self.run_whnf()
             }
             Code::Builtin(_) => self.run_builtin()?,
 
@@ -459,13 +456,9 @@ impl VM<'_> {
             Code::GlobalVar(_)      => self.run_global_access()?,
             Code::Var(_)            => self.run_access()?,
             Code::App(_, _)         => self.run_app(),
-            Code::Match(_, _)       => self.run_match(),
             Code::For               => self.run_for()?,
-            Code::IndexAccess(_, _) => self.run_index_access(),
-            Code::TupleAccess(_, _) => self.run_tuple_access(),
-            Code::FieldAccess(_, _) => self.run_field_access(),
-            Code::Let(_, _)         => self.run_let(),
             Code::LetRec(_, _)      => self.run_letrec(),
+            Code::CSeq(_, _)    => self.run_cont_with(),
 
             // continuations
             Code::KApp              => self.run_kapp(),
@@ -535,62 +528,42 @@ impl VM<'_> {
 // === VM administrative state transtions ===
 impl VM<'_> {
     fn run_whnf(&mut self) -> Result<bool, RuntimeError> {
-        if !self.upds_is_empty() {
-            self.run_update();
-            return Ok(true)
-        }
-        match self.state.conts.pop() {
-            Some(t) => {
+        match self.state.context.conts.pop() {
+            Some(c) => {
                 // *WHNF w/ continuation*
                 // (`run_cont` state transition)
                 let x = self.state.term.clone();
-                let a = self.heap_alloc(x);
-                self.whnfs_push(a);
-                self.state.term = t;
+                let a = heap::alloc(x);
+                self.ctx_env_push(a);
+                self.state.term = Term::Clo(c);
                 Ok(true)
             }
             None => {
                 // *WHNF (end of state transition)*
-                assert!(self.state.whnfs.is_empty());
+                assert!(self.state.context.env.is_empty());
                 Ok(false)
             }
         }
-    }
-
-    fn run_update(&mut self) {
-        let a = self.upds_pop();
-        self.heap_store(a);     // heap[a] <- term
     }
 
     fn run_access(&mut self) -> Result<(), RuntimeError> {
         let Code::Var(v) = self.code() else { unreachable!() };
         // ACCESS
         let a = self.env_get(*v)?;
-        self.heap_load(a.clone()); // term <- heap[a]
-
-        match &self.state.term {
-            Term::Val(_) => {
-                // no need to UPDATE
-                Ok(())
-            }
-            Term::Clo(c) => match c.code {
-                Code::Lam(_) | Code::Builtin(_) => {
-                    // no need to UPDATE
-                    Ok(())
-                }
-                _ => {
-                    // schedule UPDATE
-                    self.upds_push(a);
-                    Ok(())
-                }
-            }
-        }
+        self.heap_load(a);      // term <- heap[a]
+        Ok(())
     }
 }
 
 // -------------------------------------------------------------
 // === VM internal APIs ===
 impl VM<'_> {
+    fn apply(&mut self, f: Addr, x: Addr) {
+        let Term::Clo(Closure { code: Code::Lam(e), env }) = heap::load(f) else { unreachable!() };
+        self.set_closure(*e, env);
+        self.env_push(x);
+    }
+
     fn set_value(&mut self, val: Value) {
         self.state.term = Term::Val(val);
     }
@@ -667,86 +640,32 @@ impl VM<'_> {
             Slice::Empty
         }
         else {
-            let arr = self.heap_array(self.env_values(arity));
+            let arr = heap::array(self.env_values(arity));
             Slice::Some { arr, beg: 0, end: arity }
         }
     }
 
-    fn args_is_empty(&self) -> bool {
-        self.state.args.is_empty()
+    /// Push to context.env.
+    fn ctx_env_push(&mut self, a: Addr) {
+        self.state.context.env.push(a);
+    }
+    /// Pop from context.env.
+    fn ctx_env_pop(&mut self) -> Addr {
+        self.state.context.env.pop().unwrap()
     }
 
-    /// Push to AStack
-    fn args_push(&self, a: Addr) {
-        self.state.args.push(a);
+    /// Push closure (code w/ empty env) to continuations-stack.
+    fn ctx_conts_push_code(&mut self, code: Code) {
+        self.state.context.conts.push(Closure { code, env: Env::new() });
     }
-
-    /// Pop from AStack
-    fn args_pop(&mut self) -> Addr {
-        self.state.args.pop().unwrap()
-    }
-
-    fn upds_is_empty(&self) -> bool {
-        self.state.upds.is_empty()
-    }
-
-    /// Push (a, args) to UStack and clear AStack
-    fn upds_push(&mut self, a: Addr) {
-        self.state.upds.push((a, self.state.args.clone()));
-        self.state.args = AStack::new();
-    }
-
-    /// Pop (a, args) from UStack and restore AStack
-    fn upds_pop(&mut self) -> Addr {
-        let (a, args) = self.state.upds.pop().unwrap();
-        self.state.args = args;
-        a
-    }
-
-    /// Push to WHNF-stack.
-    fn whnfs_push(&mut self, a: Addr) {
-        self.state.whnfs.push(a);
-    }
-    /// Pop from WHNF-stack.
-    fn whnfs_pop(&mut self) -> Addr {
-        self.state.whnfs.pop().unwrap()
-    }
-
-    /// Push term to continuations-stack.
-    fn conts_push(&mut self, t: Term) {
-        self.state.conts.push(t);
-    }
-    /// Push closure (w/ empty env) to continuations-stack.
-    fn conts_push_code(&mut self, code: Code) {
-        self.conts_push(Term::Clo(Closure { code, env: Env::new() }));
-    }
-    /// Push closure (w/ duplicated env) to continuations-stack.
-    fn conts_push_closure(&mut self, code: Code) {
-        self.conts_push(Term::Clo(Closure { code, env: self.env_dup() }));
-    }
-
-    /// Allocate fresh address
-    fn heap_alloc_reserved(&self) -> Addr {
-        heap::alloc_reserved()
-    }
-
-    /// Allocate fresh address and store closure / value
-    fn heap_alloc(&self, t: Term) -> Addr {
-        heap::alloc(t)
-    }
-
-    fn heap_array<T: Clone>(&self, v: Vec<T>) -> Buf<T> {
-        heap::array(v)
+    /// Push closure (code w/ duplicated env) to continuations-stack.
+    fn ctx_conts_push_closure(&mut self, code: Code) {
+        self.state.context.conts.push(Closure { code, env: self.env_dup() });
     }
 
     /// Load closure / value from heap.
     fn heap_load(&mut self, a: Addr) {
         self.state.term = heap::load(a);
-    }
-
-    /// Store closure / value to heap.
-    fn heap_store(&self, a: Addr) {
-        heap::store(a, &self.state.term);
     }
 }
 
@@ -956,50 +875,30 @@ impl VM<'_> {
 
 // -------------------------------------------------------------
 // === VM basic state transitions ===
-// > [!NOTE]
-// > The Phox VM is originaly based on "Lazy Krivine Machine", Lang(2007).
-// > But the Phox VM is an abstract machine with *strict*/*eagar* evaluation strategy.
-// > And it has now WHNF stack and continuation stack.
-// > So maybe, the current implementation of the Phox VM is similar to SECD machine rather than LKM.
 impl VM<'_> {
-    fn run_lam(&mut self) {
-        let Code::Lam(e) = self.code().clone() else { unreachable!() };
-        self.code_replace(*e);
-        let a = self.args_pop();
-        self.env_push(a);
-    }
-
     fn run_app(&mut self) {
         // strict App f x
         let Code::App(f, x) = self.code().clone() else { unreachable!() };
-        self.conts_push_code(Code::KApp);
-        self.conts_push_closure(*f);
+        self.ctx_conts_push_code(Code::KApp);
+        self.ctx_conts_push_closure(*f);
         self.code_replace(*x);
     }
     fn run_kapp(&mut self) {
-        let f = self.whnfs_pop();
-        let x = self.whnfs_pop();
-        self.heap_load(f);
-        self.args_push(x);
-    }
-
-    fn run_let(&mut self) {
-        let Code::Let(x, e) = self.code().clone() else { unreachable!() };
-        self.conts_push_code(Code::KApp);
-        self.conts_push_closure(Code::Lam(e));
-        self.code_replace(*x);
+        let f = self.ctx_env_pop();
+        let x = self.ctx_env_pop();
+        self.apply(f, x);
     }
 
     fn run_letrec(&mut self) {
         let Code::LetRec(x, e) = self.code().clone() else { unreachable!() };
-        let a = self.heap_alloc_reserved();
+        let a = heap::alloc_reserved();
         self.env_push(a);
-        self.conts_push_closure(Code::KLetRec(e));
+        self.ctx_conts_push_closure(Code::KLetRec(e));
         self.code_replace(*x);
     }
     fn run_kletrec(&mut self) -> Result<(), RuntimeError> {
         let Code::KLetRec(e) = self.code().clone() else { unreachable!() };
-        let x = self.whnfs_pop();
+        let x = self.ctx_env_pop();
         let a = self.env_get(0)?;
         heap::store(a, &heap::load(x));
         self.code_replace(*e);
@@ -1019,6 +918,12 @@ impl VM<'_> {
         Ok(())
     }
 
+    fn run_cont_with(&mut self) {
+        let Code::CSeq(c, k) = self.code().clone() else { unreachable!() };
+        self.ctx_conts_push_closure(*k);
+        self.code_replace(*c);
+    }
+
     // Unwrap if the current term was a "newtype pattern".
     fn run_unwrap(&mut self) {
         if let Value::Con(_, args) = self.value() {
@@ -1027,15 +932,9 @@ impl VM<'_> {
         }
     }
 
-    fn run_index_access(&mut self) {
-        let Code::IndexAccess(code, arg) = self.code().clone() else { unreachable!() };
-        self.conts_push_closure(Code::KIndexAccess);
-        self.conts_push_closure(*code);
-        self.code_replace(*arg);
-    }
     fn run_kindex_access(&mut self) -> Result<(), RuntimeError> {
-        let a = self.whnfs_pop();
-        let i = self.whnfs_pop();
+        let i = self.ctx_env_pop();
+        let a = self.ctx_env_pop();
         let Term::Val(Value::I64(index)) = heap::load(i) else { unreachable!() };
         self.heap_load(a);
         self.run_unwrap();
@@ -1051,28 +950,18 @@ impl VM<'_> {
         Ok(())
     }
 
-    fn run_tuple_access(&mut self) {
-        let Code::TupleAccess(code, index) = self.code().clone() else { unreachable!() };
-        self.conts_push_closure(Code::KTupleAccess(index));
-        self.code_replace(*code);
-    }
     fn run_ktuple_access(&mut self) {
         let Code::KTupleAccess(index) = self.code().clone() else { unreachable!() };
-        let a = self.whnfs_pop();
+        let a = self.ctx_env_pop();
         self.heap_load(a);
         self.run_unwrap();
         let Value::Tuple(args) = self.value() else { unreachable!() };
         self.state.term = args[index].clone();
     }
 
-    fn run_field_access(&mut self) {
-        let Code::FieldAccess(code, label) = self.code().clone() else { unreachable!() };
-        self.conts_push_closure(Code::KFieldAccess(label));
-        self.code_replace(*code);
-    }
     fn run_kfield_access(&mut self) {
         let Code::KFieldAccess(label) = self.code().clone() else { unreachable!() };
-        let a = self.whnfs_pop();
+        let a = self.ctx_env_pop();
         self.heap_load(a);
         self.run_unwrap();
         let Value::Record(fs, args) = self.value() else { unreachable!() };
@@ -1080,14 +969,9 @@ impl VM<'_> {
         self.state.term = args[index].clone();
     }
 
-    fn run_match(&mut self) {
-        let Code::Match(code, arms) = self.code().clone() else { unreachable!() };
-        self.conts_push_closure(Code::KMatch(arms));
-        self.code_replace(*code);
-    }
     fn run_kmatch(&mut self) -> Result<(), RuntimeError> {
         let Code::KMatch(arms) = self.code().clone() else { unreachable!() };
-        let a = self.whnfs_pop();
+        let a = self.ctx_env_pop();
         let v_scrut = heap::load(a);
         for (pat, body) in arms {
             if let Some(bindings) = match_pat(&pat, &v_scrut) {
@@ -1100,26 +984,29 @@ impl VM<'_> {
     }
 
     fn run_for(&mut self) -> Result<(), RuntimeError> {
-        self.conts_push_closure(Code::KFor);
-        self.args_push(self.env_get(2)?); // init
-        self.heap_load(self.env_get(1)?); // pred
+        self.ctx_conts_push_closure(Code::KFor);
+        let init = self.env_get(2)?;
+        let pred = self.env_get(1)?;
+        self.apply(pred, init);
         Ok(())
     }
     fn run_kfor(&mut self) -> Result<(), RuntimeError> {
-        let a = self.whnfs_pop();
+        let a = self.ctx_env_pop();
         let t = heap::load(a);
         if let Value::Bool(false) = t.value() {
             self.heap_load(self.env_get(2)?); // return `init`
             return Ok(())
         }
-        self.conts_push_closure(Code::KFor2);
-        self.args_push(self.env_get(2)?); // init
-        self.heap_load(self.env_get(0)?); // next
+        self.ctx_conts_push_closure(Code::KFor2);
+        let init = self.env_get(2)?;
+        let next = self.env_get(0)?;
+        self.apply(next, init);
         Ok(())
     }
     fn run_kfor2(&mut self) -> Result<(), RuntimeError> {
-        let a = self.whnfs_pop();
-        heap::store(self.env_get(2)?, &heap::load(a)); // update `init`
+        let a = self.ctx_env_pop();
+        let init = self.env_get(2)?;
+        heap::store(init, &heap::load(a)); // update `init`
         self.code_replace(Code::For);
         Ok(())
     }

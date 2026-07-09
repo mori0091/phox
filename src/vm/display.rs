@@ -242,9 +242,9 @@ impl Code {
         match self {
             Code::App(_, _)    |
             Code::Lam(_)       |
-            Code::Match(_, _)  |
+            // Code::Match(_, _)  |
             // Code::For(_, _, _) |
-            Code::Let(_, _)    |
+            // Code::Let(_, _)    |
             Code::LetRec(_, _) => {
                 format!("({})", self)
             }
@@ -280,29 +280,29 @@ impl fmt::Display for Code {
                     }
                 }
             }
-            Code::Match(scrut, arms) => {
-                let mut xs = Vec::with_capacity(arms.len());
-                for (p, e) in arms {
-                    xs.push(format!("  {} => {}", p, e));
-                }
-                write!(f, "match ({}) {{\n{}\n}}", scrut, xs.join(",\n"))
-            }
+            // Code::Match(scrut, arms) => {
+            //     let mut xs = Vec::with_capacity(arms.len());
+            //     for (p, e) in arms {
+            //         xs.push(format!("  {} => {}", p, e));
+            //     }
+            //     write!(f, "match ({}) {{\n{}\n}}", scrut, xs.join(",\n"))
+            // }
             Code::For => {
                 write!(f, "<for-loop>")
             }
-            Code::IndexAccess(a, e) => {
-                write!(f, "{}[{}]", a.enclose(), e)
-            }
-            Code::TupleAccess(t, i) => {
-                write!(f, "{}.{}", t.enclose(), i)
-            }
-            Code::FieldAccess(r, label) => {
-                let label = PathComponent::Name(label.clone()).pretty();
-                write!(f, "{}.{}", r.enclose(), label)
-            }
-            Code::Let(x, e) => {
-                write!(f, "let ? = {} in\n{}", x, e)
-            }
+            // Code::IndexAccess(a, e) => {
+            //     write!(f, "{}[{}]", a.enclose(), e)
+            // }
+            // Code::TupleAccess(t, i) => {
+            //     write!(f, "{}.{}", t.enclose(), i)
+            // }
+            // Code::FieldAccess(r, label) => {
+            //     let label = PathComponent::Name(label.clone()).pretty();
+            //     write!(f, "{}.{}", r.enclose(), label)
+            // }
+            // Code::Let(x, e) => {
+            //     write!(f, "let ? = {} in\n{}", x, e)
+            // }
             Code::LetRec(x, e) => {
                 write!(f, "let rec ? = {} in\n{}", x, e)
             }
